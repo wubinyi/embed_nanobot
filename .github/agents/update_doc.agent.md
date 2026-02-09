@@ -9,7 +9,9 @@ description: A standard workflow to update the documentation. It applies to all 
 ---
 
 When to do: Update the documentation when you finish the task.
+
 Where to do: The documentation is located at docs.
+
 What and How to do: Modify and update the corresponding documentation based on the code.
   - Summarize the changes
   - Check for discrepancies between the existing documentation and the modified content, such as method names, method functions, class names, class functions, file paths, etc.
