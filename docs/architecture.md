@@ -215,11 +215,11 @@ User Message
 
 **Configuration fields** (see `HybridRouterConfig` in `config/schema.py`):
 - `enabled`: Enable/disable hybrid routing
-- `local_provider`: Config key of local provider (e.g., "vllm", "ollama")
-- `local_model`: Model name for local inference
-- `api_provider`: Config key of API provider (e.g., "anthropic", "openrouter")
-- `api_model`: Model name for API inference
-- `difficulty_threshold`: Float 0.0–1.0; higher = more tasks stay local (default: 0.5)
+- `localProvider`: Config key of local provider (e.g., "vllm", "ollama")
+- `localModel`: Model name for local inference
+- `apiProvider`: Config key of API provider (e.g., "anthropic", "openrouter")
+- `apiModel`: Model name for API inference
+- `difficultyThreshold`: Float 0.0–1.0; higher = more tasks stay local (default: 0.5)
 
 ---
 
@@ -320,11 +320,11 @@ Config (root)
 │   └── vllm: {apiKey, apiBase}
 ├── hybridRouter
 │   ├── enabled (bool)
-│   ├── local_provider (str)
-│   ├── local_model (str)
-│   ├── api_provider (str)
-│   ├── api_model (str)
-│   └── difficulty_threshold (float)
+│   ├── localProvider (str)
+│   ├── localModel (str)
+│   ├── apiProvider (str)
+│   ├── apiModel (str)
+│   └── difficultyThreshold (float)
 ├── channels
 │   ├── telegram: {enabled, token, allowFrom}
 │   ├── discord: {enabled, token, allowFrom}
