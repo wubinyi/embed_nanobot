@@ -173,6 +173,54 @@ Key lookup functions:
 3. **`chat(messages, tools)`** — Calls `litellm.acompletion()` with the resolved model and tools.
 4. **`_parse_response()`** — Extracts text, tool calls, reasoning content, and token usage.
 
+#### `hybrid_router.py` — Hybrid Router
+
+`HybridRouterProvider` intelligently routes requests between a local model (vLLM/Ollama) and a remote API model:
+
+**Workflow:**
+
+```
+User Message
+      │
+      ▼
+┌───────────────────────────────────────┐
+│   1. Local model judges difficulty   │
+│      (returns score 0.0–1.0)          │
+└────────────┬──────────────────────────┘
+             │
+             ├─ score ≤ threshold ────► Local model handles task
+             │
+             └─ score > threshold ────► ┌────────────────────────────┐
+                                         │ 2. Local model sanitises   │
+                                         │    PII (remove names,      │
+                                         │    emails, phone numbers)  │
+                                         └──────────┬─────────────────┘
+                                                    │
+                                                    ▼
+                                         ┌────────────────────────────┐
+                                         │ 3. API model processes     │
+                                         │    sanitised request       │
+                                         └────────────────────────────┘
+```
+
+**Key methods:**
+- **`chat()`** — Routes the request based on difficulty score.
+- **`_judge_difficulty()`** — Calls local model with a classification prompt to get a difficulty score.
+- **`_sanitise_messages()`** — Strips PII from all user messages using the local model.
+
+**Benefits:**
+- **Cost efficiency**: Easy tasks (greetings, simple questions) stay local.
+- **Privacy protection**: PII is removed before sending to external APIs.
+- **Quality**: Complex tasks leverage powerful API models.
+
+**Configuration fields** (see `HybridRouterConfig` in `config/schema.py`):
+- `enabled`: Enable/disable hybrid routing
+- `local_provider`: Config key of local provider (e.g., "vllm", "ollama")
+- `local_model`: Model name for local inference
+- `api_provider`: Config key of API provider (e.g., "anthropic", "openrouter")
+- `api_model`: Model name for API inference
+- `difficulty_threshold`: Float 0.0–1.0; higher = more tasks stay local (default: 0.5)
+
 ---
 
 ### Channels (`nanobot/channels/`)
@@ -270,6 +318,13 @@ Config (root)
 │   ├── deepseek: {apiKey, apiBase}
 │   ├── ... (all providers)
 │   └── vllm: {apiKey, apiBase}
+├── hybridRouter
+│   ├── enabled (bool)
+│   ├── local_provider (str)
+│   ├── local_model (str)
+│   ├── api_provider (str)
+│   ├── api_model (str)
+│   └── difficulty_threshold (float)
 ├── channels
 │   ├── telegram: {enabled, token, allowFrom}
 │   ├── discord: {enabled, token, allowFrom}

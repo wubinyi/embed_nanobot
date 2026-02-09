@@ -35,10 +35,11 @@ export NANOBOT_AGENTS__DEFAULTS__MODEL="anthropic/claude-opus-4-5"
       "maxToolIterations": 30               // Max tool call rounds per message
     }
   },
-  "providers": { ... },   // See Providers section
-  "channels": { ... },    // See Channels section
-  "gateway": { ... },     // See Gateway section
-  "tools": { ... }        // See Tools section
+  "providers": { ... },     // See Providers section
+  "hybridRouter": { ... },  // See Hybrid Router section
+  "channels": { ... },      // See Channels section
+  "gateway": { ... },       // See Gateway section
+  "tools": { ... }          // See Tools section
 }
 ```
 
@@ -210,6 +211,75 @@ Requires Node.js ≥18 and `nanobot channels login` to scan QR code.
   }
 }
 ```
+
+---
+
+## Hybrid Router
+
+The hybrid router enables dual-model routing: a local model judges task difficulty, handles easy tasks, and sanitises PII before forwarding hard tasks to an API model.
+
+### Configuration Fields
+
+```jsonc
+{
+  "hybridRouter": {
+    "enabled": false,                            // Enable hybrid routing
+    "localProvider": "vllm",                     // Config key of local provider
+    "localModel": "meta-llama/Llama-3.1-8B-Instruct",  // Local model name
+    "apiProvider": "openrouter",                 // Config key of API provider
+    "apiModel": "anthropic/claude-opus-4-5",     // API model name
+    "difficultyThreshold": 0.5                   // 0–1; higher = more local (default: 0.5)
+  }
+}
+```
+
+### How It Works
+
+1. **Local model judges difficulty**: The local model receives the user message and returns a difficulty score (0.0–1.0).
+2. **Routing decision**:
+   - If score ≤ threshold → Local model processes the request
+   - If score > threshold → Continue to step 3
+3. **PII sanitisation**: The local model removes personally identifiable information (names, emails, phone numbers, addresses, etc.)
+4. **API forwarding**: The sanitised message is sent to the API model for processing
+
+### Example Setup
+
+Route simple tasks to a local Llama model, send complex tasks to Claude:
+
+```jsonc
+{
+  "providers": {
+    "vllm": {
+      "apiKey": "dummy",
+      "apiBase": "http://localhost:8000/v1"
+    },
+    "openrouter": {
+      "apiKey": "sk-or-v1-xxx"
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": "meta-llama/Llama-3.1-8B-Instruct"  // Ignored when hybrid routing is enabled
+    }
+  },
+  "hybridRouter": {
+    "enabled": true,
+    "localProvider": "vllm",
+    "localModel": "meta-llama/Llama-3.1-8B-Instruct",
+    "apiProvider": "openrouter",
+    "apiModel": "anthropic/claude-opus-4-5",
+    "difficultyThreshold": 0.6  // 60% of tasks stay local
+  }
+}
+```
+
+### Threshold Tuning
+
+| Threshold | Effect |
+|-----------|--------|
+| `0.3` | Only trivial tasks (greetings, "hello") stay local |
+| `0.5` | Balanced: simple questions local, complex reasoning to API |
+| `0.7` | Most tasks stay local; only very complex tasks to API |
 
 ---
 
