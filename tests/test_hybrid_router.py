@@ -199,12 +199,16 @@ async def test_pii_sanitisation_applied_before_api_call():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_judge_failure_defaults_to_api():
-    """If the difficulty judge raises, default to API (fail-open)."""
-    local = FakeProvider()
-    # Make the first call (judge) raise by returning garbage
-    local.responses = [LLMResponse(content="not json at all")]
-    api = FakeProvider([LLMResponse(content="api fallback")])
+async def test_judge_failure_defaults_to_local_at_threshold():
+    """If the judge returns unparseable JSON, score defaults to 0.5.
+
+    With threshold=0.5, score 0.5 <= threshold -> routes to local.
+    """
+    local = FakeProvider([
+        LLMResponse(content="not json at all"),  # judge -> unparseable -> score 0.5
+        LLMResponse(content="local fallback"),    # local answer
+    ])
+    api = FakeProvider()
 
     router = HybridRouterProvider(
         local_provider=local,
@@ -218,14 +222,9 @@ async def test_judge_failure_defaults_to_api():
         messages=[{"role": "user", "content": "something"}],
     )
 
-    # _extract_json returns {} → .get("score", 0.5) → 0.5 ≤ 0.5 → local
-    # Actually, "not json at all" → _extract_json returns {} → score 0.5 ≤ 0.5 → local
-    # Let me verify the actual behavior:
-    # The judge returns "not json at all" → _extract_json({}) → score defaults to 0.5
-    # 0.5 <= 0.5 → goes local
-    # But local has no more responses, so returns default "default response"
-    # This is correct behavior - unclear responses default to local via the threshold
-    assert resp.content in ("api fallback", "default response")
+    # _extract_json({}) -> score defaults to 0.5 -> 0.5 <= 0.5 -> local
+    assert resp.content == "local fallback"
+    assert len(api.calls) == 0
 
 
 @pytest.mark.asyncio

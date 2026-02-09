@@ -175,7 +175,7 @@ class HybridRouterProvider(LLMProvider):
         except Exception as e:
             logger.warning(f"[HybridRouter] difficulty judge failed: {e}; "
                            "defaulting to API model")
-            return 1.0  # fail-open to the API model
+            return 1.0  # ensures score > threshold, routing to API model
 
     async def _sanitise_messages(
         self, messages: list[dict[str, Any]]

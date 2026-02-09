@@ -289,7 +289,7 @@ def _make_provider(config):
             raise typer.Exit(1)
         local = LiteLLMProvider(
             api_key=lp.api_key or "dummy",
-            api_base=lp.api_base or config.get_api_base(hr.local_model),
+            api_base=lp.api_base,
             default_model=hr.local_model,
             extra_headers=lp.extra_headers,
             provider_name=hr.local_provider,
@@ -302,7 +302,7 @@ def _make_provider(config):
             raise typer.Exit(1)
         api = LiteLLMProvider(
             api_key=ap.api_key,
-            api_base=ap.api_base or config.get_api_base(hr.api_model),
+            api_base=ap.api_base,
             default_model=hr.api_model,
             extra_headers=ap.extra_headers,
             provider_name=hr.api_provider,
