@@ -527,6 +527,14 @@ nanobot/
 └── cli/            # 🖥️ Commands
 ```
 
+## 📖 Documentation
+
+| Document | Description |
+|----------|-------------|
+| [Architecture](docs/architecture.md) | Internal architecture, module breakdown, data flow, and design patterns |
+| [Configuration Reference](docs/configuration.md) | Complete reference for all `config.json` options |
+| [Customization Guide](docs/customization.md) | How to add tools, providers, channels, skills, and customize agent behavior |
+
 ## 🤝 Contribute & Roadmap
 
 PRs welcome! The codebase is intentionally small and readable. 🤗
