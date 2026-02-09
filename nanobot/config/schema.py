@@ -47,6 +47,16 @@ class DiscordConfig(BaseModel):
     intents: int = 37377  # GUILDS + GUILD_MESSAGES + DIRECT_MESSAGES + MESSAGE_CONTENT
 
 
+class MeshConfig(BaseModel):
+    """LAN mesh channel configuration for device-to-device communication."""
+    enabled: bool = False
+    node_id: str = ""          # Unique node identifier (auto-generated from hostname if empty)
+    tcp_port: int = 18800      # TCP port for mesh message transport
+    udp_port: int = 18799      # UDP port for peer discovery beacons
+    roles: list[str] = Field(default_factory=lambda: ["nanobot"])  # Node roles for discovery
+    allow_from: list[str] = Field(default_factory=list)  # Allowed node IDs (empty = allow all)
+
+
 class ChannelsConfig(BaseModel):
     """Configuration for chat channels."""
     whatsapp: WhatsAppConfig = Field(default_factory=WhatsAppConfig)
@@ -54,6 +64,7 @@ class ChannelsConfig(BaseModel):
     discord: DiscordConfig = Field(default_factory=DiscordConfig)
     feishu: FeishuConfig = Field(default_factory=FeishuConfig)
     dingtalk: DingTalkConfig = Field(default_factory=DingTalkConfig)
+    mesh: MeshConfig = Field(default_factory=MeshConfig)
 
 
 class AgentDefaults(BaseModel):
