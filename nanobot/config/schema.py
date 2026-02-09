@@ -87,6 +87,7 @@ class ProvidersConfig(BaseModel):
     zhipu: ProviderConfig = Field(default_factory=ProviderConfig)
     dashscope: ProviderConfig = Field(default_factory=ProviderConfig)  # 阿里云通义千问
     vllm: ProviderConfig = Field(default_factory=ProviderConfig)
+    ollama: ProviderConfig = Field(default_factory=ProviderConfig)
     gemini: ProviderConfig = Field(default_factory=ProviderConfig)
     moonshot: ProviderConfig = Field(default_factory=ProviderConfig)
     aihubmix: ProviderConfig = Field(default_factory=ProviderConfig)  # AiHubMix API gateway
@@ -96,6 +97,20 @@ class GatewayConfig(BaseModel):
     """Gateway/server configuration."""
     host: str = "0.0.0.0"
     port: int = 18790
+
+
+class HybridRouterConfig(BaseModel):
+    """Hybrid routing configuration for dual-model (local + API) setup.
+
+    The local model judges task difficulty and handles easy tasks.
+    Difficult tasks are forwarded to the API model after PII sanitisation.
+    """
+    enabled: bool = False
+    local_provider: str = ""       # Config key of the local provider (e.g. "ollama", "vllm")
+    local_model: str = ""          # Model name served locally (e.g. "llama3")
+    api_provider: str = ""         # Config key of the API provider (e.g. "anthropic", "openrouter")
+    api_model: str = ""            # Model name on the API side (e.g. "anthropic/claude-sonnet-4-5")
+    difficulty_threshold: float = 0.5  # 0–1; higher → more tasks stay local
 
 
 class WebSearchConfig(BaseModel):
@@ -128,6 +143,7 @@ class Config(BaseSettings):
     providers: ProvidersConfig = Field(default_factory=ProvidersConfig)
     gateway: GatewayConfig = Field(default_factory=GatewayConfig)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
+    hybrid_router: HybridRouterConfig = Field(default_factory=HybridRouterConfig)
     
     @property
     def workspace_path(self) -> Path:
