@@ -246,6 +246,99 @@ class BaseChannel(ABC):
 | WhatsApp | `whatsapp.py` | WebSocket to Node.js bridge |
 | Feishu | `feishu.py` | WebSocket long connection (lark-oapi) |
 | DingTalk | `dingtalk.py` | Stream mode (dingtalk-stream) |
+| LAN Mesh | `mesh/channel.py` | UDP discovery + TCP transport |
+
+---
+
+### LAN Mesh (`nanobot/mesh/`)
+
+The LAN Mesh enables **device-to-device communication** on the same local network without requiring internet. This is ideal for smart home scenarios where nanobot acts as an AI hub controlling household appliances, or for nanobot-to-nanobot communication across multiple instances.
+
+**Architecture** — Three-layer design:
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  Layer 3: MeshChannel (nanobot/mesh/channel.py)             │
+│  ↓ Bridges mesh transport into nanobot's message bus        │
+└────────────────────┬─────────────────────────────────────────┘
+                     │
+┌────────────────────┴─────────────────────────────────────────┐
+│  Layer 2: MeshTransport (nanobot/mesh/transport.py)         │
+│  ↓ TCP connections for reliable message delivery            │
+└────────────────────┬─────────────────────────────────────────┘
+                     │
+┌────────────────────┴─────────────────────────────────────────┐
+│  Layer 1: UDPDiscovery (nanobot/mesh/discovery.py)          │
+│  ↓ Broadcast beacons for peer discovery                     │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**Discovery → Connection flow:**
+
+```
+Device A (nanobot)                    Device B (IoT device)
+       │                                      │
+       │←─── UDP beacon (port 18799) ────────│  "I'm here!"
+       │                                      │
+       ├──── UDP beacon ─────────────────────→  "I'm here too!"
+       │                                      │
+       │                                      │
+       │──── TCP connect (port 18800) ───────→  Establish link
+       │                                      │
+       │←──── TCP ACK ────────────────────────│
+       │                                      │
+       │──── CHAT envelope ───────────────────→
+       │      { type: "chat",                 │
+       │        source: "nanobot-main",       │
+       │        target: "device-b",           │
+       │        payload: {...} }              │
+       │                                      │
+       │←──── RESPONSE envelope ───────────────│
+```
+
+**Protocol envelope format** (`nanobot/mesh/protocol.py`):
+
+Every mesh message is a JSON envelope with a **4-byte big-endian length prefix** so the receiver knows exactly how many bytes to read:
+
+```
+┌──────────────────┬────────────────────────────────────────┐
+│  4 bytes         │  N bytes                               │
+│  (big-endian)    │  (JSON)                                │
+│  Length = N      │  { "type": "...", "source": "...", ... }│
+└──────────────────┴────────────────────────────────────────┘
+```
+
+JSON structure:
+
+```json
+{
+  "type": "chat",                 // Message type: CHAT, COMMAND, RESPONSE, PING, PONG
+  "source": "nanobot-main",       // Sender node ID
+  "target": "device-abc",         // Receiver node ID ("*" = broadcast)
+  "payload": {                    // Type-specific content
+    "text": "Turn on the lights"
+  },
+  "ts": 1700000000.0              // Unix timestamp
+}
+```
+
+**Message types:**
+
+| Type | Purpose |
+|------|---------|
+| `CHAT` | Chat messages between nodes (e.g., user → nanobot via IoT device) |
+| `COMMAND` | Commands directed at a device (e.g., "turn on AC") |
+| `RESPONSE` | Acknowledgements / responses from devices |
+| `PING` / `PONG` | Heartbeat for presence tracking |
+
+**Key components:**
+
+- **`protocol.py`**: Wire format, `MeshEnvelope` serialisation/deserialisation, `read_envelope()` / `write_envelope()`
+- **`discovery.py`**: UDP broadcast beacons advertising node presence on port 18799
+- **`transport.py`**: TCP server (port 18800) + client connections, handles envelope routing
+- **`channel.py`**: `MeshChannel` implements `BaseChannel` interface, publishes inbound messages to the bus and subscribes to outbound messages
+
+The mesh is registered in `nanobot/channels/manager.py` like any other channel and activated via `channels.mesh.enabled: true` in config.
 
 ---
 

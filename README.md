@@ -205,6 +205,45 @@ Run a **dual-model setup**: local model handles easy tasks, API model handles ha
 > [!TIP]
 > Adjust `difficultyThreshold` (0.0–1.0): Higher values = more tasks stay local. Start with 0.5 and tune based on your needs.
 
+## 🏠 LAN Mesh (Device-to-Device)
+
+Run nanobot as a **smart home AI hub** or enable **nanobot-to-nanobot** communication on your local network — no internet required.
+
+**How it works:**
+- **UDP discovery** (port 18799): Devices broadcast their presence on the LAN
+- **TCP messaging** (port 18800): Reliable message delivery between discovered peers
+- **No internet**: All communication stays local for privacy and low latency
+
+**Use cases:**
+- 🏠 **Smart home**: Control lights, AC, sensors via nanobot
+- 🤖 **Multi-nanobot**: Multiple instances collaborate and share knowledge
+- 🔒 **Private commands**: IoT devices query nanobot without cloud roundtrip
+
+**Example: Smart Home Hub**
+
+```json
+{
+  "channels": {
+    "mesh": {
+      "enabled": true,
+      "nodeId": "nanobot-hub",
+      "tcpPort": 18800,
+      "udpPort": 18799,
+      "roles": ["nanobot", "home-controller"],
+      "allowFrom": []
+    }
+  }
+}
+```
+
+IoT devices discover nanobot, connect via TCP, and send commands:
+```json
+{"type": "chat", "source": "light-001", "target": "nanobot-hub", "payload": {"text": "Turn on bedroom lights"}}
+```
+
+> [!TIP]
+> Use `allowFrom` to whitelist trusted node IDs. Messages are plaintext on your LAN — use on trusted networks.
+
 ## 💬 Chat Apps
 
 Talk to your nanobot through Telegram, Discord, WhatsApp, or Feishu — anytime, anywhere.
@@ -558,7 +597,8 @@ nanobot/
 │   ├── subagent.py #    Background task execution
 │   └── tools/      #    Built-in tools (incl. spawn)
 ├── skills/         # 🎯 Bundled skills (github, weather, tmux...)
-├── channels/       # 📱 WhatsApp integration
+├── channels/       # 📱 Chat channels (Telegram, Discord, WhatsApp, etc.)
+├── mesh/           # 🔗 LAN device mesh (UDP discovery, TCP transport)
 ├── bus/            # 🚌 Message routing
 ├── cron/           # ⏰ Scheduled tasks
 ├── heartbeat/      # 💓 Proactive wake-up
