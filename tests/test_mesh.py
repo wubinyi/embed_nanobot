@@ -195,8 +195,7 @@ class TestMeshTransport:
         await transport_a.start()
         await transport_b.start()
 
-        # Get actual ports assigned by the OS
-        transport_a._server.sockets[0].getsockname()[1]
+        # Get actual port assigned by the OS for transport_b
         port_b = transport_b._server.sockets[0].getsockname()[1]
 
         # Register b as a peer of a
