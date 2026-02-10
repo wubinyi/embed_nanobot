@@ -35,10 +35,11 @@ export NANOBOT_AGENTS__DEFAULTS__MODEL="anthropic/claude-opus-4-5"
       "maxToolIterations": 30               // Max tool call rounds per message
     }
   },
-  "providers": { ... },   // See Providers section
-  "channels": { ... },    // See Channels section
-  "gateway": { ... },     // See Gateway section
-  "tools": { ... }        // See Tools section
+  "providers": { ... },     // See Providers section
+  "hybridRouter": { ... },  // See Hybrid Router section
+  "channels": { ... },      // See Channels section
+  "gateway": { ... },       // See Gateway section
+  "tools": { ... }          // See Tools section
 }
 ```
 
@@ -210,6 +211,168 @@ Requires Node.js ≥18 and `nanobot channels login` to scan QR code.
   }
 }
 ```
+
+---
+
+## LAN Mesh
+
+The LAN Mesh enables **device-to-device communication** on the same local network without requiring internet. Use cases include:
+
+- **Smart home hub**: nanobot controls IoT devices (lights, AC, sensors) via local commands
+- **Nanobot-to-nanobot**: Multiple nanobot instances communicate with each other on the same network
+- **Private device commands**: Appliances can query nanobot for decisions without internet access
+
+### Configuration Fields
+
+```jsonc
+{
+  "channels": {
+    "mesh": {
+      "enabled": false,                  // Enable LAN mesh communication
+      "nodeId": "",                      // Unique node identifier (auto-generated from hostname if empty)
+      "tcpPort": 18800,                  // TCP port for mesh message transport
+      "udpPort": 18799,                  // UDP port for peer discovery beacons
+      "roles": ["nanobot"],              // Node roles for discovery (e.g., ["nanobot", "controller"])
+      "allowFrom": []                    // Allowed node IDs (empty = allow all)
+    }
+  }
+}
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | bool | `false` | Enable mesh communication |
+| `nodeId` | string | `""` | Unique node identifier. Empty = auto-generated from hostname |
+| `tcpPort` | int | `18800` | TCP port for reliable message delivery |
+| `udpPort` | int | `18799` | UDP port for peer discovery broadcasts |
+| `roles` | string[] | `["nanobot"]` | Node roles advertised in discovery beacons |
+| `allowFrom` | string[] | `[]` | Whitelist of node IDs allowed to send messages. Empty = allow all |
+
+### Example: Smart Home Setup
+
+Nanobot controls IoT devices in your home:
+
+```jsonc
+{
+  "channels": {
+    "mesh": {
+      "enabled": true,
+      "nodeId": "nanobot-hub",           // This nanobot is the home hub
+      "tcpPort": 18800,
+      "udpPort": 18799,
+      "roles": ["nanobot", "home-controller"],
+      "allowFrom": []                    // Allow all devices on LAN
+    }
+  }
+}
+```
+
+In this setup:
+- IoT devices (lights, AC, sensors) discover the nanobot hub via UDP beacons
+- Devices connect via TCP and send commands like `{"type": "chat", "payload": {"text": "Turn on bedroom lights"}}`
+- Nanobot processes the command and sends back responses
+
+### Example: Multi-Nanobot Setup
+
+Multiple nanobot instances collaborate on the same network:
+
+```jsonc
+{
+  "channels": {
+    "mesh": {
+      "enabled": true,
+      "nodeId": "nanobot-office",        // Unique ID for this instance
+      "tcpPort": 18800,
+      "udpPort": 18799,
+      "roles": ["nanobot"],
+      "allowFrom": [                     // Only talk to other known nanobots
+        "nanobot-home",
+        "nanobot-lab"
+      ]
+    }
+  }
+}
+```
+
+Use cases:
+- **Work distribution**: One nanobot delegates tasks to others
+- **Knowledge sharing**: Nanobots exchange information without cloud roundtrip
+- **Redundancy**: If one nanobot is busy, another can handle the request
+
+### Security Notes
+
+- **`allowFrom` whitelist**: Restrict which nodes can send messages to prevent unauthorized access
+- **LAN-only**: The mesh uses UDP/TCP on the local network and never touches the internet
+- **No encryption**: Messages are transmitted in plaintext on your LAN. Use trusted networks only.
+
+---
+
+## Hybrid Router
+
+The hybrid router enables dual-model routing: a local model judges task difficulty, handles easy tasks, and sanitises PII before forwarding hard tasks to an API model.
+
+### Configuration Fields
+
+```jsonc
+{
+  "hybridRouter": {
+    "enabled": false,                            // Enable hybrid routing
+    "localProvider": "vllm",                     // Config key of local provider
+    "localModel": "meta-llama/Llama-3.1-8B-Instruct",  // Local model name
+    "apiProvider": "openrouter",                 // Config key of API provider
+    "apiModel": "anthropic/claude-opus-4-5",     // API model name
+    "difficultyThreshold": 0.5                   // 0–1; higher = more local (default: 0.5)
+  }
+}
+```
+
+### How It Works
+
+1. **Local model judges difficulty**: The local model receives the user message and returns a difficulty score (0.0–1.0).
+2. **Routing decision**:
+   - If score ≤ threshold → Local model processes the request
+   - If score > threshold → Continue to step 3
+3. **PII sanitisation**: The local model removes personally identifiable information (names, emails, phone numbers, addresses, etc.)
+4. **API forwarding**: The sanitised message is sent to the API model for processing
+
+### Example Setup
+
+Route simple tasks to a local Llama model, send complex tasks to Claude:
+
+```jsonc
+{
+  "providers": {
+    "vllm": {
+      "apiKey": "dummy",
+      "apiBase": "http://localhost:8000/v1"
+    },
+    "openrouter": {
+      "apiKey": "sk-or-v1-xxx"
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": "meta-llama/Llama-3.1-8B-Instruct"  // Ignored when hybrid routing is enabled
+    }
+  },
+  "hybridRouter": {
+    "enabled": true,
+    "localProvider": "vllm",
+    "localModel": "meta-llama/Llama-3.1-8B-Instruct",
+    "apiProvider": "openrouter",
+    "apiModel": "anthropic/claude-opus-4-5",
+    "difficultyThreshold": 0.6  // 60% of tasks stay local
+  }
+}
+```
+
+### Threshold Tuning
+
+| Threshold | Effect |
+|-----------|--------|
+| `0.3` | Only trivial tasks (greetings, "hello") stay local |
+| `0.5` | Balanced: simple questions local, complex reasoning to API |
+| `0.7` | Most tasks stay local; only very complex tasks to API |
 
 ---
 

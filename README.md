@@ -164,6 +164,86 @@ nanobot agent -m "Hello from my local LLM!"
 > [!TIP]
 > The `apiKey` can be any non-empty string for local servers that don't require authentication.
 
+## 🔀 Hybrid Router (Local + API)
+
+Run a **dual-model setup**: local model handles easy tasks, API model handles hard tasks with automatic PII protection.
+
+**How it works:**
+1. Local model judges task difficulty (0.0–1.0 score)
+2. Easy tasks (≤ threshold) → processed locally
+3. Hard tasks (> threshold) → PII sanitised by local model → sent to API model
+
+**Example: Route simple tasks to local Llama, complex tasks to Claude**
+
+```json
+{
+  "providers": {
+    "vllm": {
+      "apiKey": "dummy",
+      "apiBase": "http://localhost:8000/v1"
+    },
+    "openrouter": {
+      "apiKey": "sk-or-v1-xxx"
+    }
+  },
+  "hybridRouter": {
+    "enabled": true,
+    "localProvider": "vllm",
+    "localModel": "meta-llama/Llama-3.1-8B-Instruct",
+    "apiProvider": "openrouter",
+    "apiModel": "anthropic/claude-opus-4-5",
+    "difficultyThreshold": 0.5
+  }
+}
+```
+
+**Benefits:**
+- 💰 **Cost savings**: Simple tasks (greetings, basic questions) stay local
+- 🔒 **Privacy**: PII stripped before sending to external APIs
+- 🎯 **Quality**: Complex tasks leverage powerful API models
+
+> [!TIP]
+> Adjust `difficultyThreshold` (0.0–1.0): Higher values = more tasks stay local. Start with 0.5 and tune based on your needs.
+
+## 🏠 LAN Mesh (Device-to-Device)
+
+Run nanobot as a **smart home AI hub** or enable **nanobot-to-nanobot** communication on your local network — no internet required.
+
+**How it works:**
+- **UDP discovery** (port 18799): Devices broadcast their presence on the LAN
+- **TCP messaging** (port 18800): Reliable message delivery between discovered peers
+- **No internet**: All communication stays local for privacy and low latency
+
+**Use cases:**
+- 🏠 **Smart home**: Control lights, AC, sensors via nanobot
+- 🤖 **Multi-nanobot**: Multiple instances collaborate and share knowledge
+- 🔒 **Private commands**: IoT devices query nanobot without cloud roundtrip
+
+**Example: Smart Home Hub**
+
+```json
+{
+  "channels": {
+    "mesh": {
+      "enabled": true,
+      "nodeId": "nanobot-hub",
+      "tcpPort": 18800,
+      "udpPort": 18799,
+      "roles": ["nanobot", "home-controller"],
+      "allowFrom": []
+    }
+  }
+}
+```
+
+IoT devices discover nanobot, connect via TCP, and send commands:
+```json
+{"type": "chat", "source": "light-001", "target": "nanobot-hub", "payload": {"text": "Turn on bedroom lights"}}
+```
+
+> [!TIP]
+> Use `allowFrom` to whitelist trusted node IDs. Messages are plaintext on your LAN — use on trusted networks.
+
 ## 💬 Chat Apps
 
 Talk to your nanobot through Telegram, Discord, WhatsApp, or Feishu — anytime, anywhere.
@@ -517,7 +597,8 @@ nanobot/
 │   ├── subagent.py #    Background task execution
 │   └── tools/      #    Built-in tools (incl. spawn)
 ├── skills/         # 🎯 Bundled skills (github, weather, tmux...)
-├── channels/       # 📱 WhatsApp integration
+├── channels/       # 📱 Chat channels (Telegram, Discord, WhatsApp, etc.)
+├── mesh/           # 🔗 LAN device mesh (UDP discovery, TCP transport)
 ├── bus/            # 🚌 Message routing
 ├── cron/           # ⏰ Scheduled tasks
 ├── heartbeat/      # 💓 Proactive wake-up

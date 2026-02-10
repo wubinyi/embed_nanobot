@@ -95,6 +95,17 @@ class ChannelManager:
                 logger.info("DingTalk channel enabled")
             except ImportError as e:
                 logger.warning(f"DingTalk channel not available: {e}")
+
+        # LAN Mesh channel
+        if self.config.channels.mesh.enabled:
+            try:
+                from nanobot.mesh.channel import MeshChannel
+                self.channels["mesh"] = MeshChannel(
+                    self.config.channels.mesh, self.bus
+                )
+                logger.info("LAN Mesh channel enabled")
+            except ImportError as e:
+                logger.warning(f"LAN Mesh channel not available: {e}")
     
     async def _start_channel(self, name: str, channel: BaseChannel) -> None:
         """Start a channel and log any exceptions."""
