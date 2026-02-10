@@ -294,14 +294,62 @@ This file stores important information that should persist across sessions.
 """)
         console.print("  [dim]Created memory/MEMORY.md[/dim]")
 
-    # Create skills directory for custom user skills
-    skills_dir = workspace / "skills"
-    skills_dir.mkdir(exist_ok=True)
-
 
 def _make_provider(config):
-    """Create LiteLLMProvider from config. Exits if no API key found."""
+    """Create LiteLLMProvider from config. Exits if no API key found.
+
+    When ``config.hybrid_router.enabled`` is ``True`` a
+    :class:`HybridRouterProvider` is returned instead, wrapping a local and
+    an API provider.
+    """
     from nanobot.providers.litellm_provider import LiteLLMProvider
+
+    hr = config.hybrid_router
+    if hr.enabled and hr.local_provider and hr.api_provider:
+        from nanobot.providers.hybrid_router import HybridRouterProvider
+
+        # --- local provider ---
+        lp = getattr(config.providers, hr.local_provider, None)
+        if not lp:
+            console.print(f"[red]Error: local provider '{hr.local_provider}' not found.[/red]")
+            raise typer.Exit(1)
+        local = LiteLLMProvider(
+            api_key=lp.api_key or "dummy",
+            api_base=lp.api_base,
+            default_model=hr.local_model,
+            extra_headers=lp.extra_headers,
+            provider_name=hr.local_provider,
+        )
+
+        # --- API provider ---
+        ap = getattr(config.providers, hr.api_provider, None)
+        if not (ap and ap.api_key):
+            console.print(f"[red]Error: API provider '{hr.api_provider}' has no key.[/red]")
+            raise typer.Exit(1)
+        api = LiteLLMProvider(
+            api_key=ap.api_key,
+            api_base=ap.api_base,
+            default_model=hr.api_model,
+            extra_headers=ap.extra_headers,
+            provider_name=hr.api_provider,
+        )
+
+        console.print(
+            f"[green]✓[/green] Hybrid routing: "
+            f"local={hr.local_provider}/{hr.local_model}, "
+            f"api={hr.api_provider}/{hr.api_model}, "
+            f"threshold={hr.difficulty_threshold}"
+        )
+
+        return HybridRouterProvider(
+            local_provider=local,
+            api_provider=api,
+            local_model=hr.local_model,
+            api_model=hr.api_model,
+            difficulty_threshold=hr.difficulty_threshold,
+        )
+
+    # --- standard single-provider path ---
     p = config.get_provider()
     model = config.agents.defaults.model
     if not (p and p.api_key) and not model.startswith("bedrock/"):
@@ -564,24 +612,6 @@ def channels_status():
         "Discord",
         "✓" if dc.enabled else "✗",
         dc.gateway_url
-    )
-
-    # Feishu
-    fs = config.channels.feishu
-    fs_config = f"app_id: {fs.app_id[:10]}..." if fs.app_id else "[dim]not configured[/dim]"
-    table.add_row(
-        "Feishu",
-        "✓" if fs.enabled else "✗",
-        fs_config
-    )
-
-    # Mochat
-    mc = config.channels.mochat
-    mc_base = mc.base_url or "[dim]not configured[/dim]"
-    table.add_row(
-        "Mochat",
-        "✓" if mc.enabled else "✗",
-        mc_base
     )
     
     # Telegram
