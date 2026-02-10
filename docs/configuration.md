@@ -212,6 +212,83 @@ Requires Node.js ≥18 and `nanobot channels login` to scan QR code.
 }
 ```
 
+### Email
+
+```jsonc
+{
+  "channels": {
+    "email": {
+      "enabled": true,
+      "consentGranted": true,          // Explicit consent to access mailbox
+      
+      // IMAP (receive)
+      "imapHost": "imap.gmail.com",
+      "imapPort": 993,
+      "imapUsername": "your-email@gmail.com",
+      "imapPassword": "your-app-password",
+      "imapMailbox": "INBOX",
+      "imapUseSsl": true,
+      
+      // SMTP (send)
+      "smtpHost": "smtp.gmail.com",
+      "smtpPort": 587,
+      "smtpUsername": "your-email@gmail.com",
+      "smtpPassword": "your-app-password",
+      "smtpUseTls": true,
+      "smtpUseSsl": false,
+      "fromAddress": "your-email@gmail.com",
+      
+      // Behavior
+      "autoReplyEnabled": true,        // Automatically reply to emails
+      "pollIntervalSeconds": 30,       // Check for new emails every 30 seconds
+      "markSeen": true,                // Mark emails as read after processing
+      "maxBodyChars": 12000,           // Max email body length to process
+      "subjectPrefix": "Re: ",         // Prefix for reply subjects
+      "allowFrom": []                  // Allowed sender email addresses (empty = allow all)
+    }
+  }
+}
+```
+
+### Slack
+
+```jsonc
+{
+  "channels": {
+    "slack": {
+      "enabled": true,
+      "mode": "socket",                // "socket" mode (Socket Mode)
+      "webhookPath": "/slack/events",  // Webhook path (if not using socket mode)
+      "botToken": "xoxb-YOUR-BOT-TOKEN",     // Bot User OAuth Token
+      "appToken": "xapp-YOUR-APP-TOKEN",     // App-Level Token (for Socket Mode)
+      "userTokenReadOnly": true,       // User token is read-only
+      "groupPolicy": "mention",        // "mention" (respond when @mentioned), "open" (all messages), "allowlist" (specific channels)
+      "groupAllowFrom": [],            // Allowed channel IDs (if groupPolicy is "allowlist")
+      "dm": {
+        "enabled": true,               // Enable DM support
+        "policy": "open",              // "open" (all DMs) or "allowlist" (specific users)
+        "allowFrom": []                // Allowed Slack user IDs (if policy is "allowlist")
+      }
+    }
+  }
+}
+```
+
+### QQ (QQ单聊)
+
+```jsonc
+{
+  "channels": {
+    "qq": {
+      "enabled": true,
+      "appId": "YOUR_APP_ID",          // 机器人 ID (AppID) from q.qq.com
+      "secret": "YOUR_APP_SECRET",     // 机器人密钥 (AppSecret) from q.qq.com
+      "allowFrom": []                  // Allowed user openids (empty = public access)
+    }
+  }
+}
+```
+
 ---
 
 ## LAN Mesh
