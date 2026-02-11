@@ -85,6 +85,18 @@ class ChannelManager:
             except ImportError as e:
                 logger.warning(f"Feishu channel not available: {e}")
 
+        # Mochat channel
+        if self.config.channels.mochat.enabled:
+            try:
+                from nanobot.channels.mochat import MochatChannel
+
+                self.channels["mochat"] = MochatChannel(
+                    self.config.channels.mochat, self.bus
+                )
+                logger.info("Mochat channel enabled")
+            except ImportError as e:
+                logger.warning(f"Mochat channel not available: {e}")
+
         # DingTalk channel
         if self.config.channels.dingtalk.enabled:
             try:
@@ -129,17 +141,6 @@ class ChannelManager:
                 logger.info("QQ channel enabled")
             except ImportError as e:
                 logger.warning(f"QQ channel not available: {e}")
-
-        # LAN Mesh channel
-        if self.config.channels.mesh.enabled:
-            try:
-                from nanobot.mesh.channel import MeshChannel
-                self.channels["mesh"] = MeshChannel(
-                    self.config.channels.mesh, self.bus
-                )
-                logger.info("LAN Mesh channel enabled")
-            except ImportError as e:
-                logger.warning(f"LAN Mesh channel not available: {e}")
     
     async def _start_channel(self, name: str, channel: BaseChannel) -> None:
         """Start a channel and log any exceptions."""
