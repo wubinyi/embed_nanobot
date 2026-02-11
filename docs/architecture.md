@@ -265,7 +265,7 @@ Built with `typer`, the CLI provides these entry points:
 | `nanobot gateway` | Starts all enabled channels + cron + heartbeat |
 | `nanobot status` | Displays config, providers, and channel status |
 | `nanobot channels login` | Links WhatsApp device (QR scan) |
-| `nanobot channels status` | Shows channel connection status (Telegram, Discord, WhatsApp, Feishu, MoChat, DingTalk, Slack) |
+| `nanobot channels status` | Shows channel connection status (WhatsApp, Discord, Feishu, MoChat, Telegram, Slack) |
 | `nanobot cron add/list/remove` | Manage scheduled jobs |
 
 **Interactive mode features:**
