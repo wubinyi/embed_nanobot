@@ -60,8 +60,10 @@ If there are new upstream commits:
 1. **Implementation gaps**: Is there unfinished work from the last session? Any half-implemented features?
 2. **Technical debt**: Are there TODOs, hacks, or shortcuts that need addressing?
 3. **Security hazards**: For mesh/device features — are there authentication gaps, unencrypted channels, or missing input validation?
-4. **Upstream conflict risk**: Do our recent changes touch files that upstream also modified?
+4. **Upstream conflict risk**: Do our recent changes touch files that upstream also modified? Review the conflict surface table in copilot-instructions.md.
 5. **Test coverage**: Are there untested modules?
+6. **Documentation staleness**: Run the Documentation Freshness Check (defined in copilot-instructions.md `<Documentation_Freshness_Check>`). Quick scan: do `docs/architecture.md`, `docs/configuration.md`, `docs/customization.md` still match the current codebase?
+7. **Convention drift**: Has upstream changed patterns since our last sync? Check `agent.md` still reflects upstream's actual code style.
 
 ### Step D: Roadmap Alignment
 
