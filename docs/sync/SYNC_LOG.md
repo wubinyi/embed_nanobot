@@ -10,6 +10,7 @@ Tracks all merges from `HKUDS/nanobot` (upstream) `main` into our `main_embed` b
 | 2026-02-10 | ea1d2d7 | 3 (MiniMax, MoChat, DingTalk) | schema.py (MiniMax config) | Resolved conflicts, adapted MiniMax. Added missing channel docs. | [#6](https://github.com/wubinyi/embed_nanobot/pull/6) |
 | 2026-02-12 | ea1d2d7 | 0 | None | Clean merge (main already up to date) | Direct merge |
 | 2026-02-17 | a219a91 | 116 (77 non-merge) | README.md, commands.py, providers/__init__.py, pyproject.toml | Upstream-first; appended HybridRouter/Codex integration in CLI; kept vLLM/Mesh sections in README. See details below. | `copilot/sync-upstream-and-merge-main-embed` |
+| 2026-02-17b | 8053193 | 22 (11 non-merge) | README.md | Telegram media, GitHub Copilot provider, cron timezone, ClawHub skill, empty content fix | Accept upstream README, preserve embed_nanobot extensions section |
 
 ---
 
@@ -96,11 +97,47 @@ This sync brought in a large batch of upstream improvements spanning **35 files 
 
 ## Pending
 
-As of 2026-02-17, upstream has **22 more commits** ahead of `origin/main` (post-sync):
-- `8053193` Merge PR #747: add media file sending support for Telegram
-- `d89736a` Merge PR #720: add GitHub Copilot provider support
-- `d405dcb` Merge PR #744: add timezone support for cron scheduling
-- `23726cb` Add ClawHub skill for searching and installing agent skills
-- Plus more fixes and refactors
+As of 2026-02-17 (second sync), upstream is **fully synced** — 0 commits ahead.
 
-**Next sync needed**: Before starting task 1.9 (PSK authentication).
+**Next sync**: On-demand, before starting next feature task.
+
+---
+
+## 2026-02-17b Sync Details
+
+### Upstream Features Merged (a219a91 → 8053193)
+
+This sync brought in the remaining 22 upstream commits (11 non-merge), spanning **12 files changed**.
+
+#### 1. Telegram Media File Support — PR #747
+- `nanobot/channels/telegram.py` — Handle voice messages, audio, images, and documents. Clean up media sending logic.
+
+#### 2. GitHub Copilot Provider — PR #720
+- `nanobot/providers/registry.py` — Added `github_copilot` provider spec with `is_oauth=True`.
+- `nanobot/cli/commands.py` — Refactored to use `is_oauth` flag instead of hardcoded provider name check.
+
+#### 3. Cron Timezone Support — PR #744
+- `nanobot/agent/tools/cron.py` — Timezone validation and display bug fix.
+- `nanobot/cron/service.py` — Timezone propagation improvements.
+- `nanobot/skills/cron/SKILL.md` — Updated skill docs with timezone examples.
+
+#### 4. ClawHub Skill — PR #758
+- **New file**: `nanobot/skills/clawhub/SKILL.md` — Skill for searching and installing agent skills from the public ClawHub registry.
+- `nanobot/skills/README.md` — Updated index.
+
+#### 5. Bug Fixes
+- `nanobot/agent/context.py`, `nanobot/agent/tools/message.py` — Omit empty content entries in assistant messages.
+
+### Conflicts Resolved
+
+| File | Conflict | Resolution |
+|------|----------|------------|
+| `README.md` | Upstream restructured README significantly (new sections, updated Chat Apps table with Mochat) | Accept upstream version entirely; moved our custom sections (vLLM, Hybrid Router, LAN Mesh) to a new "embed_nanobot Extensions" section before Star History |
+
+### Auto-Merged Files (no conflicts)
+- `nanobot/cli/commands.py` — GitHub Copilot `is_oauth` refactor merged cleanly with our HybridRouter additions.
+- `nanobot/config/schema.py` — No new fields from upstream; our appended fields preserved.
+- `nanobot/providers/registry.py` — New `github_copilot` spec merged above our appended `vllm` spec.
+
+### Remaining Upstream Commits
+- **0** — fully synced with upstream/main (8053193).

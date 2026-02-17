@@ -116,6 +116,10 @@ Each provider has an `apiKey` and optional `apiBase`. Only configure the provide
     "openaiCodex": {                 // OAuth-based (use `nanobot provider login openai-codex`)
       "apiKey": "",                  // Managed automatically via OAuth
       "apiBase": ""
+    },
+    "githubCopilot": {               // OAuth-based (use `nanobot provider login github-copilot`)
+      "apiKey": "",                  // Managed automatically via OAuth
+      "apiBase": ""
     }
   }
 }
@@ -136,6 +140,7 @@ Set the default model in `agents.defaults.model`. The provider is auto-detected 
 | `ollama` | ollama |
 | `minimax` | minimax |
 | `codex`, `openai-codex` | openai_codex (OAuth) |
+| `copilot`, `github_copilot` | github_copilot (OAuth) |
 | `moonshot`, `kimi` | moonshot |
 | `llama`, `mistral` | groq (or openrouter) |
 
@@ -168,7 +173,8 @@ Each channel has an `enabled` flag and an `allowFrom` list for access control.
     "telegram": {
       "enabled": true,
       "token": "123456:ABC-xxx",       // Bot token from @BotFather
-      "allowFrom": ["123456789"]       // Telegram user IDs (get from @userinfobot)
+      "allowFrom": ["123456789"],      // Telegram user IDs (get from @userinfobot)
+      "proxy": "socks5://host:port"    // Optional: SOCKS5 proxy for restricted networks
     }
   }
 }

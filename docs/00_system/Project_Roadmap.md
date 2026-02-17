@@ -20,12 +20,13 @@
 | 1.6 | Second upstream merge (MiniMax, MoChat, DingTalk) | Done | 2026-02-10 | PR #6, conflicts resolved |
 | 1.7 | Project SKILL file for Copilot workflow | Done | 2026-02-12 | `.github/copilot-instructions.md`, bootstrap protocol, PRD |
 | 1.8 | Upstream sync (catch up 116 upstream commits) | Done | 2026-02-17 | Merged MCP, Codex, memory redesign, CLI overhaul, security hardening. See SYNC_LOG.md |
+| 1.8b | Upstream sync (remaining 22 commits) | Done | 2026-02-17 | Telegram media, GitHub Copilot provider, cron timezone, ClawHub skill. Fully synced. |
 
 ### In Progress
 
 | # | Task | Status | Assignee | Notes |
 |---|------|--------|----------|-------|
-| — | Documentation freshness update | In progress | Current session | Updating docs after major upstream sync |
+| — | (none) | — | — | Ready for task 1.9 |
 
 ### Planned (Phase 1 Remaining)
 
@@ -81,10 +82,10 @@
 | Metric | Value |
 |--------|-------|
 | Last sync date | 2026-02-17 |
-| `origin/main` HEAD | a219a91 |
+| `origin/main` HEAD | 8053193 |
 | `upstream/main` HEAD | 8053193 |
-| Commits behind | 22 (post-sync: Telegram media, GitHub Copilot provider, timezone cron) |
-| Next sync target | Before task 1.9 |
+| Commits behind | 0 (fully synced) |
+| Next sync target | On-demand, before next feature task |
 
 See [docs/sync/SYNC_LOG.md](../sync/SYNC_LOG.md) for full merge history.
 
@@ -108,6 +109,12 @@ See [docs/sync/SYNC_LOG.md](../sync/SYNC_LOG.md) for full merge history.
   - Provider registry now supports `is_oauth` and `extra_headers` — useful for future industrial cloud integrations.
 - **Upstream still advancing**: 22 more commits ahead (Telegram media sending, GitHub Copilot provider, timezone cron). Next sync before task 1.9.
 - **Conflict surface stable**: 7 shared files, all manageable with append-only convention.
+
+### 2026-02-17b — Second Sync + SKILL v1.2
+- **22 remaining upstream commits merged** (fully synced): Telegram media file support, GitHub Copilot provider with is_oauth, cron timezone improvements, ClawHub skill, empty content fix.
+- **SKILL v1.2 shipped**: Extracted Upstream_Sync_Protocol to dedicated file, added completion gate checklist, Key Features column in sync log, post-sync verification step, simplified Session_Bootstrap.
+- **All documentation refreshed**: GitHub Copilot provider added to architecture.md and configuration.md, Telegram media support noted, proxy field documented.
+- **Ready for task 1.9** (PSK-based device authentication).
 
 ### Conventions Reminder
 - Feature branches: `copilot/<feature-name>` from `main_embed`

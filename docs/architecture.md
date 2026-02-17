@@ -87,7 +87,7 @@ The `AgentLoop` class orchestrates message processing:
   3. Memory context: long-term `MEMORY.md` (two-layer memory system)
   4. Skills: always-loaded skills (full content) + available skills (metadata summary)
 - **Messages** combine the system prompt with session history and the current user message.
-- **Media handling**: Images are base64-encoded and sent as vision content blocks.
+- **Media handling**: Images are base64-encoded and sent as vision content blocks. Telegram supports voice/audio (transcribed via Groq), photos, and documents.
 
 #### `memory.py` — Memory Store
 
@@ -176,6 +176,12 @@ OAuth-based provider for OpenAI Codex:
 - Registered with `is_oauth=True` in the provider spec — uses OAuth flow instead of API key.
 - Supports `nanobot provider login openai-codex` for authentication.
 
+#### GitHub Copilot Provider
+
+- Uses the same OAuth mechanism as Codex (`is_oauth=True`).
+- Registered as `github_copilot` in the provider registry with `litellm_prefix="github_copilot"`.
+- Supports `nanobot provider login github-copilot` for authentication.
+
 #### `litellm_provider.py` — LLM Provider
 
 `LiteLLMProvider` wraps the `litellm` library:
@@ -253,7 +259,7 @@ class BaseChannel(ABC):
 
 | Channel | File | Transport |
 |---------|------|-----------|
-| Telegram | `telegram.py` | Long polling via `python-telegram-bot` |
+| Telegram | `telegram.py` | Long polling via `python-telegram-bot`; media support (voice, audio, photos, documents) |
 | Discord | `discord.py` | WebSocket gateway |
 | WhatsApp | `whatsapp.py` | WebSocket to Node.js bridge |
 | Feishu | `feishu.py` | WebSocket long connection (lark-oapi) |
@@ -437,7 +443,8 @@ Config (root)
 │   ├── deepseek: {apiKey, apiBase, extraHeaders}
 │   ├── groq, zhipu, dashscope, vllm, ollama, gemini, moonshot
 │   ├── minimax, aihubmix: {apiKey, apiBase, extraHeaders}
-│   └── openai_codex: {apiKey, apiBase}    # OAuth-based (is_oauth=True)
+│   ├── openai_codex: {apiKey, apiBase}    # OAuth-based (is_oauth=True)
+│   └── github_copilot: {apiKey, apiBase}  # OAuth-based (is_oauth=True)
 ├── hybridRouter
 │   ├── enabled (bool)
 │   ├── localProvider (str)

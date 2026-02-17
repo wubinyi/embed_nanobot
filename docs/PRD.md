@@ -231,7 +231,7 @@ The SDK should implement:
 - [x] Implement LAN Mesh communication (UDP discovery + TCP transport)
 - [x] Implement Hybrid Router (local + cloud LLM routing)
 - [x] Developer documentation (architecture, configuration, customization)
-- [x] Upstream merge workflow (manual)
+- [x] Upstream merge workflow (manual) — five syncs completed (138+ upstream commits merged)
 - [ ] Project SKILL file for Copilot-assisted development
 - [ ] Automated upstream sync (daily)
 - [ ] PSK-based device authentication (HMAC signing)
