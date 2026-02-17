@@ -160,7 +160,7 @@ Build an **AI Hub** — a central intelligence node for smart homes and smart fa
 
 ### 3.5 Upstream Synchronization
 
-**Status: Partially done** — one manual merge completed, needs automation.
+**Status: Active** — four manual syncs completed (116+ upstream commits merged), needs automation.
 
 | ID | Requirement | Priority |
 |----|-------------|----------|
@@ -168,7 +168,7 @@ Build an **AI Hub** — a central intelligence node for smart homes and smart fa
 | US-02 | Daily automated fetch of upstream changes | 🔲 Planned |
 | US-03 | Automated merge attempt from `main` into `main_embed` | 🔲 Planned |
 | US-04 | Conflict detection and documentation | ✅ Done (manual, see MERGE_ANALYSIS.md) |
-| US-05 | Merge results logged to `docs/sync/` for traceability | 🔲 Planned |
+| US-05 | Merge results logged to `docs/sync/` for traceability | ✅ Done (SYNC_LOG.md maintained) |
 | US-06 | Custom code follows "append-only" convention to minimize conflicts | ✅ Done (agent.md) |
 
 ---
@@ -297,9 +297,10 @@ The SDK should implement:
 | `nanobot/cron/` | Scheduled tasks | No (upstream) |
 | `nanobot/heartbeat/` | Periodic task execution | No (upstream) |
 | `nanobot/mesh/` | LAN device mesh (discovery, transport, protocol) | **Yes** |
-| `nanobot/providers/` | LLM providers (LiteLLM wrapper) | Extended (hybrid_router) |
+| `nanobot/providers/` | LLM providers (LiteLLM wrapper) | Extended (hybrid_router, openai_codex_provider) |
 | `nanobot/session/` | Conversation session management | No (upstream) |
 | `nanobot/skills/` | Modular skill packages | Extended (embed-specific skills) |
+| `nanobot/utils/` | Utility helpers | No (upstream) |
 | `bridge/` | Node.js WhatsApp bridge | No (upstream) |
 | `docs/` | Developer documentation | **Yes** |
 | `workspace/` | Agent workspace (memory, heartbeat, etc.) | No (upstream) |

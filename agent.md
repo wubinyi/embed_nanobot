@@ -83,6 +83,8 @@ These files are modified by both upstream and our fork. Take extra care:
 | `nanobot/config/schema.py` | **High** — both sides add config classes and fields | Append our fields at the end of `ChannelsConfig` and `Config` |
 | `nanobot/channels/manager.py` | **High** — both sides register channels | Append our channel registration at the end of `_init_channels()` |
 | `nanobot/cli/commands.py` | **Medium** — both sides modify CLI behavior | Isolate custom logic in separate functions; minimize inline changes |
+| `nanobot/providers/__init__.py` | **Low** — both sides export providers | Append our exports after upstream's |
+| `nanobot/providers/registry.py` | **Medium** — both sides add ProviderSpec entries | Append our entries at end of PROVIDERS tuple |
 | `README.md` | **Medium** — both sides add documentation | Add custom sections at the end of relevant areas; don't rewrite upstream text |
 | `.gitignore` | **Low** — simple list file | Append entries at the end |
 | `pyproject.toml` | **Low** — version/deps | Don't modify version; append deps at end |
@@ -109,8 +111,10 @@ These files are modified by both upstream and our fork. Take extra care:
 Follow the upstream project's conventions:
 
 - **Python**: Type hints, `from __future__ import annotations`, loguru for logging
-- **Config models**: Pydantic `BaseModel` with `Field(default_factory=...)` 
+- **Config models**: Pydantic `BaseModel` with `Field(default_factory=...)`, `BaseSettings` for root config
+- **Provider registry**: `ProviderSpec` supports `is_oauth`, `extra_headers`, `detect_by_base_keyword`
 - **Channel pattern**: Inherit from `BaseChannel`, implement `start()`, `stop()`, `send()`
+- **CLI framework**: `typer` + `prompt_toolkit` for interactive input
 - **Imports**: Lazy imports inside functions for optional dependencies (wrapped in try/except)
 - **Naming**: snake_case for files/functions, PascalCase for classes
 - **Comments**: Minimal — only for non-obvious logic; use docstrings for public APIs

@@ -2,7 +2,7 @@
 
 > Single source of truth for project progress. Updated after each feature completion.
 
-**Last updated**: 2026-02-12
+**Last updated**: 2026-02-17
 
 ---
 
@@ -19,12 +19,13 @@
 | 1.5 | Developer documentation (arch, config, customization) | Done | 2026-02-08 | `docs/architecture.md`, `docs/configuration.md`, `docs/customization.md` |
 | 1.6 | Second upstream merge (MiniMax, MoChat, DingTalk) | Done | 2026-02-10 | PR #6, conflicts resolved |
 | 1.7 | Project SKILL file for Copilot workflow | Done | 2026-02-12 | `.github/copilot-instructions.md`, bootstrap protocol, PRD |
+| 1.8 | Upstream sync (catch up 116 upstream commits) | Done | 2026-02-17 | Merged MCP, Codex, memory redesign, CLI overhaul, security hardening. See SYNC_LOG.md |
 
 ### In Progress
 
 | # | Task | Status | Assignee | Notes |
 |---|------|--------|----------|-------|
-| 1.8 | Upstream sync (catch up 9 new commits) | Pending | Next session | `origin/main` is 9 commits behind `upstream/main` |
+| — | Documentation freshness update | In progress | Current session | Updating docs after major upstream sync |
 
 ### Planned (Phase 1 Remaining)
 
@@ -79,10 +80,10 @@
 
 | Metric | Value |
 |--------|-------|
-| Last sync date | 2026-02-12 |
-| `origin/main` HEAD | ea1d2d7 |
-| `upstream/main` HEAD | b429bf9 |
-| Commits behind | 9 |
+| Last sync date | 2026-02-17 |
+| `origin/main` HEAD | a219a91 |
+| `upstream/main` HEAD | 8053193 |
+| Commits behind | 22 (post-sync: Telegram media, GitHub Copilot provider, timezone cron) |
 | Next sync target | Before task 1.9 |
 
 See [docs/sync/SYNC_LOG.md](../sync/SYNC_LOG.md) for full merge history.
@@ -97,6 +98,16 @@ See [docs/sync/SYNC_LOG.md](../sync/SYNC_LOG.md) for full merge history.
 - **Key architectural decision**: PSK+HMAC first (simple, fits ESP32), mTLS later (production-grade).
 - **Main risk**: Upstream divergence — mitigated by daily sync protocol and append-only convention.
 - **Next priority**: Perform upstream sync (9 commits behind), then start PSK authentication (task 1.9).
+
+### 2026-02-17 — Major Upstream Sync Complete
+- **116 upstream commits merged** (77 non-merge): MCP support, OpenAI Codex provider, redesigned memory system, CLI overhaul with prompt_toolkit, security hardening, cron improvements.
+- **Documentation fully updated**: architecture.md, configuration.md, customization.md, SYNC_LOG.md, MERGE_ANALYSIS.md all refreshed to reflect new upstream features.
+- **Key upstream changes to note for our work**:
+  - Memory system is now two-layer (MEMORY.md + HISTORY.md) — our future device registry may want to leverage this pattern.
+  - MCP support adds a new tool extension mechanism — consider MCP for device protocol tools.
+  - Provider registry now supports `is_oauth` and `extra_headers` — useful for future industrial cloud integrations.
+- **Upstream still advancing**: 22 more commits ahead (Telegram media sending, GitHub Copilot provider, timezone cron). Next sync before task 1.9.
+- **Conflict surface stable**: 7 shared files, all manageable with append-only convention.
 
 ### Conventions Reminder
 - Feature branches: `copilot/<feature-name>` from `main_embed`

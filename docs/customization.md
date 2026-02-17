@@ -124,6 +124,7 @@ class ProvidersConfig(BaseModel):
 | `detect_by_key_prefix` | Detect gateway by API key prefix | `"sk-my-"` |
 | `detect_by_base_keyword` | Detect gateway by base URL keyword | `"myprovider"` |
 | `strip_model_prefix` | Strip existing prefix before re-prefixing | `True` |
+| `is_oauth` | Uses OAuth flow instead of API key (e.g., Codex) | `False` |
 
 ### How Auto-Detection Works
 
@@ -363,7 +364,7 @@ The system prompt is assembled from multiple files in order:
 3. **SOUL.md** — Personality definition
 4. **USER.md** — User profile
 5. **TOOLS.md** — Available tools documentation
-6. **Memory** — Long-term memory + recent daily notes
+6. **Memory** — Long-term memory (`MEMORY.md`) from two-layer memory system
 7. **Skills** — Always-loaded skill content + available skill metadata
 
 To customize, edit any of these files in `~/.nanobot/workspace/`. Changes take effect on the next message.
@@ -398,6 +399,7 @@ The agent reads this file periodically and acts on unchecked tasks. Remove or ch
 | Heartbeat tasks | `workspace/HEARTBEAT.md` | No |
 | New skill | `workspace/skills/my-skill/SKILL.md` | No |
 | New tool | `nanobot/agent/tools/` + `loop.py` | Yes |
+| MCP tool server | `config.json` (`tools.mcpServers`) | Yes |
 | New provider | `providers/registry.py` + `config/schema.py` | Yes |
 | New channel | `nanobot/channels/` + `config/schema.py` + `manager.py` | Yes |
 | Model/temperature | `~/.nanobot/config.json` | Yes |

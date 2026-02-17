@@ -32,7 +32,8 @@ export NANOBOT_AGENTS__DEFAULTS__MODEL="anthropic/claude-opus-4-5"
       "model": "anthropic/claude-opus-4-5",         // Default LLM model
       "maxTokens": 16384,                   // Max tokens in LLM response
       "temperature": 0.7,                   // LLM temperature (0.0–2.0)
-      "maxToolIterations": 30               // Max tool call rounds per message
+      "maxToolIterations": 30,              // Max tool call rounds per message
+      "memoryWindow": 50                    // Messages to keep before consolidation
     }
   },
   "providers": { ... },     // See Providers section
@@ -55,6 +56,7 @@ Each provider has an `apiKey` and optional `apiBase`. Only configure the provide
 |-------|------|-------------|
 | `apiKey` | string | API key for the provider |
 | `apiBase` | string | Custom API base URL (for self-hosted or proxy setups) |
+| `extraHeaders` | object | Optional custom HTTP headers (e.g., APP-Code for AiHubMix) |
 
 ### Available Providers
 
@@ -91,11 +93,29 @@ Each provider has an `apiKey` and optional `apiBase`. Only configure the provide
     },
     "aihubmix": {
       "apiKey": "xxx",
-      "apiBase": ""                  // Default: https://aihubmix.com/v1
+      "apiBase": "",                 // Default: https://aihubmix.com/v1
+      "extraHeaders": {              // Optional: custom headers
+        "APP-Code": "your-app-code"
+      }
     },
     "vllm": {
       "apiKey": "dummy",            // Any non-empty string for local servers
       "apiBase": "http://localhost:8000/v1"
+    },
+    "ollama": {
+      "apiKey": "dummy",
+      "apiBase": "http://localhost:11434/v1"
+    },
+    "minimax": {
+      "apiKey": "xxx"
+    },
+    "custom": {                      // Any OpenAI-compatible endpoint
+      "apiKey": "your-key",
+      "apiBase": "https://your-endpoint.com/v1"
+    },
+    "openaiCodex": {                 // OAuth-based (use `nanobot provider login openai-codex`)
+      "apiKey": "",                  // Managed automatically via OAuth
+      "apiBase": ""
     }
   }
 }
@@ -113,6 +133,9 @@ Set the default model in `agents.defaults.model`. The provider is auto-detected 
 | `gemini` | gemini |
 | `qwen` | dashscope |
 | `glm`, `zhipu` | zhipu |
+| `ollama` | ollama |
+| `minimax` | minimax |
+| `codex`, `openai-codex` | openai_codex (OAuth) |
 | `moonshot`, `kimi` | moonshot |
 | `llama`, `mistral` | groq (or openrouter) |
 
@@ -495,6 +518,36 @@ Controls the internal WebSocket gateway used by channels like WhatsApp.
 | `restrictToWorkspace: true` | All file and shell operations are confined to the workspace directory. Path traversal is blocked. |
 | `exec.timeout` | Commands exceeding this timeout are killed. |
 | Dangerous command blocking | Commands matching destructive patterns (`rm -rf /`, fork bombs, `mkfs`, etc.) are automatically blocked. |
+
+### MCP Server Configuration
+
+MCP (Model Context Protocol) allows nanobot to connect to external tool servers. Tools from MCP servers are dynamically registered and available to the agent.
+
+```jsonc
+{
+  "tools": {
+    "mcpServers": {
+      "filesystem": {                    // Server name (your choice)
+        "command": "npx",               // Stdio: command to run
+        "args": ["-y", "@modelcontextprotocol/server-filesystem", "/home/user"],
+        "env": {}                        // Extra environment variables
+      },
+      "remote-tools": {                  // HTTP-based MCP server
+        "url": "http://localhost:3000/mcp"  // Streamable HTTP endpoint
+      }
+    }
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `command` | string | Command to run for stdio transport (e.g., `npx`, `python`) |
+| `args` | string[] | Command arguments |
+| `env` | object | Extra environment variables passed to the process |
+| `url` | string | HTTP endpoint URL for streamable HTTP transport |
+
+Use either `command`+`args` (stdio) or `url` (HTTP), not both.
 
 ---
 

@@ -13,7 +13,8 @@ nanobot is built around an **agentic loop** pattern: a user message flows in thr
                              │
                              ▼
 ┌──────────────────────────────────────────────────────────────┐
-│  Channels (Telegram, Discord, WhatsApp, Feishu, DingTalk)   │
+│  Channels (Telegram, Discord, WhatsApp, Feishu, DingTalk,   │
+│  Email, Slack, QQ, MoChat, LAN Mesh)                        │
 │  nanobot/channels/                                           │
 └────────────────────────────┬─────────────────────────────────┘
                              │ publish_inbound()
@@ -83,18 +84,19 @@ The `AgentLoop` class orchestrates message processing:
 - **System prompt** is built from (in order):
   1. Identity string ("You are nanobot...")
   2. Bootstrap files from workspace: `AGENTS.md`, `SOUL.md`, `USER.md`, `TOOLS.md`
-  3. Memory context: long-term `MEMORY.md` + recent daily notes
+  3. Memory context: long-term `MEMORY.md` (two-layer memory system)
   4. Skills: always-loaded skills (full content) + available skills (metadata summary)
 - **Messages** combine the system prompt with session history and the current user message.
 - **Media handling**: Images are base64-encoded and sent as vision content blocks.
 
 #### `memory.py` — Memory Store
 
-File-based persistence for agent memory:
+Two-layer file-based persistence for agent memory:
 
-- **Daily notes**: `workspace/memory/YYYY-MM-DD.md` — append-only daily log.
-- **Long-term memory**: `workspace/memory/MEMORY.md` — persistent knowledge.
-- **`get_memory_context()`** returns formatted memory for the system prompt.
+- **Long-term memory**: `workspace/memory/MEMORY.md` — persistent knowledge and distilled facts.
+- **Conversation history log**: `workspace/memory/HISTORY.md` — grep-searchable log of past conversations.
+- **Memory consolidation**: The agent loop periodically summarizes old session messages via LLM, writes distilled facts to `MEMORY.md` and a searchable log to `HISTORY.md`, then trims the session.
+- **`get_memory_context()`** returns formatted `MEMORY.md` content for the system prompt.
 
 #### `skills.py` — Skills Loader
 
@@ -127,18 +129,19 @@ class Tool(ABC):
 
 | Tool | File | Description |
 |------|------|-------------|
-| `read_file` | `file_tools.py` | Read file contents |
-| `write_file` | `file_tools.py` | Write/create files |
-| `edit_file` | `file_tools.py` | Search-and-replace in files |
-| `list_dir` | `file_tools.py` | List directory contents |
-| `exec` | `exec_tool.py` | Execute shell commands (with safety checks) |
-| `web_search` | `web_tools.py` | Search the web (Brave API) |
-| `web_fetch` | `web_tools.py` | Fetch and extract URL content |
-| `message` | `message_tool.py` | Send message to user |
-| `spawn` | `spawn_tool.py` | Spawn background subagent |
-| `cron` | `cron_tool.py` | Schedule tasks |
+| `read_file` | `filesystem.py` | Read file contents |
+| `write_file` | `filesystem.py` | Write/create files |
+| `edit_file` | `filesystem.py` | Search-and-replace in files |
+| `list_dir` | `filesystem.py` | List directory contents |
+| `exec` | `shell.py` | Execute shell commands (with safety checks) |
+| `web_search` | `web.py` | Search the web (Brave API) |
+| `web_fetch` | `web.py` | Fetch and extract URL content |
+| `message` | `message.py` | Send message to user |
+| `spawn` | `spawn.py` | Spawn background subagent |
+| `cron` | `cron.py` | Schedule tasks |
+| MCP tools | `mcp.py` | Dynamic tools from external MCP servers (stdio/HTTP) |
 
-Tools are registered in `AgentLoop._register_default_tools()` and presented to the LLM as OpenAI-format function definitions via `ToolRegistry.to_schemas()`.
+Tools are registered in `AgentLoop._register_default_tools()` and presented to the LLM as OpenAI-format function definitions via `ToolRegistry.to_schemas()`. MCP tools are connected dynamically via `AgentLoop._connect_mcp()` at startup.
 
 ---
 
@@ -156,6 +159,7 @@ ProviderSpec(
     display_name="DeepSeek",             # Shown in status output
     litellm_prefix="deepseek",           # Model prefix: model → deepseek/model
     skip_prefixes=("deepseek/",),        # Don't double-prefix
+    is_oauth=False,                       # If True, uses OAuth flow (e.g., Codex)
 )
 ```
 
@@ -163,6 +167,14 @@ Key lookup functions:
 - **`find_by_model(model)`** — Matches a provider by checking if any keyword appears in the model name.
 - **`find_gateway(api_key, api_base)`** — Detects gateway providers (OpenRouter, AiHubMix) by key prefix or URL.
 - **`find_by_name(name)`** — Direct lookup by config field name.
+
+#### `openai_codex_provider.py` — OpenAI Codex Provider
+
+OAuth-based provider for OpenAI Codex:
+
+- Uses `oauth-cli-kit` for OAuth token management.
+- Registered with `is_oauth=True` in the provider spec — uses OAuth flow instead of API key.
+- Supports `nanobot provider login openai-codex` for authentication.
 
 #### `litellm_provider.py` — LLM Provider
 
@@ -246,6 +258,10 @@ class BaseChannel(ABC):
 | WhatsApp | `whatsapp.py` | WebSocket to Node.js bridge |
 | Feishu | `feishu.py` | WebSocket long connection (lark-oapi) |
 | DingTalk | `dingtalk.py` | Stream mode (dingtalk-stream) |
+| Email | `email.py` | IMAP polling + SMTP replies |
+| Slack | `slack.py` | Socket Mode (slack-sdk) |
+| QQ | `qq.py` | WebSocket via botpy SDK |
+| MoChat | `mochat.py` | HTTP webhook |
 | LAN Mesh | `mesh/channel.py` | UDP discovery + TCP transport |
 
 ---
@@ -359,7 +375,9 @@ Persistent conversation history per user:
 - **Session key**: `channel:chat_id` (e.g., `telegram:123456789`).
 - **Storage**: JSONL files in `~/.nanobot/sessions/` — one file per session.
 - **In-memory cache**: Sessions are loaded once and cached for fast access.
-- **History retrieval**: `get_history(n)` returns the last N messages for LLM context.
+- **History retrieval**: `get_history(max_messages=500)` returns recent messages for LLM context.
+- **Consolidation tracking**: `last_consolidated` field tracks how many messages have been summarized to memory files.
+- **`/new` command**: Clears session and triggers full memory consolidation.
 
 ---
 
@@ -368,6 +386,7 @@ Persistent conversation history per user:
 The cron service manages scheduled agent tasks:
 
 - **Job types**: `at` (one-time), `every` (interval), `cron` (cron expression via `croniter`).
+- **Timezone support**: Jobs respect timezone configuration; defaults to system timezone.
 - **Persistence**: Jobs stored in `~/.nanobot/cron/jobs.json`.
 - **Execution**: Timer-based (`asyncio.sleep`); when a job is due, calls the agent's `process_direct()`.
 - **Delivery**: Jobs can optionally deliver responses to a specific channel/chat via the bus.
@@ -380,14 +399,19 @@ Built with `typer`, the CLI provides these entry points:
 
 | Command | What It Does |
 |---------|-------------|
-| `nanobot onboard` | Creates `~/.nanobot/config.json` and `~/.nanobot/workspace/` |
+| `nanobot onboard` | Creates/merges `~/.nanobot/config.json` and `~/.nanobot/workspace/` (non-destructive) |
 | `nanobot agent -m "..."` | Single-message mode — process and exit |
-| `nanobot agent` | Interactive REPL mode with readline history |
+| `nanobot agent` | Interactive REPL mode with `prompt_toolkit` (history, multi-line) |
 | `nanobot gateway` | Starts all enabled channels + cron + heartbeat |
 | `nanobot status` | Displays config, providers, and channel status |
+| `nanobot provider login <name>` | OAuth login for providers (e.g., `openai-codex`) |
 | `nanobot channels login` | Links WhatsApp device (QR scan) |
 | `nanobot channels status` | Shows channel connection status |
-| `nanobot cron add/list/remove` | Manage scheduled jobs |
+| `nanobot cron add/list/remove/enable/run` | Manage and execute scheduled jobs |
+
+**Slash commands** (available in interactive mode and all channels):
+- `/new` — Start a new conversation (consolidates memory, clears session)
+- `/help` — Show available commands
 
 ---
 
@@ -403,14 +427,17 @@ Config (root)
 │       ├── model (str)
 │       ├── max_tokens (int)
 │       ├── temperature (float)
-│       └── max_tool_iterations (int)
+│       ├── max_tool_iterations (int)
+│       └── memory_window (int)            # Messages to keep before consolidation
 ├── providers
-│   ├── openrouter: {apiKey, apiBase}
-│   ├── anthropic: {apiKey, apiBase}
-│   ├── openai: {apiKey, apiBase}
-│   ├── deepseek: {apiKey, apiBase}
-│   ├── ... (all providers)
-│   └── vllm: {apiKey, apiBase}
+│   ├── custom: {apiKey, apiBase, extraHeaders}  # User-defined OpenAI-compatible
+│   ├── anthropic: {apiKey, apiBase, extraHeaders}
+│   ├── openai: {apiKey, apiBase, extraHeaders}
+│   ├── openrouter: {apiKey, apiBase, extraHeaders}
+│   ├── deepseek: {apiKey, apiBase, extraHeaders}
+│   ├── groq, zhipu, dashscope, vllm, ollama, gemini, moonshot
+│   ├── minimax, aihubmix: {apiKey, apiBase, extraHeaders}
+│   └── openai_codex: {apiKey, apiBase}    # OAuth-based (is_oauth=True)
 ├── hybridRouter
 │   ├── enabled (bool)
 │   ├── localProvider (str)
@@ -423,12 +450,17 @@ Config (root)
 │   ├── discord: {enabled, token, allowFrom}
 │   ├── whatsapp: {enabled, allowFrom}
 │   ├── feishu: {enabled, appId, appSecret, ...}
-│   └── dingtalk: {enabled, clientId, clientSecret, ...}
+│   ├── dingtalk: {enabled, clientId, clientSecret, ...}
+│   ├── email: {enabled, imapHost, smtpHost, ...}
+│   ├── slack: {enabled, botToken, appToken, mode, dm, ...}
+│   ├── qq: {enabled, appId, secret, ...}
+│   └── mesh: {enabled, nodeId, tcpPort, udpPort, roles, ...}
 ├── gateway: {host, port}
 └── tools
     ├── restrictToWorkspace (bool)
-    ├── web.search: {apiKey}
-    └── exec: {timeout}
+    ├── web.search: {apiKey, maxResults}
+    ├── exec: {timeout}
+    └── mcp_servers: {name: {command, args, env, url}}  # MCP server connections
 ```
 
 Config is loaded from `~/.nanobot/config.json` and supports environment variable overrides with the `NANOBOT_` prefix.
@@ -484,7 +516,7 @@ Step-by-step instructions the agent follows when this skill is activated.
 
 ## Data Flow: Complete Message Lifecycle
 
-1. **User sends message** via Telegram/Discord/WhatsApp/Feishu/DingTalk.
+1. **User sends message** via Telegram/Discord/WhatsApp/Feishu/DingTalk/Email/Slack/QQ/MoChat/LAN Mesh.
 2. **Channel** receives message and calls `bus.publish_inbound(msg)`.
 3. **Agent loop** calls `bus.consume_inbound()` to get the message.
 4. **Session manager** retrieves or creates a session for this `channel:chat_id`.
