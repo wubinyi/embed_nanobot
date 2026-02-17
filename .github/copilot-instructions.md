@@ -67,10 +67,11 @@ Repository structure:
     This ensures context recovery, roadmap alignment, and detection of any upstream changes since the last session.
 
     **Current Upstream Sync Status** (Updated: 2026-02-17):
-    - Latest sync: Merged 71 commits from upstream/main (HKUDS/nanobot) into main_embed
-    - Upstream features integrated: MCP support, OpenAI Codex provider, security hardening, redesigned memory system
+    - Latest sync: Merged 116 commits (77 non-merge) from upstream/main (HKUDS/nanobot) into main_embed
+    - Upstream features integrated: MCP support, OpenAI Codex provider, security hardening, redesigned memory system, CLI overhaul, cron timezone, channel improvements
     - Custom features preserved: Hybrid Router, LAN Mesh, vLLM integration
     - All conflicts resolved following upstream-first / append-only convention
+    - 22 more upstream commits pending (Telegram media, GitHub Copilot provider, timezone cron)
     - Check #file:docs/sync/SYNC_LOG.md for detailed history
   </Session_Bootstrap>
 
@@ -339,7 +340,8 @@ Repository structure:
     | `nanobot/config/schema.py` | Same | Appended MeshConfig, HybridRouterConfig fields |
     | `nanobot/channels/manager.py` | Same | Appended mesh channel registration |
     | `nanobot/cli/commands.py` | Same | Added hybrid router creation in `_make_provider()` |
-    | `nanobot/providers/registry.py` | Same | Appended hybrid_router entry |
+    | `nanobot/providers/__init__.py` | Same | Added hybrid_router export |
+    | `nanobot/providers/registry.py` | Same | Appended hybrid_router, vllm entries |
     | `README.md` | Same | Added embed_nanobot section at bottom |
     | `pyproject.toml` | Same | Added deps at end |
   - **Goal**: Keep this list as short as possible. Before touching a shared file, ask: "Can I achieve this in a separate file instead?"
