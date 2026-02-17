@@ -78,9 +78,9 @@ If there are new upstream commits:
 ### Step E: Sync Decision
 
 If upstream has new changes (from Step B):
-- **If no conflicts expected**: Perform sync now (follow Upstream_Sync_Protocol in copilot-instructions.md).
+- **If no conflicts expected**: Perform sync now (follow `docs/00_system/UPSTREAM_SYNC_PROTOCOL.md`).
 - **If conflicts likely**: Defer sync to after current task, but document the risk.
-- **If our `main` is behind**: Always update `main` to match `upstream/main`.
+- **If our `main` is behind**: Always update `main` to match `upstream/main` first (Step 2 in UPSTREAM_SYNC_PROTOCOL.md).
 
 ---
 

@@ -1,6 +1,6 @@
 ---
-name: EmbedNanobot_Agentic_Workflow_v1.1
-version: 1.1.0
+name: EmbedNanobot_Agentic_Workflow_v1.2
+version: 1.2.0
 description: Multi-agent collaboration protocol for embed_nanobot — AI Hub for Smart Home & Smart Factory
 ---
 
@@ -19,6 +19,7 @@ Key references:
 - Customization Guide: #file:docs/customization.md
 - Merge Analysis: #file:docs/sync/MERGE_ANALYSIS.md
 - Sync Log: #file:docs/sync/SYNC_LOG.md
+- Upstream Sync Protocol: #file:docs/00_system/UPSTREAM_SYNC_PROTOCOL.md
 
 Repository structure:
 - **Upstream branch**: `main` (tracks HKUDS/nanobot)
@@ -29,6 +30,7 @@ Repository structure:
 </Context>
 
 <Agents>
+
   <Agent id="Architect">
     - **Role**: System design, strategic planning, implementation plans, upstream alignment.
     - **Focus**: Ensure current work aligns with PRD goals, maintain system coherence across embedded features and upstream nanobot core, manage phased roadmap progression.
@@ -65,14 +67,10 @@ Repository structure:
     Read and follow: #file:docs/00_system/BOOTSTRAP_PROTOCOL.md
 
     This ensures context recovery, roadmap alignment, and detection of any upstream changes since the last session.
+    For current sync status, see: #file:docs/sync/SYNC_LOG.md
 
-    **Current Upstream Sync Status** (Updated: 2026-02-17):
-    - Latest sync: Merged 116 commits (77 non-merge) from upstream/main (HKUDS/nanobot) into main_embed
-    - Upstream features integrated: MCP support, OpenAI Codex provider, security hardening, redesigned memory system, CLI overhaul, cron timezone, channel improvements
-    - Custom features preserved: Hybrid Router, LAN Mesh, vLLM integration
-    - All conflicts resolved following upstream-first / append-only convention
-    - 22 more upstream commits pending (Telegram media, GitHub Copilot provider, timezone cron)
-    - Check #file:docs/sync/SYNC_LOG.md for detailed history
+    At the END of bootstrap, run the **Upstream Sync Protocol** if upstream has new commits:
+    Read and follow: #file:docs/00_system/UPSTREAM_SYNC_PROTOCOL.md
   </Session_Bootstrap>
 
   ## Phase 0: [Strategic Roadmap Review]
@@ -123,7 +121,7 @@ Repository structure:
      - Check edge cases: empty inputs, network failures, concurrent access, device disconnection.
      - Verify no regressions in existing functionality.
 
-  3. **[Documentation]**:
+  3. **[Documentation] (MANDATORY)**:
      - **[Developer]** writes `docs/01_features/fXX_<feature>/02_Dev_Implementation.md`.
      - **[Tester]** writes `docs/01_features/fXX_<feature>/03_Test_Report.md`.
      - **[Developer]** runs the **Documentation Freshness Check** (see below).
@@ -136,71 +134,27 @@ Repository structure:
      - Mark completed tasks with status `Done` and timestamp.
      - Add strategic reflection: what we learned, what to adjust.
 
-  2. **[Architect]** checks upstream alignment:
-     - Run: `git fetch upstream && git log --oneline upstream/main..main_embed --first-parent`
-     - Note any upstream changes that may need merging soon.
+  2. **[Architect]** Using the standard format, feat(fXX): Briefly describe the commit to the main branch.
 
-  3. **[Architect]** proposes next task from the roadmap.
+  3. **[Architect]** proposes next task from the roadmap if there are pending tasks, or reports completion if all tasks are done.
+
+  ## Completion Gate
+
+  **Before declaring ANY task (feature, sync, or fix) as complete**, verify:
+
+  - [ ] All code changes committed and pushed
+  - [ ] `docs/sync/SYNC_LOG.md` updated (if sync was performed)
+  - [ ] `docs/sync/MERGE_ANALYSIS.md` updated (if conflict surface changed)
+  - [ ] Documentation Freshness Check passed (see below)
+  - [ ] `docs/00_system/Project_Roadmap.md` updated with task status
+  - [ ] Feature docs written (`01_Design_Log.md`, `02_Dev_Implementation.md`, `03_Test_Report.md`) if applicable
+
+  For upstream syncs specifically, the full completion gate is in: #file:docs/00_system/UPSTREAM_SYNC_PROTOCOL.md
 
 </Workflow>
 
-<Upstream_Sync_Protocol>
-
-  ## Daily Upstream Sync
-
-  The project must stay aligned with HKUDS/nanobot. This is managed through a structured merge process.
-
-  ### Automated Sync Steps
-
-  1. Fetch upstream:
-     ```bash
-     git fetch upstream
-     ```
-
-  2. Update local main:
-     ```bash
-     git checkout main
-     git merge upstream/main --ff-only
-     git push origin main
-     ```
-
-  3. Merge main into main_embed:
-     ```bash
-     git checkout main_embed
-     git merge main --no-edit
-     ```
-
-  4. If conflicts arise:
-     - Document in `docs/sync/YYYY-MM-DD_sync.md`
-     - Resolve following conventions in #file:agent.md (upstream-first, our code appended last)
-     - Test after resolution
-
-  5. Push and log:
-     ```bash
-     git push origin main_embed
-     ```
-     - Append result to `docs/sync/SYNC_LOG.md`
-
-  ### Sync Log Format (`docs/sync/SYNC_LOG.md`)
-
-  ```markdown
-  | Date | Upstream HEAD | Commits Merged | Conflicts | Resolution |
-  |------|---------------|----------------|-----------|------------|
-  | 2026-02-12 | abc1234 | 5 | None | Clean merge |
-  | 2026-02-13 | def5678 | 3 | schema.py | Appended our fields after upstream |
-  ```
-
-  ### Conflict Resolution Rules
-
-  1. **Config schema** (`nanobot/config/schema.py`): Upstream fields first, our fields appended at end.
-  2. **Channel manager** (`nanobot/channels/manager.py`): Upstream channels registered first, ours last.
-  3. **CLI** (`nanobot/cli/commands.py`): Check for both Hybrid Router and upstream provider logic; integrate both sequentially.
-  4. **Providers** (`nanobot/providers/__init__.py`): Export both upstream and custom providers.
-  5. **Dependencies** (`pyproject.toml`): Keep all upstream dependencies, add ours at end if needed.
-  6. **New upstream files**: Accept as-is (they don't conflict with our separate modules).
-  7. **README**: Accept upstream news/version updates, preserve our custom feature sections (vLLM, Hybrid Router, LAN Mesh).
-
-</Upstream_Sync_Protocol>
+<!-- Upstream_Sync_Protocol has been extracted to a dedicated file for maintainability.
+     See: docs/00_system/UPSTREAM_SYNC_PROTOCOL.md -->
 
 <Documentation_Freshness_Check>
 
@@ -417,6 +371,7 @@ Repository structure:
   ├── 00_system/
   │   ├── Project_Roadmap.md       # Master roadmap with all tasks and status
   │   ├── BOOTSTRAP_PROTOCOL.md    # Session bootstrap procedure
+  │   ├── UPSTREAM_SYNC_PROTOCOL.md # Upstream sync procedure (extracted from SKILL)
   │   └── SYNC_LOG.md              # Upstream sync history (symlink or moved)
   ├── 01_features/
   │   ├── f01_hybrid_router/
