@@ -13,10 +13,12 @@ Key references:
 - PRD: #file:docs/PRD.md
 - Architecture: #file:docs/architecture.md
 - Project Roadmap: #file:docs/00_system/Project_Roadmap.md
+- Bootstrap Protocol: #file:docs/00_system/BOOTSTRAP_PROTOCOL.md
 - Upstream Coding Conventions: #file:agent.md
 - Configuration Reference: #file:docs/configuration.md
 - Customization Guide: #file:docs/customization.md
-- Merge Analysis: #file:docs/MERGE_ANALYSIS.md
+- Merge Analysis: #file:docs/sync/MERGE_ANALYSIS.md
+- Sync Log: #file:docs/sync/SYNC_LOG.md
 
 Repository structure:
 - **Upstream branch**: `main` (tracks HKUDS/nanobot)
@@ -63,6 +65,13 @@ Repository structure:
     Read and follow: #file:docs/00_system/BOOTSTRAP_PROTOCOL.md
 
     This ensures context recovery, roadmap alignment, and detection of any upstream changes since the last session.
+
+    **Current Upstream Sync Status** (Updated: 2026-02-17):
+    - Latest sync: Merged 71 commits from upstream/main (HKUDS/nanobot) into main_embed
+    - Upstream features integrated: MCP support, OpenAI Codex provider, security hardening, redesigned memory system
+    - Custom features preserved: Hybrid Router, LAN Mesh, vLLM integration
+    - All conflicts resolved following upstream-first / append-only convention
+    - Check #file:docs/sync/SYNC_LOG.md for detailed history
   </Session_Bootstrap>
 
   ## Phase 0: [Strategic Roadmap Review]
@@ -98,6 +107,8 @@ Repository structure:
      - **Test Plan**: Which test files to create/update.
 
   3. **[Record]**: Write the design and plan to `docs/01_features/fXX_<feature>/01_Design_Log.md`.
+     
+     > **Note**: The `docs/01_features/` directory structure is a prescriptive framework for new feature documentation. Create feature folders as needed when implementing new features (e.g., `docs/01_features/f03_zigbee_integration/`).
 
   ## Phase 2: [Implementation & Verification]
 
@@ -182,9 +193,11 @@ Repository structure:
 
   1. **Config schema** (`nanobot/config/schema.py`): Upstream fields first, our fields appended at end.
   2. **Channel manager** (`nanobot/channels/manager.py`): Upstream channels registered first, ours last.
-  3. **CLI** (`nanobot/cli/commands.py`): Accept upstream changes, re-add our customizations at end.
-  4. **New upstream files**: Accept as-is (they don't conflict with our separate modules).
-  5. **README**: Accept upstream version, add our section at the very bottom.
+  3. **CLI** (`nanobot/cli/commands.py`): Check for both Hybrid Router and upstream provider logic; integrate both sequentially.
+  4. **Providers** (`nanobot/providers/__init__.py`): Export both upstream and custom providers.
+  5. **Dependencies** (`pyproject.toml`): Keep all upstream dependencies, add ours at end if needed.
+  6. **New upstream files**: Accept as-is (they don't conflict with our separate modules).
+  7. **README**: Accept upstream news/version updates, preserve our custom feature sections (vLLM, Hybrid Router, LAN Mesh).
 
 </Upstream_Sync_Protocol>
 
