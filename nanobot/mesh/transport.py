@@ -18,6 +18,7 @@ from loguru import logger
 
 from nanobot.mesh.discovery import PeerInfo, UDPDiscovery
 from nanobot.mesh.protocol import MeshEnvelope, MsgType, read_envelope, write_envelope
+from nanobot.mesh.security import KeyStore
 
 # Callback type: receives a MeshEnvelope and returns nothing.
 MessageHandler = Callable[[MeshEnvelope], Awaitable[None]]
@@ -44,6 +45,9 @@ class MeshTransport:
         discovery: UDPDiscovery,
         host: str = "0.0.0.0",
         tcp_port: int = 18800,
+        key_store: KeyStore | None = None,
+        psk_auth_enabled: bool = True,
+        allow_unauthenticated: bool = False,
     ):
         self.node_id = node_id
         self.discovery = discovery
@@ -51,6 +55,10 @@ class MeshTransport:
         self.tcp_port = tcp_port
         self._server: asyncio.Server | None = None
         self._handlers: list[MessageHandler] = []
+        # --- embed_nanobot extensions (PSK auth, task 1.9) ---
+        self.key_store = key_store
+        self.psk_auth_enabled = psk_auth_enabled
+        self.allow_unauthenticated = allow_unauthenticated
 
     # -- handler registration ------------------------------------------------
 
@@ -90,6 +98,9 @@ class MeshTransport:
         try:
             env = await asyncio.wait_for(read_envelope(reader), timeout=10.0)
             if env is None:
+                return
+            # --- embed_nanobot: PSK authentication check ---
+            if not self._verify_inbound(env):
                 return
             logger.debug(
                 f"[Mesh/Transport] received {env.type} from {env.source}"
@@ -145,6 +156,8 @@ class MeshTransport:
 
     async def _send_to(self, peer: PeerInfo, env: MeshEnvelope) -> bool:
         try:
+            # --- embed_nanobot: auto-sign outbound envelopes ---
+            self._sign_outbound(env)
             reader, writer = await asyncio.wait_for(
                 asyncio.open_connection(peer.ip, peer.tcp_port),
                 timeout=5.0,
@@ -160,3 +173,75 @@ class MeshTransport:
                 f"@ {peer.ip}:{peer.tcp_port}: {exc}"
             )
             return False
+
+    # -- embed_nanobot: PSK authentication helpers (task 1.9) ----------------
+
+    def _verify_inbound(self, env: MeshEnvelope) -> bool:
+        """Verify HMAC signature on an inbound envelope.
+
+        Returns ``True`` if the message should be processed, ``False`` to drop.
+        """
+        if not self.psk_auth_enabled or self.key_store is None:
+            return True  # auth disabled — pass through
+
+        # Check if the message carries auth fields
+        if not env.hmac or not env.nonce:
+            if self.allow_unauthenticated:
+                logger.warning(
+                    f"[Mesh/Security] UNSIGNED message from {env.source} — "
+                    "allow_unauthenticated=True, processing anyway"
+                )
+                return True
+            logger.warning(
+                f"[Mesh/Security] REJECTED unsigned message from {env.source}"
+            )
+            return False
+
+        # Look up PSK
+        psk = self.key_store.get_psk(env.source)
+        if psk is None:
+            logger.warning(
+                f"[Mesh/Security] REJECTED message from unknown node {env.source!r}"
+            )
+            return False
+
+        # Verify HMAC
+        canonical = env.canonical_bytes()
+        if not KeyStore.verify_hmac(canonical, env.nonce, psk, env.hmac):
+            logger.warning(
+                f"[Mesh/Security] REJECTED message from {env.source} — "
+                "HMAC verification failed"
+            )
+            return False
+
+        # Timestamp window check
+        if not self.key_store.check_timestamp(env.ts):
+            logger.warning(
+                f"[Mesh/Security] REJECTED message from {env.source} — "
+                f"timestamp {env.ts} outside window"
+            )
+            return False
+
+        # Nonce replay check
+        if not self.key_store.check_and_record_nonce(env.nonce):
+            logger.warning(
+                f"[Mesh/Security] REJECTED replay from {env.source} — "
+                f"nonce {env.nonce!r} already seen"
+            )
+            return False
+
+        logger.debug(f"[Mesh/Security] authenticated message from {env.source}")
+        return True
+
+    def _sign_outbound(self, env: MeshEnvelope) -> None:
+        """Sign an outbound envelope with this node's PSK (if available)."""
+        if not self.psk_auth_enabled or self.key_store is None:
+            return
+
+        psk = self.key_store.get_psk(self.node_id)
+        if psk is None:
+            return  # Hub's own node might not be in the key store
+
+        env.nonce = KeyStore.generate_nonce()
+        canonical = env.canonical_bytes()
+        env.hmac = KeyStore.compute_hmac(canonical, env.nonce, psk)

@@ -47,19 +47,50 @@ class MeshEnvelope:
     target: str  # "*" means broadcast
     payload: dict[str, Any] = field(default_factory=dict)
     ts: float = field(default_factory=time.time)
+    # --- embed_nanobot extensions (PSK auth, task 1.9) ---
+    nonce: str = ""   # Random 16-hex-char nonce for replay protection
+    hmac: str = ""    # HMAC-SHA256 hex digest for authentication
 
     # -- serialisation -------------------------------------------------------
 
+    def to_dict(self) -> dict[str, Any]:
+        """Return the envelope as a plain dict (includes hmac/nonce if set)."""
+        d = asdict(self)
+        # Omit empty auth fields for backward compatibility
+        if not d.get("nonce"):
+            d.pop("nonce", None)
+        if not d.get("hmac"):
+            d.pop("hmac", None)
+        return d
+
     def to_bytes(self) -> bytes:
         """Serialise to length-prefixed JSON bytes."""
-        body = json.dumps(asdict(self), ensure_ascii=False).encode()
+        body = json.dumps(self.to_dict(), ensure_ascii=False).encode()
         return struct.pack("!I", len(body)) + body
 
     @classmethod
     def from_bytes(cls, data: bytes) -> "MeshEnvelope":
         """Deserialise from raw JSON bytes (no length prefix)."""
         obj = json.loads(data)
-        return cls(**obj)
+        return cls(
+            type=obj.get("type", ""),
+            source=obj.get("source", ""),
+            target=obj.get("target", ""),
+            payload=obj.get("payload", {}),
+            ts=obj.get("ts", 0.0),
+            nonce=obj.get("nonce", ""),
+            hmac=obj.get("hmac", ""),
+        )
+
+    def canonical_bytes(self) -> bytes:
+        """Return canonical JSON bytes for HMAC computation.
+
+        Excludes ``hmac`` and ``nonce`` fields, serialises with sorted keys.
+        """
+        d = asdict(self)
+        d.pop("hmac", None)
+        d.pop("nonce", None)
+        return json.dumps(d, sort_keys=True, ensure_ascii=False).encode("utf-8")
 
 
 async def read_envelope(reader: Any) -> MeshEnvelope | None:

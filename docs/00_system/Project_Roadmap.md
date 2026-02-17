@@ -21,20 +21,20 @@
 | 1.7 | Project SKILL file for Copilot workflow | Done | 2026-02-12 | `.github/copilot-instructions.md`, bootstrap protocol, PRD |
 | 1.8 | Upstream sync (catch up 116 upstream commits) | Done | 2026-02-17 | Merged MCP, Codex, memory redesign, CLI overhaul, security hardening. See SYNC_LOG.md |
 | 1.8b | Upstream sync (remaining 22 commits) | Done | 2026-02-17 | Telegram media, GitHub Copilot provider, cron timezone, ClawHub skill. Fully synced. |
+| 1.9 | PSK-based device authentication (HMAC signing) | Done | 2026-02-17 | `nanobot/mesh/security.py` — KeyStore, HMAC-SHA256 sign/verify, nonce replay protection. 25 new tests. |
 
 ### In Progress
 
 | # | Task | Status | Assignee | Notes |
 |---|------|--------|----------|-------|
-| — | (none) | — | — | Ready for task 1.9 |
+| — | (none) | — | — | Ready for task 1.10 |
 
 ### Planned (Phase 1 Remaining)
 
 | # | Task | Priority | Complexity | Dependencies |
 |---|------|----------|------------|--------------|
-| 1.9 | PSK-based device authentication (HMAC signing) | P0 | L | Mesh transport layer |
-| 1.10 | Device enrollment flow (PIN-based pairing) | P0 | M | PSK auth (1.9) |
-| 1.11 | Mesh message encryption (AES-GCM) | P0 | M | PSK auth (1.9) |
+| 1.10 | Device enrollment flow (PIN-based pairing) | P0 | M | PSK auth (1.9) ✅ |
+| 1.11 | Mesh message encryption (AES-GCM) | P0 | M | PSK auth (1.9) ✅ |
 
 ---
 
@@ -115,6 +115,18 @@ See [docs/sync/SYNC_LOG.md](../sync/SYNC_LOG.md) for full merge history.
 - **SKILL v1.2 shipped**: Extracted Upstream_Sync_Protocol to dedicated file, added completion gate checklist, Key Features column in sync log, post-sync verification step, simplified Session_Bootstrap.
 - **All documentation refreshed**: GitHub Copilot provider added to architecture.md and configuration.md, Telegram media support noted, proxy field documented.
 - **Ready for task 1.9** (PSK-based device authentication).
+
+### 2026-02-17c — Task 1.9: PSK Authentication Complete
+- **HMAC-SHA256 authentication added** to mesh transport: every TCP message is signed with a per-device Pre-Shared Key.
+- **New module**: `nanobot/mesh/security.py` — `KeyStore` class manages device enrollment, PSK storage (JSON with `0600` perms), HMAC sign/verify, nonce replay tracking, and timestamp window validation.
+- **Wire format extended**: `MeshEnvelope` now supports `nonce` and `hmac` optional fields, backward-compatible with old unsigned messages.
+- **25 new tests**: KeyStore management, HMAC correctness, nonce replay rejection, transport-level integration (authenticated send/receive, unsigned message rejection, unknown node rejection, allow_unauthenticated mode).
+- **111 total tests passing**, zero regressions.
+- **Zero new dependencies** — uses only Python stdlib (`hmac`, `hashlib`, `secrets`).
+- **Config additions**: 4 fields appended to `MeshConfig` (append-only convention).
+- **Docs updated**: architecture.md (4-layer mesh diagram), configuration.md (PSK auth fields + security notes), feature docs (Design Log, Dev Implementation, Test Report).
+- **SKILL v1.3 shipped**: Added AUTO mode for unattended workflow progression.
+- **Next tasks**: 1.10 (PIN-based device enrollment) and 1.11 (AES-GCM encryption), both now unblocked.
 
 ### Conventions Reminder
 - Feature branches: `copilot/<feature-name>` from `main_embed`
