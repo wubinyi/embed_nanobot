@@ -276,12 +276,17 @@ class BaseChannel(ABC):
 
 The LAN Mesh enables **device-to-device communication** on the same local network without requiring internet. This is ideal for smart home scenarios where nanobot acts as an AI hub controlling household appliances, or for nanobot-to-nanobot communication across multiple instances.
 
-**Architecture** — Three-layer design:
+**Architecture** — Four-layer design:
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  Layer 3: MeshChannel (nanobot/mesh/channel.py)             │
+│  Layer 4: MeshChannel (nanobot/mesh/channel.py)             │
 │  ↓ Bridges mesh transport into nanobot's message bus        │
+└────────────────────┬─────────────────────────────────────────┘
+                     │
+┌────────────────────┴─────────────────────────────────────────┐
+│  Layer 3: PSK Security (nanobot/mesh/security.py)           │
+│  ↓ HMAC-SHA256 signing/verification, key store, nonce guard │
 └────────────────────┬─────────────────────────────────────────┘
                      │
 ┌────────────────────┴─────────────────────────────────────────┐
@@ -340,7 +345,9 @@ JSON structure:
   "payload": {                    // Type-specific content
     "text": "Turn on the lights"
   },
-  "ts": 1700000000.0              // Unix timestamp
+  "ts": 1700000000.0,             // Unix timestamp
+  "nonce": "a1b2c3d4e5f6a7b8",   // Random 16-hex-char nonce (PSK auth)
+  "hmac": "hex-sha256-digest"     // HMAC-SHA256 signature (PSK auth)
 }
 ```
 
@@ -355,9 +362,10 @@ JSON structure:
 
 **Key components:**
 
-- **`protocol.py`**: Wire format, `MeshEnvelope` serialisation/deserialisation, `read_envelope()` / `write_envelope()`
+- **`protocol.py`**: Wire format, `MeshEnvelope` serialisation/deserialisation, `read_envelope()` / `write_envelope()`, canonical bytes for HMAC
+- **`security.py`**: `KeyStore` — per-device PSK management, HMAC-SHA256 sign/verify, nonce replay tracking, timestamp validation
 - **`discovery.py`**: UDP broadcast beacons advertising node presence on port 18799
-- **`transport.py`**: TCP server (port 18800) + client connections, handles envelope routing
+- **`transport.py`**: TCP server (port 18800) + client connections, handles envelope routing, auto-sign outbound / verify inbound
 - **`channel.py`**: `MeshChannel` implements `BaseChannel` interface, publishes inbound messages to the bus and subscribes to outbound messages
 
 The mesh is registered in `nanobot/channels/manager.py` like any other channel and activated via `channels.mesh.enabled: true` in config.

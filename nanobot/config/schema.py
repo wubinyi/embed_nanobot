@@ -114,6 +114,11 @@ class MeshConfig(BaseModel):
     udp_port: int = 18799      # UDP port for peer discovery beacons
     roles: list[str] = Field(default_factory=lambda: ["nanobot"])  # Node roles for discovery
     allow_from: list[str] = Field(default_factory=list)  # Allowed node IDs (empty = allow all)
+    # --- embed_nanobot extensions: PSK authentication (task 1.9) ---
+    psk_auth_enabled: bool = True       # Enable HMAC-PSK authentication for mesh messages
+    key_store_path: str = ""            # Path to mesh_keys.json (default: <workspace>/mesh_keys.json)
+    allow_unauthenticated: bool = False # If True, log warning but still process unsigned messages
+    nonce_window: int = 60              # Seconds; reject messages with ts outside this window
 
 
 class ChannelsConfig(BaseModel):

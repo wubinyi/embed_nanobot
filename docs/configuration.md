@@ -339,7 +339,11 @@ The LAN Mesh enables **device-to-device communication** on the same local networ
       "tcpPort": 18800,                  // TCP port for mesh message transport
       "udpPort": 18799,                  // UDP port for peer discovery beacons
       "roles": ["nanobot"],              // Node roles for discovery (e.g., ["nanobot", "controller"])
-      "allowFrom": []                    // Allowed node IDs (empty = allow all)
+      "allowFrom": [],                   // Allowed node IDs (empty = allow all)
+      "pskAuthEnabled": true,            // Enable HMAC-PSK authentication for mesh messages
+      "keyStorePath": "",                // Path to mesh_keys.json (default: <workspace>/mesh_keys.json)
+      "allowUnauthenticated": false,     // If true, log warning but still process unsigned messages
+      "nonceWindow": 60                  // Seconds; reject messages with ts outside this window
     }
   }
 }
@@ -353,6 +357,10 @@ The LAN Mesh enables **device-to-device communication** on the same local networ
 | `udpPort` | int | `18799` | UDP port for peer discovery broadcasts |
 | `roles` | string[] | `["nanobot"]` | Node roles advertised in discovery beacons |
 | `allowFrom` | string[] | `[]` | Whitelist of node IDs allowed to send messages. Empty = allow all |
+| `pskAuthEnabled` | bool | `true` | Enable HMAC-SHA256 authentication using per-device PSKs |
+| `keyStorePath` | string | `""` | Path to key store file. Empty = `<workspace>/mesh_keys.json` |
+| `allowUnauthenticated` | bool | `false` | Process unsigned messages with warning (dev only) |
+| `nonceWindow` | int | `60` | Seconds; reject messages with timestamps outside this window |
 
 ### Example: Smart Home Setup
 
@@ -407,9 +415,13 @@ Use cases:
 
 ### Security Notes
 
-- **`allowFrom` whitelist**: Restrict which nodes can send messages to prevent unauthorized access
-- **LAN-only**: The mesh uses UDP/TCP on the local network and never touches the internet
-- **No encryption**: Messages are transmitted in plaintext on your LAN. Use trusted networks only.
+- **PSK authentication (default: enabled)**: Every mesh message is signed with HMAC-SHA256 using a per-device Pre-Shared Key. Unauthenticated messages are rejected unless `allowUnauthenticated` is set to `true`.
+- **Key store**: Device PSKs are stored in `mesh_keys.json` with `0600` file permissions. Use `keyStorePath` to customise the location.
+- **Replay protection**: Each message includes a random nonce and timestamp. Duplicate nonces and messages outside the `nonceWindow` are rejected.
+- **`allowFrom` whitelist**: Restrict which nodes can send messages to prevent unauthorized access.
+- **LAN-only**: The mesh uses UDP/TCP on the local network and never touches the internet.
+- **`allowUnauthenticated` (dev only)**: Set to `true` during development to accept unsigned messages with a warning. **Never enable in production.**
+- **Encryption**: Message payloads are not yet encrypted (HMAC provides authentication + integrity, not confidentiality). AES-GCM encryption is planned as task 1.11.
 
 ---
 
