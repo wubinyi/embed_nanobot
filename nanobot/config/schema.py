@@ -1,7 +1,7 @@
 """Configuration schema using Pydantic."""
 
 from pathlib import Path
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from pydantic_settings import BaseSettings
 
 
@@ -9,6 +9,7 @@ class WhatsAppConfig(BaseModel):
     """WhatsApp channel configuration."""
     enabled: bool = False
     bridge_url: str = "ws://localhost:3001"
+    bridge_token: str = ""  # Shared token for bridge auth (optional, recommended)
     allow_from: list[str] = Field(default_factory=list)  # Allowed phone numbers
 
 
@@ -77,42 +78,6 @@ class EmailConfig(BaseModel):
     allow_from: list[str] = Field(default_factory=list)  # Allowed sender email addresses
 
 
-class MochatMentionConfig(BaseModel):
-    """Mochat mention behavior configuration."""
-    require_in_groups: bool = False
-
-
-class MochatGroupRule(BaseModel):
-    """Mochat per-group mention requirement."""
-    require_mention: bool = False
-
-
-class MochatConfig(BaseModel):
-    """Mochat channel configuration."""
-    enabled: bool = False
-    base_url: str = "https://mochat.io"
-    socket_url: str = ""
-    socket_path: str = "/socket.io"
-    socket_disable_msgpack: bool = False
-    socket_reconnect_delay_ms: int = 1000
-    socket_max_reconnect_delay_ms: int = 10000
-    socket_connect_timeout_ms: int = 10000
-    refresh_interval_ms: int = 30000
-    watch_timeout_ms: int = 25000
-    watch_limit: int = 100
-    retry_delay_ms: int = 500
-    max_retry_attempts: int = 0  # 0 means unlimited retries
-    claw_token: str = ""
-    agent_user_id: str = ""
-    sessions: list[str] = Field(default_factory=list)
-    panels: list[str] = Field(default_factory=list)
-    allow_from: list[str] = Field(default_factory=list)
-    mention: MochatMentionConfig = Field(default_factory=MochatMentionConfig)
-    groups: dict[str, MochatGroupRule] = Field(default_factory=dict)
-    reply_delay_mode: str = "non-mention"  # off | non-mention
-    reply_delay_ms: int = 120000
-
-
 class SlackDMConfig(BaseModel):
     """Slack DM policy configuration."""
     enabled: bool = True
@@ -141,17 +106,27 @@ class QQConfig(BaseModel):
     allow_from: list[str] = Field(default_factory=list)  # Allowed user openids (empty = public access)
 
 
+class MeshConfig(BaseModel):
+    """LAN mesh channel configuration for device-to-device communication."""
+    enabled: bool = False
+    node_id: str = ""          # Unique node identifier (auto-generated from hostname if empty)
+    tcp_port: int = 18800      # TCP port for mesh message transport
+    udp_port: int = 18799      # UDP port for peer discovery beacons
+    roles: list[str] = Field(default_factory=lambda: ["nanobot"])  # Node roles for discovery
+    allow_from: list[str] = Field(default_factory=list)  # Allowed node IDs (empty = allow all)
+
+
 class ChannelsConfig(BaseModel):
     """Configuration for chat channels."""
     whatsapp: WhatsAppConfig = Field(default_factory=WhatsAppConfig)
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
     discord: DiscordConfig = Field(default_factory=DiscordConfig)
     feishu: FeishuConfig = Field(default_factory=FeishuConfig)
-    mochat: MochatConfig = Field(default_factory=MochatConfig)
     dingtalk: DingTalkConfig = Field(default_factory=DingTalkConfig)
     email: EmailConfig = Field(default_factory=EmailConfig)
     slack: SlackConfig = Field(default_factory=SlackConfig)
     qq: QQConfig = Field(default_factory=QQConfig)
+    mesh: MeshConfig = Field(default_factory=MeshConfig)
 
 
 class AgentDefaults(BaseModel):
@@ -161,6 +136,7 @@ class AgentDefaults(BaseModel):
     max_tokens: int = 8192
     temperature: float = 0.7
     max_tool_iterations: int = 20
+    memory_window: int = 50
 
 
 class AgentsConfig(BaseModel):
@@ -177,6 +153,7 @@ class ProviderConfig(BaseModel):
 
 class ProvidersConfig(BaseModel):
     """Configuration for LLM providers."""
+    custom: ProviderConfig = Field(default_factory=ProviderConfig)  # Any OpenAI-compatible endpoint
     anthropic: ProviderConfig = Field(default_factory=ProviderConfig)
     openai: ProviderConfig = Field(default_factory=ProviderConfig)
     openrouter: ProviderConfig = Field(default_factory=ProviderConfig)
@@ -185,16 +162,32 @@ class ProvidersConfig(BaseModel):
     zhipu: ProviderConfig = Field(default_factory=ProviderConfig)
     dashscope: ProviderConfig = Field(default_factory=ProviderConfig)  # 阿里云通义千问
     vllm: ProviderConfig = Field(default_factory=ProviderConfig)
+    ollama: ProviderConfig = Field(default_factory=ProviderConfig)
     gemini: ProviderConfig = Field(default_factory=ProviderConfig)
     moonshot: ProviderConfig = Field(default_factory=ProviderConfig)
     minimax: ProviderConfig = Field(default_factory=ProviderConfig)
     aihubmix: ProviderConfig = Field(default_factory=ProviderConfig)  # AiHubMix API gateway
+    openai_codex: ProviderConfig = Field(default_factory=ProviderConfig)  # OpenAI Codex (OAuth)
 
 
 class GatewayConfig(BaseModel):
     """Gateway/server configuration."""
     host: str = "0.0.0.0"
     port: int = 18790
+
+
+class HybridRouterConfig(BaseModel):
+    """Hybrid routing configuration for dual-model (local + API) setup.
+
+    The local model judges task difficulty and handles easy tasks.
+    Difficult tasks are forwarded to the API model after PII sanitisation.
+    """
+    enabled: bool = False
+    local_provider: str = ""       # Config key of the local provider (e.g. "ollama", "vllm")
+    local_model: str = ""          # Model name served locally (e.g. "llama3")
+    api_provider: str = ""         # Config key of the API provider (e.g. "anthropic", "openrouter")
+    api_model: str = ""            # Model name on the API side (e.g. "anthropic/claude-sonnet-4-5")
+    difficulty_threshold: float = 0.5  # 0–1; higher → more tasks stay local
 
 
 class WebSearchConfig(BaseModel):
@@ -213,11 +206,20 @@ class ExecToolConfig(BaseModel):
     timeout: int = 60
 
 
+class MCPServerConfig(BaseModel):
+    """MCP server connection configuration (stdio or HTTP)."""
+    command: str = ""  # Stdio: command to run (e.g. "npx")
+    args: list[str] = Field(default_factory=list)  # Stdio: command arguments
+    env: dict[str, str] = Field(default_factory=dict)  # Stdio: extra env vars
+    url: str = ""  # HTTP: streamable HTTP endpoint URL
+
+
 class ToolsConfig(BaseModel):
     """Tools configuration."""
     web: WebToolsConfig = Field(default_factory=WebToolsConfig)
     exec: ExecToolConfig = Field(default_factory=ExecToolConfig)
     restrict_to_workspace: bool = False  # If true, restrict all tool access to workspace directory
+    mcp_servers: dict[str, MCPServerConfig] = Field(default_factory=dict)
 
 
 class Config(BaseSettings):
@@ -227,6 +229,7 @@ class Config(BaseSettings):
     providers: ProvidersConfig = Field(default_factory=ProvidersConfig)
     gateway: GatewayConfig = Field(default_factory=GatewayConfig)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
+    hybrid_router: HybridRouterConfig = Field(default_factory=HybridRouterConfig)
     
     @property
     def workspace_path(self) -> Path:
@@ -241,11 +244,15 @@ class Config(BaseSettings):
         # Match by keyword (order follows PROVIDERS registry)
         for spec in PROVIDERS:
             p = getattr(self.providers, spec.name, None)
-            if p and any(kw in model_lower for kw in spec.keywords) and p.api_key:
-                return p, spec.name
+            if p and any(kw in model_lower for kw in spec.keywords):
+                if spec.is_oauth or p.api_key:
+                    return p, spec.name
 
         # Fallback: gateways first, then others (follows registry order)
+        # OAuth providers are NOT valid fallbacks — they require explicit model selection
         for spec in PROVIDERS:
+            if spec.is_oauth:
+                continue
             p = getattr(self.providers, spec.name, None)
             if p and p.api_key:
                 return p, spec.name
@@ -281,6 +288,7 @@ class Config(BaseSettings):
                 return spec.default_api_base
         return None
     
-    class Config:
-        env_prefix = "NANOBOT_"
-        env_nested_delimiter = "__"
+    model_config = ConfigDict(
+        env_prefix="NANOBOT_",
+        env_nested_delimiter="__"
+    )

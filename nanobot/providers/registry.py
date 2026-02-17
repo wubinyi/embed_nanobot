@@ -51,6 +51,9 @@ class ProviderSpec:
     # per-model param overrides, e.g. (("kimi-k2.5", {"temperature": 1.0}),)
     model_overrides: tuple[tuple[str, dict[str, Any]], ...] = ()
 
+    # OAuth-based providers (e.g., OpenAI Codex) don't use API keys
+    is_oauth: bool = False                   # if True, uses OAuth flow instead of API key
+
     @property
     def label(self) -> str:
         return self.display_name or self.name.title()
@@ -61,6 +64,20 @@ class ProviderSpec:
 # ---------------------------------------------------------------------------
 
 PROVIDERS: tuple[ProviderSpec, ...] = (
+
+    # === Custom (user-provided OpenAI-compatible endpoint) =================
+    # No auto-detection — only activates when user explicitly configures "custom".
+
+    ProviderSpec(
+        name="custom",
+        keywords=(),
+        env_key="OPENAI_API_KEY",
+        display_name="Custom",
+        litellm_prefix="openai",
+        skip_prefixes=("openai/",),
+        is_gateway=True,
+        strip_model_prefix=True,
+    ),
 
     # === Gateways (detected by api_key / api_base, not model name) =========
     # Gateways can route any model, so they win in fallback.
@@ -139,6 +156,25 @@ PROVIDERS: tuple[ProviderSpec, ...] = (
         default_api_base="",
         strip_model_prefix=False,
         model_overrides=(),
+    ),
+
+    # OpenAI Codex: uses OAuth, not API key.
+    ProviderSpec(
+        name="openai_codex",
+        keywords=("openai-codex", "codex"),
+        env_key="",                         # OAuth-based, no API key
+        display_name="OpenAI Codex",
+        litellm_prefix="",                  # Not routed through LiteLLM
+        skip_prefixes=(),
+        env_extras=(),
+        is_gateway=False,
+        is_local=False,
+        detect_by_key_prefix="",
+        detect_by_base_keyword="codex",
+        default_api_base="https://chatgpt.com/backend-api",
+        strip_model_prefix=False,
+        model_overrides=(),
+        is_oauth=True,                      # OAuth-based authentication
     ),
 
     # DeepSeek: needs "deepseek/" prefix for LiteLLM routing.
@@ -277,6 +313,25 @@ PROVIDERS: tuple[ProviderSpec, ...] = (
         detect_by_key_prefix="",
         detect_by_base_keyword="",
         default_api_base="",                # user must provide in config
+        strip_model_prefix=False,
+        model_overrides=(),
+    ),
+
+    # Ollama: local model server with OpenAI-compatible API.
+    # Detected when config key is "ollama" (provider_name="ollama").
+    ProviderSpec(
+        name="ollama",
+        keywords=("ollama",),
+        env_key="OLLAMA_API_KEY",
+        display_name="Ollama/Local",
+        litellm_prefix="ollama",            # llama3 → ollama/llama3
+        skip_prefixes=("ollama/",),
+        env_extras=(),
+        is_gateway=False,
+        is_local=True,
+        detect_by_key_prefix="",
+        detect_by_base_keyword="",
+        default_api_base="http://localhost:11434",
         strip_model_prefix=False,
         model_overrides=(),
     ),
