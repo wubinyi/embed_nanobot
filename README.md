@@ -12,14 +12,16 @@
   </p>
 </div>
 
-🐈 **nanobot** is an **ultra-lightweight** personal AI assistant inspired by [Clawdbot](https://github.com/openclaw/openclaw) 
+🐈 **nanobot** is an **ultra-lightweight** personal AI assistant inspired by [OpenClaw](https://github.com/openclaw/openclaw) 
 
 ⚡️ Delivers core agent functionality in just **~4,000** lines of code — **99% smaller** than Clawdbot's 430k+ lines.
 
-📏 Real-time line count: **3,668 lines** (run `bash core_agent_lines.sh` to verify anytime)
+📏 Real-time line count: **3,689 lines** (run `bash core_agent_lines.sh` to verify anytime)
 
 ## 📢 News
 
+- **2026-02-16** 🦞 nanobot now integrates a [ClawHub](https://clawhub.ai) skill — search and install public agent skills.
+- **2026-02-15** 🔑 nanobot now supports OpenAI Codex provider with OAuth login support.
 - **2026-02-14** 🔌 nanobot now supports MCP! See [MCP section](#mcp-model-context-protocol) for details.
 - **2026-02-13** 🎉 Released v0.1.3.post7 — includes security hardening and multiple improvements. All users are recommended to upgrade to the latest version. See [release notes](https://github.com/HKUDS/nanobot/releases/tag/v0.1.3.post7) for more details.
 - **2026-02-12** 🧠 Redesigned memory system — Less code, more reliable. Join the [discussion](https://github.com/HKUDS/nanobot/discussions/566) about it!
@@ -99,7 +101,7 @@ pip install nanobot-ai
 
 > [!TIP]
 > Set your API key in `~/.nanobot/config.json`.
-> Get API keys: [OpenRouter](https://openrouter.ai/keys) (Global) · [DashScope](https://dashscope.console.aliyun.com) (Qwen) · [Brave Search](https://brave.com/search/api/) (optional, for web search)
+> Get API keys: [OpenRouter](https://openrouter.ai/keys) (Global) · [Brave Search](https://brave.com/search/api/) (optional, for web search)
 
 **1. Initialize**
 
@@ -141,138 +143,21 @@ nanobot agent
 
 That's it! You have a working AI assistant in 2 minutes.
 
-<<<<<<< HEAD
-## 🖥️ Local Models (vLLM)
-
-Run nanobot with your own local models using vLLM or any OpenAI-compatible server.
-
-**1. Start your vLLM server**
-
-```bash
-vllm serve meta-llama/Llama-3.1-8B-Instruct --port 8000
-```
-
-**2. Configure** (`~/.nanobot/config.json`)
-
-```json
-{
-  "providers": {
-    "vllm": {
-      "apiKey": "dummy",
-      "apiBase": "http://localhost:8000/v1"
-    }
-  },
-  "agents": {
-    "defaults": {
-      "model": "meta-llama/Llama-3.1-8B-Instruct"
-    }
-  }
-}
-```
-
-**3. Chat**
-
-```bash
-nanobot agent -m "Hello from my local LLM!"
-```
-
-> [!TIP]
-> The `apiKey` can be any non-empty string for local servers that don't require authentication.
-
-## 🔀 Hybrid Router (Local + API)
-
-Run a **dual-model setup**: local model handles easy tasks, API model handles hard tasks with automatic PII protection.
-
-**How it works:**
-1. Local model judges task difficulty (0.0–1.0 score)
-2. Easy tasks (≤ threshold) → processed locally
-3. Hard tasks (> threshold) → PII sanitised by local model → sent to API model
-
-**Example: Route simple tasks to local Llama, complex tasks to Claude**
-
-```json
-{
-  "providers": {
-    "vllm": {
-      "apiKey": "dummy",
-      "apiBase": "http://localhost:8000/v1"
-    },
-    "openrouter": {
-      "apiKey": "sk-or-v1-xxx"
-    }
-  },
-  "hybridRouter": {
-    "enabled": true,
-    "localProvider": "vllm",
-    "localModel": "meta-llama/Llama-3.1-8B-Instruct",
-    "apiProvider": "openrouter",
-    "apiModel": "anthropic/claude-opus-4-5",
-    "difficultyThreshold": 0.5
-  }
-}
-```
-
-**Benefits:**
-- 💰 **Cost savings**: Simple tasks (greetings, basic questions) stay local
-- 🔒 **Privacy**: PII stripped before sending to external APIs
-- 🎯 **Quality**: Complex tasks leverage powerful API models
-
-> [!TIP]
-> Adjust `difficultyThreshold` (0.0–1.0): Higher values = more tasks stay local. Start with 0.5 and tune based on your needs.
-
-## 🏠 LAN Mesh (Device-to-Device)
-
-Run nanobot as a **smart home AI hub** or enable **nanobot-to-nanobot** communication on your local network — no internet required.
-
-**How it works:**
-- **UDP discovery** (port 18799): Devices broadcast their presence on the LAN
-- **TCP messaging** (port 18800): Reliable message delivery between discovered peers
-- **No internet**: All communication stays local for privacy and low latency
-
-**Use cases:**
-- 🏠 **Smart home**: Control lights, AC, sensors via nanobot
-- 🤖 **Multi-nanobot**: Multiple instances collaborate and share knowledge
-- 🔒 **Private commands**: IoT devices query nanobot without cloud roundtrip
-
-**Example: Smart Home Hub**
-
-```json
-{
-  "channels": {
-    "mesh": {
-      "enabled": true,
-      "nodeId": "nanobot-hub",
-      "tcpPort": 18800,
-      "udpPort": 18799,
-      "roles": ["nanobot", "home-controller"],
-      "allowFrom": []
-    }
-  }
-}
-```
-
-IoT devices discover nanobot, connect via TCP, and send commands:
-```json
-{"type": "chat", "source": "light-001", "target": "nanobot-hub", "payload": {"text": "Turn on bedroom lights"}}
-```
-
-> [!TIP]
-> Use `allowFrom` to whitelist trusted node IDs. Messages are plaintext on your LAN — use on trusted networks.
-
 ## 💬 Chat Apps
 
-Talk to your nanobot through Telegram, Discord, WhatsApp, Feishu, DingTalk, Slack, Email, or QQ — anytime, anywhere.
+Connect nanobot to your favorite chat platform.
 
-| Channel | Setup |
-|---------|-------|
-| **Telegram** | Easy (just a token) |
-| **Discord** | Easy (bot token + intents) |
-| **WhatsApp** | Medium (scan QR) |
-| **Feishu** | Medium (app credentials) |
-| **DingTalk** | Medium (app credentials) |
-| **Slack** | Medium (bot + app tokens) |
-| **Email** | Medium (IMAP/SMTP credentials) |
-| **QQ** | Easy (app credentials) |
+| Channel | What you need |
+|---------|---------------|
+| **Telegram** | Bot token from @BotFather |
+| **Discord** | Bot token + Message Content intent |
+| **WhatsApp** | QR code scan |
+| **Feishu** | App ID + App Secret |
+| **Mochat** | Claw token (auto-setup available) |
+| **DingTalk** | App Key + App Secret |
+| **Slack** | Bot token + App-Level token |
+| **Email** | IMAP/SMTP credentials |
+| **QQ** | App ID + App Secret |
 
 <details>
 <summary><b>Telegram</b> (Recommended)</summary>
@@ -305,6 +190,63 @@ Talk to your nanobot through Telegram, Discord, WhatsApp, Feishu, DingTalk, Slac
 ```bash
 nanobot gateway
 ```
+
+</details>
+
+<details>
+<summary><b>Mochat (Claw IM)</b></summary>
+
+Uses **Socket.IO WebSocket** by default, with HTTP polling fallback.
+
+**1. Ask nanobot to set up Mochat for you**
+
+Simply send this message to nanobot (replace `xxx@xxx` with your real email):
+
+```
+Read https://raw.githubusercontent.com/HKUDS/MoChat/refs/heads/main/skills/nanobot/skill.md and register on MoChat. My Email account is xxx@xxx Bind me as your owner and DM me on MoChat.
+```
+
+nanobot will automatically register, configure `~/.nanobot/config.json`, and connect to Mochat.
+
+**2. Restart gateway**
+
+```bash
+nanobot gateway
+```
+
+That's it — nanobot handles the rest!
+
+<br>
+
+<details>
+<summary>Manual configuration (advanced)</summary>
+
+If you prefer to configure manually, add the following to `~/.nanobot/config.json`:
+
+> Keep `claw_token` private. It should only be sent in `X-Claw-Token` header to your Mochat API endpoint.
+
+```json
+{
+  "channels": {
+    "mochat": {
+      "enabled": true,
+      "base_url": "https://mochat.io",
+      "socket_url": "https://mochat.io",
+      "socket_path": "/socket.io",
+      "claw_token": "claw_xxx",
+      "agent_user_id": "6982abcdef",
+      "sessions": ["*"],
+      "panels": ["*"],
+      "reply_delay_mode": "non-mention",
+      "reply_delay_ms": 120000
+    }
+  }
+}
+```
+
+
+
+</details>
 
 </details>
 
@@ -646,6 +588,7 @@ Config file: `~/.nanobot/config.json`
 | `zhipu` | LLM (Zhipu GLM) | [open.bigmodel.cn](https://open.bigmodel.cn) |
 | `vllm` | LLM (local, any OpenAI-compatible server) | — |
 | `openai_codex` | LLM (Codex, OAuth) | `nanobot provider login openai-codex` |
+| `github_copilot` | LLM (GitHub Copilot, OAuth) | Requires [GitHub Copilot](https://github.com/features/copilot) subscription |
 
 <details>
 <summary><b>OpenAI Codex (OAuth)</b></summary>
@@ -880,7 +823,7 @@ docker run -v ~/.nanobot:/root/.nanobot --rm nanobot onboard
 # Edit config on host to add API keys
 vim ~/.nanobot/config.json
 
-# Run gateway (connects to Telegram/WhatsApp)
+# Run gateway (connects to enabled channels, e.g. Telegram/Discord/Mochat)
 docker run -v ~/.nanobot:/root/.nanobot -p 18790:18790 nanobot gateway
 
 # Or run a single command
@@ -900,8 +843,7 @@ nanobot/
 │   ├── subagent.py #    Background task execution
 │   └── tools/      #    Built-in tools (incl. spawn)
 ├── skills/         # 🎯 Bundled skills (github, weather, tmux...)
-├── channels/       # 📱 Chat channels (Telegram, Discord, WhatsApp, etc.)
-├── mesh/           # 🔗 LAN device mesh (UDP discovery, TCP transport)
+├── channels/       # 📱 Chat channel integrations
 ├── bus/            # 🚌 Message routing
 ├── cron/           # ⏰ Scheduled tasks
 ├── heartbeat/      # 💓 Proactive wake-up
@@ -910,14 +852,6 @@ nanobot/
 ├── config/         # ⚙️ Configuration
 └── cli/            # 🖥️ Commands
 ```
-
-## 📖 Documentation
-
-| Document | Description |
-|----------|-------------|
-| [Architecture](docs/architecture.md) | Internal architecture, module breakdown, data flow, and design patterns |
-| [Configuration Reference](docs/configuration.md) | Complete reference for all `config.json` options |
-| [Customization Guide](docs/customization.md) | How to add tools, providers, channels, skills, and customize agent behavior |
 
 ## 🤝 Contribute & Roadmap
 
@@ -936,6 +870,130 @@ PRs welcome! The codebase is intentionally small and readable. 🤗
 <a href="https://github.com/HKUDS/nanobot/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=HKUDS/nanobot&max=100&columns=12&updated=20260210" alt="Contributors" />
 </a>
+
+
+---
+
+## 🧩 embed_nanobot Extensions
+
+The following features are unique to **embed_nanobot** (fork of nanobot):
+
+## 🖥️ Local Models (vLLM)
+
+Run nanobot with your own local models using vLLM or any OpenAI-compatible server.
+
+**1. Start your vLLM server**
+
+```bash
+vllm serve meta-llama/Llama-3.1-8B-Instruct --port 8000
+```
+
+**2. Configure** (`~/.nanobot/config.json`)
+
+```json
+{
+  "providers": {
+    "vllm": {
+      "apiKey": "dummy",
+      "apiBase": "http://localhost:8000/v1"
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": "meta-llama/Llama-3.1-8B-Instruct"
+    }
+  }
+}
+```
+
+**3. Chat**
+
+```bash
+nanobot agent -m "Hello from my local LLM!"
+```
+
+> [!TIP]
+> The `apiKey` can be any non-empty string for local servers that don't require authentication.
+
+## 🔀 Hybrid Router (Local + API)
+
+Run a **dual-model setup**: local model handles easy tasks, API model handles hard tasks with automatic PII protection.
+
+**How it works:**
+1. Local model judges task difficulty (0.0–1.0 score)
+2. Easy tasks (≤ threshold) → processed locally
+3. Hard tasks (> threshold) → PII sanitised by local model → sent to API model
+
+**Example: Route simple tasks to local Llama, complex tasks to Claude**
+
+```json
+{
+  "providers": {
+    "vllm": {
+      "apiKey": "dummy",
+      "apiBase": "http://localhost:8000/v1"
+    },
+    "openrouter": {
+      "apiKey": "sk-or-v1-xxx"
+    }
+  },
+  "hybridRouter": {
+    "enabled": true,
+    "localProvider": "vllm",
+    "localModel": "meta-llama/Llama-3.1-8B-Instruct",
+    "apiProvider": "openrouter",
+    "apiModel": "anthropic/claude-opus-4-5",
+    "difficultyThreshold": 0.5
+  }
+}
+```
+
+**Benefits:**
+- 💰 **Cost savings**: Simple tasks (greetings, basic questions) stay local
+- 🔒 **Privacy**: PII stripped before sending to external APIs
+- 🎯 **Quality**: Complex tasks leverage powerful API models
+
+> [!TIP]
+> Adjust `difficultyThreshold` (0.0–1.0): Higher values = more tasks stay local. Start with 0.5 and tune based on your needs.
+
+## 🏠 LAN Mesh (Device-to-Device)
+
+Run nanobot as a **smart home AI hub** or enable **nanobot-to-nanobot** communication on your local network — no internet required.
+
+**How it works:**
+- **UDP discovery** (port 18799): Devices broadcast their presence on the LAN
+- **TCP messaging** (port 18800): Reliable message delivery between discovered peers
+- **No internet**: All communication stays local for privacy and low latency
+
+**Use cases:**
+- 🏠 **Smart home**: Control lights, AC, sensors via nanobot
+- 🤖 **Multi-nanobot**: Multiple instances collaborate and share knowledge
+- 🔒 **Private commands**: IoT devices query nanobot without cloud roundtrip
+
+**Example: Smart Home Hub**
+
+```json
+{
+  "channels": {
+    "mesh": {
+      "enabled": true,
+      "nodeId": "nanobot-hub",
+      "tcpPort": 18800,
+      "udpPort": 18799,
+      "roles": ["nanobot", "home-controller"],
+      "allowFrom": []
+    }
+  }
+}
+```
+
+IoT devices discover nanobot, connect via TCP, and send commands:
+```json
+{"type": "chat", "source": "light-001", "target": "nanobot-hub", "payload": {"text": "Turn on bedroom lights"}}
+```
+
+> [!TIP]
+> Use `allowFrom` to whitelist trusted node IDs. Messages are plaintext on your LAN — use on trusted networks.
 
 
 ## ⭐ Star History
