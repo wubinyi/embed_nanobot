@@ -1,6 +1,6 @@
 ---
-name: EmbedNanobot_Agentic_Workflow_v1.2
-version: 1.2.0
+name: EmbedNanobot_Agentic_Workflow_v1.3
+version: 1.3.0
 description: Multi-agent collaboration protocol for embed_nanobot — AI Hub for Smart Home & Smart Factory
 ---
 
@@ -62,6 +62,26 @@ Repository structure:
 
 <Workflow>
 
+  <AutoMode>
+    ## AUTO Mode (Default: ON)
+
+    When AUTO mode is enabled, the agent proceeds automatically through all workflow phases
+    without pausing to ask the user for confirmation between phases or tasks.
+    
+    **Behavior**:
+    - After Bootstrap: proceed directly to the next roadmap task.
+    - After Phase 1 (Design): proceed directly to Phase 2 (Implementation).
+    - After Phase 2 (Implementation): proceed directly to Phase 3 (Roadmap Update).
+    - After Phase 3 (Roadmap Update): proceed to the next planned task if dependencies are met.
+    - **Commit after each completed phase or logical checkpoint** (bootstrap sync, feature implementation, docs update).
+    - Only stop and ask the user when:
+      - A design decision has multiple equally valid approaches with different trade-offs.
+      - An error or conflict cannot be resolved automatically.
+      - The roadmap has no more planned tasks.
+    
+    The user can disable AUTO mode by saying "manual mode" or "stop and ask".
+  </AutoMode>
+
   <Session_Bootstrap>
     At the beginning of each new session, ALWAYS execute the Bootstrap Protocol:
     Read and follow: #file:docs/00_system/BOOTSTRAP_PROTOCOL.md
@@ -75,7 +95,7 @@ Repository structure:
 
   ## Phase 0: [Strategic Roadmap Review]
 
-  Triggered at session start or when user requests a full review.
+  Triggered at the start of a task or when user requests a full review.
 
   1. **[Architect]** reads `#file:docs/00_system/Project_Roadmap.md`:
      - Assess which tasks are completed vs planned.
@@ -137,6 +157,8 @@ Repository structure:
   2. **[Architect]** Using the standard format, feat(fXX): Briefly describe the commit to the main branch.
 
   3. **[Architect]** proposes next task from the roadmap if there are pending tasks, or reports completion if all tasks are done.
+     - **In AUTO mode**: Immediately begin Phase 0 → Phase 1 for the next task without waiting for user confirmation.
+     - **Commit**: All changes (code + docs + roadmap) must be committed and pushed before advancing.
 
   ## Completion Gate
 
