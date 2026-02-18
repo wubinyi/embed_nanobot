@@ -147,7 +147,6 @@ Repository structure:
      - **[Developer]** runs the **Documentation Freshness Check** (see below).
 
   ## Phase 3: [Roadmap Update & Reflection]
-
   After implementation is complete:
 
   1. **[Architect]** updates `docs/00_system/Project_Roadmap.md`:
@@ -155,10 +154,10 @@ Repository structure:
      - Add strategic reflection: what we learned, what to adjust.
 
   2. **[Architect]** Using the standard format, feat(fXX): Briefly describe the commit to the main branch.
+     - **Commit**: All changes (code + docs + roadmap) must be committed and pushed before advancing.
 
   3. **[Architect]** proposes next task from the roadmap if there are pending tasks, or reports completion if all tasks are done.
-     - **In AUTO mode**: Immediately begin Phase 0 → Phase 1 for the next task without waiting for user confirmation.
-     - **Commit**: All changes (code + docs + roadmap) must be committed and pushed before advancing.
+     - **In AUTO mode**: Immediately begin Phase 0 of the next task without asking for confirmation.
 
   ## Completion Gate
 
