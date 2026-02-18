@@ -23,18 +23,18 @@
 | 1.8b | Upstream sync (remaining 22 commits) | Done | 2026-02-17 | Telegram media, GitHub Copilot provider, cron timezone, ClawHub skill. Fully synced. |
 | 1.9 | PSK-based device authentication (HMAC signing) | Done | 2026-02-17 | `nanobot/mesh/security.py` — KeyStore, HMAC-SHA256 sign/verify, nonce replay protection. 25 new tests. |
 | 1.9b | Upstream sync (20 commits: 8053193→7f8a3df) | Done | 2026-02-18 | Base class alias_generator, Mochat channel, CustomProvider, Slack enhancements, Docker Compose. Migrated configs to Base. |
+| 1.10 | Device enrollment flow (PIN-based pairing) | Done | 2026-02-18 | `nanobot/mesh/enrollment.py` — EnrollmentService, PBKDF2 PIN-derived key, XOR one-time pad PSK encryption. 35 new tests (146 total). |
 
 ### In Progress
 
 | # | Task | Status | Assignee | Notes |
 |---|------|--------|----------|-------|
-| — | (none) | — | — | Ready for task 1.10 |
+| — | (none) | — | — | Ready for task 1.11 |
 
 ### Planned (Phase 1 Remaining)
 
 | # | Task | Priority | Complexity | Dependencies |
 |---|------|----------|------------|--------------|
-| 1.10 | Device enrollment flow (PIN-based pairing) | P0 | M | PSK auth (1.9) ✅ |
 | 1.11 | Mesh message encryption (AES-GCM) | P0 | M | PSK auth (1.9) ✅ |
 
 ---
@@ -128,6 +128,16 @@ See [docs/sync/SYNC_LOG.md](../sync/SYNC_LOG.md) for full merge history.
 - **Docs updated**: architecture.md (4-layer mesh diagram), configuration.md (PSK auth fields + security notes), feature docs (Design Log, Dev Implementation, Test Report).
 - **SKILL v1.3 shipped**: Added AUTO mode for unattended workflow progression.
 - **Next tasks**: 1.10 (PIN-based device enrollment) and 1.11 (AES-GCM encryption), both now unblocked.
+
+### 2026-02-18 — Task 1.10: Device Enrollment Complete
+- **PIN-based pairing protocol** added: Hub generates time-limited numeric PIN, device proves knowledge via HMAC-SHA256, Hub sends PSK encrypted with PBKDF2-derived one-time pad.
+- **New module**: `nanobot/mesh/enrollment.py` (~240 LOC) — `EnrollmentService` manages PIN lifecycle (create/cancel/expire), validates enrollment requests, rate-limits failures (max 3 attempts), encrypts PSK transfer.
+- **Security measures**: PBKDF2-HMAC-SHA256 with 100K iterations makes 6-digit PIN brute-force costly (~115 days). Single-use PINs with auto-expiry. Auth bypass narrowly scoped to `ENROLL_REQUEST` during active enrollment only.
+- **Wire protocol extended**: `ENROLL_REQUEST` and `ENROLL_RESPONSE` message types. Transport auth bypass for enrollment. Channel routes enrollment messages and exposes `create_enrollment_pin()`/`cancel_enrollment_pin()` convenience methods.
+- **35 new tests** across 7 test classes (146 total, zero regressions). Covers crypto roundtrips, PIN lifecycle, rate limiting, expiry, transport bypass, channel wiring, config validation.
+- **Zero new dependencies** — uses only stdlib (`hashlib.pbkdf2_hmac`, `hmac`, `secrets`).
+- **3 config fields** appended to `MeshConfig` (append-only convention): `enrollmentPinLength`, `enrollmentPinTimeout`, `enrollmentMaxAttempts`.
+- **Next task**: 1.11 (AES-GCM mesh message encryption) — last remaining Phase 1 task.
 
 ### Conventions Reminder
 - Feature branches: `copilot/<feature-name>` from `main_embed`
