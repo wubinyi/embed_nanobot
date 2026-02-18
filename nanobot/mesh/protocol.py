@@ -53,17 +53,24 @@ class MeshEnvelope:
     # --- embed_nanobot extensions (PSK auth, task 1.9) ---
     nonce: str = ""   # Random 16-hex-char nonce for replay protection
     hmac: str = ""    # HMAC-SHA256 hex digest for authentication
+    # --- embed_nanobot extensions: payload encryption (task 1.11) ---
+    encrypted_payload: str = ""  # Hex AES-256-GCM ciphertext (+ tag) when encrypted
+    iv: str = ""                 # Hex 12-byte GCM nonce when encrypted
 
     # -- serialisation -------------------------------------------------------
 
     def to_dict(self) -> dict[str, Any]:
         """Return the envelope as a plain dict (includes hmac/nonce if set)."""
         d = asdict(self)
-        # Omit empty auth fields for backward compatibility
+        # Omit empty auth/encryption fields for backward compatibility
         if not d.get("nonce"):
             d.pop("nonce", None)
         if not d.get("hmac"):
             d.pop("hmac", None)
+        if not d.get("encrypted_payload"):
+            d.pop("encrypted_payload", None)
+        if not d.get("iv"):
+            d.pop("iv", None)
         return d
 
     def to_bytes(self) -> bytes:
@@ -83,6 +90,8 @@ class MeshEnvelope:
             ts=obj.get("ts", 0.0),
             nonce=obj.get("nonce", ""),
             hmac=obj.get("hmac", ""),
+            encrypted_payload=obj.get("encrypted_payload", ""),
+            iv=obj.get("iv", ""),
         )
 
     def canonical_bytes(self) -> bytes:

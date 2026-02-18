@@ -182,6 +182,8 @@ class MeshConfig(Base):
     enrollment_pin_length: int = 6          # Number of digits in enrollment PIN
     enrollment_pin_timeout: int = 300       # Seconds before PIN expires (default 5 min)
     enrollment_max_attempts: int = 3        # Max failed PIN attempts before lockout
+    # --- embed_nanobot extensions: payload encryption (task 1.11) ---
+    encryption_enabled: bool = True         # Enable AES-256-GCM payload encryption
 
 
 class ChannelsConfig(Base):

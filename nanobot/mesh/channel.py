@@ -68,6 +68,8 @@ class MeshChannel(BaseChannel):
             udp_port=self.udp_port,
             roles=roles,
         )
+        # --- embed_nanobot: payload encryption (task 1.11) ---
+        encryption_enabled = getattr(config, "encryption_enabled", True)
         self.transport = MeshTransport(
             node_id=self.node_id,
             discovery=self.discovery,
@@ -75,6 +77,7 @@ class MeshChannel(BaseChannel):
             key_store=self.key_store,
             psk_auth_enabled=psk_auth_enabled,
             allow_unauthenticated=allow_unauthenticated,
+            encryption_enabled=encryption_enabled,
         )
         self.transport.on_message(self._on_mesh_message)
 

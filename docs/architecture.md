@@ -285,6 +285,9 @@ The LAN Mesh enables **device-to-device communication** on the same local networ
 └────────────────────┬─────────────────────────────────────────┘
                      │
 ┌────────────────────┴─────────────────────────────────────────┐
+│  Layer 3c: Encryption (nanobot/mesh/encryption.py)          │
+│  ↓ AES-256-GCM payload encryption, PSK-derived keys         │
+├─────────────────────────────────────────────────────────────-┤
 │  Layer 3b: Enrollment (nanobot/mesh/enrollment.py)          │
 │  ↓ PIN-based device pairing, PBKDF2 key derivation          │
 ├─────────────────────────────────────────────────────────────-┤
@@ -370,6 +373,7 @@ JSON structure:
 - **`protocol.py`**: Wire format, `MeshEnvelope` serialisation/deserialisation, `read_envelope()` / `write_envelope()`, canonical bytes for HMAC
 - **`security.py`**: `KeyStore` — per-device PSK management, HMAC-SHA256 sign/verify, nonce replay tracking, timestamp validation
 - **`enrollment.py`**: `EnrollmentService` — PIN lifecycle (create/cancel/expire/lock), PIN proof verification, PBKDF2 key derivation, XOR-encrypted PSK transfer
+- **`encryption.py`**: AES-256-GCM payload encrypt/decrypt, HMAC-SHA256-based key derivation from PSK, AAD binding to envelope metadata. Requires `cryptography` library.
 - **`discovery.py`**: UDP broadcast beacons advertising node presence on port 18799
 - **`transport.py`**: TCP server (port 18800) + client connections, handles envelope routing, auto-sign outbound / verify inbound
 - **`channel.py`**: `MeshChannel` implements `BaseChannel` interface, publishes inbound messages to the bus and subscribes to outbound messages

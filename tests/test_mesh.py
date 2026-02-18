@@ -11,6 +11,14 @@ import pytest
 from nanobot.mesh.channel import MeshChannel, _default_node_id
 from nanobot.mesh.discovery import PeerInfo, UDPDiscovery
 from nanobot.mesh.enrollment import EnrollmentService, PendingEnrollment, _PBKDF2_ITERATIONS, _PSK_BYTES
+from nanobot.mesh.encryption import (
+    HAS_AESGCM,
+    build_aad,
+    decrypt_payload,
+    derive_encryption_key,
+    encrypt_payload,
+    is_available,
+)
 from nanobot.mesh.protocol import MeshEnvelope, MsgType, read_envelope, write_envelope
 from nanobot.mesh.security import KeyStore
 from nanobot.mesh.transport import MeshTransport
@@ -604,10 +612,12 @@ class TestTransportAuth:
         transport_a = MeshTransport(
             node_id="node-a", discovery=disc_a, tcp_port=0,
             key_store=ks_a, psk_auth_enabled=True,
+            encryption_enabled=False,  # Test auth only, not encryption
         )
         transport_b = MeshTransport(
             node_id="node-b", discovery=disc_b, tcp_port=0,
             key_store=ks_b, psk_auth_enabled=True,
+            encryption_enabled=False,  # Test auth only, not encryption
         )
 
         async def handler(env: MeshEnvelope) -> None:
@@ -1356,3 +1366,418 @@ class TestEnrollmentConfig:
         assert mc.enrollment_pin_length == 8
         assert mc.enrollment_pin_timeout == 60
         assert mc.enrollment_max_attempts == 5
+
+
+# ---------------------------------------------------------------------------
+# Encryption tests (task 1.11)
+# ---------------------------------------------------------------------------
+
+
+class TestEncryptionAvailability:
+    """Verify crypto library detection."""
+
+    def test_is_available(self):
+        assert is_available() is True  # cryptography is installed
+
+    def test_has_aesgcm_flag(self):
+        assert HAS_AESGCM is True
+
+
+class TestDeriveEncryptionKey:
+    """Tests for PSK → AES key derivation."""
+
+    def test_deterministic(self):
+        psk_hex = "ab" * 32
+        k1 = derive_encryption_key(psk_hex)
+        k2 = derive_encryption_key(psk_hex)
+        assert k1 == k2
+        assert len(k1) == 32  # 256-bit key
+
+    def test_different_psks_produce_different_keys(self):
+        k1 = derive_encryption_key("aa" * 32)
+        k2 = derive_encryption_key("bb" * 32)
+        assert k1 != k2
+
+    def test_key_differs_from_raw_psk(self):
+        psk_hex = "cc" * 32
+        enc_key = derive_encryption_key(psk_hex)
+        assert enc_key != bytes.fromhex(psk_hex)
+
+
+class TestBuildAAD:
+    """Tests for Additional Authenticated Data construction."""
+
+    def test_format(self):
+        aad = build_aad("chat", "node-a", "node-b", 1700000000.0)
+        assert aad == b"chat|node-a|node-b|1700000000.0"
+
+    def test_different_metadata_different_aad(self):
+        aad1 = build_aad("chat", "a", "b", 1.0)
+        aad2 = build_aad("command", "a", "b", 1.0)
+        assert aad1 != aad2
+
+
+class TestEncryptDecryptPayload:
+    """Roundtrip and edge-case tests for AES-256-GCM."""
+
+    PSK = "dd" * 32  # 32-byte hex PSK
+
+    def _ctx(self):
+        """Common envelope metadata context."""
+        return dict(msg_type="chat", source="src", target="tgt", ts=1700000000.0)
+
+    def test_roundtrip_simple(self):
+        payload = {"text": "hello world"}
+        result = encrypt_payload(payload, self.PSK, **self._ctx())
+        assert result is not None
+        ct_hex, iv_hex = result
+        assert len(iv_hex) == 24  # 12 bytes hex
+        decrypted = decrypt_payload(ct_hex, iv_hex, self.PSK, **self._ctx())
+        assert decrypted == payload
+
+    def test_roundtrip_empty_payload(self):
+        payload = {}
+        result = encrypt_payload(payload, self.PSK, **self._ctx())
+        assert result is not None
+        ct_hex, iv_hex = result
+        decrypted = decrypt_payload(ct_hex, iv_hex, self.PSK, **self._ctx())
+        assert decrypted == payload
+
+    def test_roundtrip_nested_payload(self):
+        payload = {"cmd": "set_temp", "params": {"value": 22.5, "unit": "C"}}
+        result = encrypt_payload(payload, self.PSK, **self._ctx())
+        assert result is not None
+        ct_hex, iv_hex = result
+        decrypted = decrypt_payload(ct_hex, iv_hex, self.PSK, **self._ctx())
+        assert decrypted == payload
+
+    def test_roundtrip_unicode_payload(self):
+        payload = {"text": "你好世界 🌍"}
+        result = encrypt_payload(payload, self.PSK, **self._ctx())
+        assert result is not None
+        ct_hex, iv_hex = result
+        decrypted = decrypt_payload(ct_hex, iv_hex, self.PSK, **self._ctx())
+        assert decrypted == payload
+
+    def test_different_iv_each_call(self):
+        payload = {"text": "same"}
+        r1 = encrypt_payload(payload, self.PSK, **self._ctx())
+        r2 = encrypt_payload(payload, self.PSK, **self._ctx())
+        assert r1 is not None and r2 is not None
+        assert r1[1] != r2[1]  # different IVs
+        assert r1[0] != r2[0]  # different ciphertexts (probabilistic encryption)
+
+    def test_wrong_psk_fails_decrypt(self):
+        payload = {"text": "secret"}
+        ct_hex, iv_hex = encrypt_payload(payload, self.PSK, **self._ctx())
+        wrong_psk = "ee" * 32
+        decrypted = decrypt_payload(ct_hex, iv_hex, wrong_psk, **self._ctx())
+        assert decrypted is None
+
+    def test_tampered_ciphertext_fails(self):
+        payload = {"text": "secret"}
+        ct_hex, iv_hex = encrypt_payload(payload, self.PSK, **self._ctx())
+        # Flip one hex char in ciphertext
+        tampered = ("0" if ct_hex[0] != "0" else "1") + ct_hex[1:]
+        decrypted = decrypt_payload(tampered, iv_hex, self.PSK, **self._ctx())
+        assert decrypted is None
+
+    def test_aad_mismatch_fails(self):
+        """Changing envelope metadata after encryption must fail decryption."""
+        payload = {"text": "secret"}
+        ct_hex, iv_hex = encrypt_payload(payload, self.PSK, **self._ctx())
+        # Decrypt with different msg_type (AAD mismatch)
+        decrypted = decrypt_payload(
+            ct_hex, iv_hex, self.PSK,
+            msg_type="command", source="src", target="tgt", ts=1700000000.0,
+        )
+        assert decrypted is None
+
+    def test_aad_different_source_fails(self):
+        payload = {"text": "secret"}
+        ct_hex, iv_hex = encrypt_payload(payload, self.PSK, **self._ctx())
+        decrypted = decrypt_payload(
+            ct_hex, iv_hex, self.PSK,
+            msg_type="chat", source="attacker", target="tgt", ts=1700000000.0,
+        )
+        assert decrypted is None
+
+    def test_aad_different_timestamp_fails(self):
+        payload = {"text": "secret"}
+        ct_hex, iv_hex = encrypt_payload(payload, self.PSK, **self._ctx())
+        decrypted = decrypt_payload(
+            ct_hex, iv_hex, self.PSK,
+            msg_type="chat", source="src", target="tgt", ts=9999999999.0,
+        )
+        assert decrypted is None
+
+
+class TestEnvelopeEncryptionFields:
+    """Test MeshEnvelope new encryption fields."""
+
+    def test_default_fields_empty(self):
+        env = MeshEnvelope(type="chat", source="a", target="b")
+        assert env.encrypted_payload == ""
+        assert env.iv == ""
+
+    def test_to_dict_omits_empty_encryption_fields(self):
+        env = MeshEnvelope(type="chat", source="a", target="b")
+        d = env.to_dict()
+        assert "encrypted_payload" not in d
+        assert "iv" not in d
+
+    def test_to_dict_includes_encryption_fields_when_set(self):
+        env = MeshEnvelope(
+            type="chat", source="a", target="b",
+            encrypted_payload="deadbeef", iv="aabbccdd",
+        )
+        d = env.to_dict()
+        assert d["encrypted_payload"] == "deadbeef"
+        assert d["iv"] == "aabbccdd"
+
+    def test_from_bytes_reads_encryption_fields(self):
+        data = json.dumps({
+            "type": "chat", "source": "a", "target": "b",
+            "payload": {}, "ts": 1.0,
+            "encrypted_payload": "cafebabe", "iv": "1234abcd",
+        }).encode()
+        env = MeshEnvelope.from_bytes(data)
+        assert env.encrypted_payload == "cafebabe"
+        assert env.iv == "1234abcd"
+
+    def test_from_bytes_defaults_missing_fields(self):
+        data = json.dumps({
+            "type": "chat", "source": "a", "target": "b",
+            "payload": {"text": "hi"}, "ts": 1.0,
+        }).encode()
+        env = MeshEnvelope.from_bytes(data)
+        assert env.encrypted_payload == ""
+        assert env.iv == ""
+
+    def test_canonical_bytes_includes_encryption_fields(self):
+        """HMAC canonical form must cover encrypted_payload + iv."""
+        env = MeshEnvelope(
+            type="chat", source="a", target="b",
+            encrypted_payload="aabb", iv="ccdd",
+        )
+        canonical = env.canonical_bytes()
+        obj = json.loads(canonical)
+        assert obj["encrypted_payload"] == "aabb"
+        assert obj["iv"] == "ccdd"
+        assert "hmac" not in obj
+        assert "nonce" not in obj
+
+    def test_roundtrip_with_encryption_fields(self):
+        env = MeshEnvelope(
+            type="chat", source="a", target="b",
+            payload={}, encrypted_payload="deadbeef", iv="112233",
+        )
+        raw = env.to_bytes()
+        length = struct.unpack("!I", raw[:4])[0]
+        restored = MeshEnvelope.from_bytes(raw[4:4 + length])
+        assert restored.encrypted_payload == "deadbeef"
+        assert restored.iv == "112233"
+        assert restored.payload == {}
+
+
+class TestTransportEncryption:
+    """Integration tests for encrypt/decrypt in MeshTransport."""
+
+    def _make_transport(self, ks, encryption_enabled=True, psk_auth=True):
+        discovery = MagicMock(spec=UDPDiscovery)
+        transport = MeshTransport(
+            node_id="hub",
+            discovery=discovery,
+            key_store=ks,
+            psk_auth_enabled=psk_auth,
+            encryption_enabled=encryption_enabled,
+        )
+        return transport
+
+    def test_encrypt_outbound_chat(self):
+        """CHAT message payload should be encrypted."""
+        ks = KeyStore(path="/tmp/test_enc_ks.json")
+        psk = ks.add_device("device-1")
+        ks.add_device("hub")  # Hub needs PSK for signing
+        transport = self._make_transport(ks)
+
+        env = MeshEnvelope(
+            type=MsgType.CHAT, source="hub", target="device-1",
+            payload={"text": "hello"},
+        )
+        transport._encrypt_outbound(env)
+        assert env.encrypted_payload != ""
+        assert env.iv != ""
+        assert env.payload == {}
+
+    def test_encrypt_outbound_command(self):
+        ks = KeyStore(path="/tmp/test_enc_ks.json")
+        ks.add_device("device-1")
+        transport = self._make_transport(ks)
+
+        env = MeshEnvelope(
+            type=MsgType.COMMAND, source="hub", target="device-1",
+            payload={"cmd": "on"},
+        )
+        transport._encrypt_outbound(env)
+        assert env.encrypted_payload != ""
+
+    def test_encrypt_outbound_response(self):
+        ks = KeyStore(path="/tmp/test_enc_ks.json")
+        ks.add_device("device-1")
+        transport = self._make_transport(ks)
+
+        env = MeshEnvelope(
+            type=MsgType.RESPONSE, source="hub", target="device-1",
+            payload={"text": "ok"},
+        )
+        transport._encrypt_outbound(env)
+        assert env.encrypted_payload != ""
+
+    def test_no_encrypt_ping(self):
+        """PING messages should NOT be encrypted."""
+        ks = KeyStore(path="/tmp/test_enc_ks.json")
+        ks.add_device("device-1")
+        transport = self._make_transport(ks)
+
+        env = MeshEnvelope(
+            type=MsgType.PING, source="hub", target="device-1",
+        )
+        transport._encrypt_outbound(env)
+        assert env.encrypted_payload == ""
+        assert env.iv == ""
+
+    def test_no_encrypt_enroll_request(self):
+        ks = KeyStore(path="/tmp/test_enc_ks.json")
+        transport = self._make_transport(ks)
+
+        env = MeshEnvelope(
+            type=MsgType.ENROLL_REQUEST, source="new-device", target="hub",
+            payload={"pin_proof": "abc"},
+        )
+        transport._encrypt_outbound(env)
+        assert env.encrypted_payload == ""
+
+    def test_no_encrypt_broadcast(self):
+        ks = KeyStore(path="/tmp/test_enc_ks.json")
+        ks.add_device("*")  # Even if * has a key, broadcast shouldn't encrypt
+        transport = self._make_transport(ks)
+
+        env = MeshEnvelope(
+            type=MsgType.CHAT, source="hub", target="*",
+            payload={"text": "broadcast"},
+        )
+        transport._encrypt_outbound(env)
+        assert env.encrypted_payload == ""
+
+    def test_no_encrypt_when_disabled(self):
+        ks = KeyStore(path="/tmp/test_enc_ks.json")
+        ks.add_device("device-1")
+        transport = self._make_transport(ks, encryption_enabled=False)
+
+        env = MeshEnvelope(
+            type=MsgType.CHAT, source="hub", target="device-1",
+            payload={"text": "plain"},
+        )
+        transport._encrypt_outbound(env)
+        assert env.encrypted_payload == ""
+        assert env.payload == {"text": "plain"}
+
+    def test_no_encrypt_unknown_target(self):
+        ks = KeyStore(path="/tmp/test_enc_ks.json")
+        # Don't add device-unknown to key store
+        transport = self._make_transport(ks)
+
+        env = MeshEnvelope(
+            type=MsgType.CHAT, source="hub", target="device-unknown",
+            payload={"text": "hi"},
+        )
+        transport._encrypt_outbound(env)
+        assert env.encrypted_payload == ""
+        assert env.payload == {"text": "hi"}
+
+    def test_decrypt_inbound(self):
+        """Receiver should decrypt an encrypted message."""
+        ks = KeyStore(path="/tmp/test_enc_ks.json")
+        psk = ks.add_device("device-1")
+        transport = self._make_transport(ks)
+
+        # Simulate encrypted inbound from device-1
+        payload = {"text": "secret"}
+        result = encrypt_payload(
+            payload, psk,
+            msg_type="chat", source="device-1", target="hub", ts=1.0,
+        )
+        assert result is not None
+        ct_hex, iv_hex = result
+
+        env = MeshEnvelope(
+            type="chat", source="device-1", target="hub", ts=1.0,
+            payload={}, encrypted_payload=ct_hex, iv=iv_hex,
+        )
+        transport._decrypt_inbound(env)
+        assert env.payload == payload
+        assert env.encrypted_payload == ""
+        assert env.iv == ""
+
+    def test_decrypt_skips_unencrypted(self):
+        """Unencrypted messages pass through untouched."""
+        ks = KeyStore(path="/tmp/test_enc_ks.json")
+        ks.add_device("device-1")
+        transport = self._make_transport(ks)
+
+        env = MeshEnvelope(
+            type="chat", source="device-1", target="hub",
+            payload={"text": "plain"},
+        )
+        transport._decrypt_inbound(env)
+        assert env.payload == {"text": "plain"}
+
+    def test_encrypt_then_decrypt_roundtrip(self):
+        """Full encrypt → decrypt roundtrip via transport methods.
+
+        Hub encrypts for device-1 using device-1's PSK (looked up by target).
+        On receive, decryption looks up sender's PSK. Since both directions
+        use the same per-device PSK, simulate device→hub direction where
+        source=device-1 and target=hub.
+        """
+        ks = KeyStore(path="/tmp/test_enc_ks.json")
+        psk = ks.add_device("device-1")
+
+        # Device sends encrypted message to hub
+        sender = self._make_transport(ks)
+        sender.node_id = "device-1"
+        env = MeshEnvelope(
+            type=MsgType.CHAT, source="device-1", target="hub",
+            payload={"text": "encrypted roundtrip"},
+        )
+        # Encryption uses target's PSK — but hub isn't in key store,
+        # so we encrypt manually using the shared PSK for the test.
+        result = encrypt_payload(
+            env.payload, psk,
+            msg_type=env.type, source=env.source, target=env.target, ts=env.ts,
+        )
+        assert result is not None
+        env.encrypted_payload, env.iv = result
+        env.payload = {}
+
+        # Hub receives and decrypts using source's (device-1's) PSK
+        receiver = self._make_transport(ks)
+        receiver._decrypt_inbound(env)
+        assert env.payload == {"text": "encrypted roundtrip"}
+        assert env.encrypted_payload == ""
+        assert env.iv == ""
+
+
+class TestEncryptionConfig:
+    """Test encryption_enabled config field."""
+
+    def test_default_enabled(self):
+        from nanobot.config.schema import MeshConfig
+        mc = MeshConfig()
+        assert mc.encryption_enabled is True
+
+    def test_can_disable(self):
+        from nanobot.config.schema import MeshConfig
+        mc = MeshConfig(encryption_enabled=False)
+        assert mc.encryption_enabled is False

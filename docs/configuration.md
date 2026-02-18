@@ -387,7 +387,8 @@ The LAN Mesh enables **device-to-device communication** on the same local networ
       \"nonceWindow\": 60,                 // Seconds; reject messages with ts outside this window
       \"enrollmentPinLength\": 6,          // Number of digits in enrollment PIN
       \"enrollmentPinTimeout\": 300,       // Seconds before PIN expires (default 5 min)
-      \"enrollmentMaxAttempts\": 3         // Max failed PIN attempts before lockout
+      "enrollmentMaxAttempts": 3,        // Max failed PIN attempts before lockout
+      "encryptionEnabled": true           // Enable AES-256-GCM payload encryption (requires cryptography package)
     }
   }
 }
@@ -405,6 +406,10 @@ The LAN Mesh enables **device-to-device communication** on the same local networ
 | `keyStorePath` | string | `""` | Path to key store file. Empty = `<workspace>/mesh_keys.json` |
 | `allowUnauthenticated` | bool | `false` | Process unsigned messages with warning (dev only) |
 | `nonceWindow` | int | `60` | Seconds; reject messages with timestamps outside this window |
+| `enrollmentPinLength` | int | `6` | Number of digits in enrollment PIN |
+| `enrollmentPinTimeout` | int | `300` | Seconds before PIN expires (default 5 min) |
+| `enrollmentMaxAttempts` | int | `3` | Max failed PIN attempts before lockout |
+| `encryptionEnabled` | bool | `true` | Enable AES-256-GCM payload encryption. Requires `cryptography` package. |
 
 ### Example: Smart Home Setup
 
@@ -465,7 +470,7 @@ Use cases:
 - **`allowFrom` whitelist**: Restrict which nodes can send messages to prevent unauthorized access.
 - **LAN-only**: The mesh uses UDP/TCP on the local network and never touches the internet.
 - **`allowUnauthenticated` (dev only)**: Set to `true` during development to accept unsigned messages with a warning. **Never enable in production.**
-- **Encryption**: Message payloads are not yet encrypted (HMAC provides authentication + integrity, not confidentiality). AES-GCM encryption is planned as task 1.11.
+- **Encryption (default: enabled)**: Message payloads are encrypted with AES-256-GCM using a key derived from the device's PSK (`HMAC-SHA256(PSK, "mesh-encrypt-v1")`). Only CHAT, COMMAND, and RESPONSE payloads are encrypted; heartbeats and enrollment messages are plaintext. Requires the `cryptography` package (`pip install cryptography`). Set `encryptionEnabled` to `false` to disable.
 
 ---
 

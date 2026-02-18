@@ -16,6 +16,7 @@ from typing import Awaitable, Callable
 
 from loguru import logger
 
+from nanobot.mesh import encryption
 from nanobot.mesh.discovery import PeerInfo, UDPDiscovery
 from nanobot.mesh.protocol import MeshEnvelope, MsgType, read_envelope, write_envelope
 from nanobot.mesh.security import KeyStore
@@ -54,6 +55,7 @@ class MeshTransport:
         key_store: KeyStore | None = None,
         psk_auth_enabled: bool = True,
         allow_unauthenticated: bool = False,
+        encryption_enabled: bool = True,
     ):
         self.node_id = node_id
         self.discovery = discovery
@@ -65,6 +67,8 @@ class MeshTransport:
         self.key_store = key_store
         self.psk_auth_enabled = psk_auth_enabled
         self.allow_unauthenticated = allow_unauthenticated
+        # --- embed_nanobot extensions: payload encryption (task 1.11) ---
+        self.encryption_enabled = encryption_enabled
         # --- embed_nanobot extensions: device enrollment (task 1.10) ---
         self.enrollment_service: EnrollmentService | None = None
 
@@ -110,6 +114,8 @@ class MeshTransport:
             # --- embed_nanobot: PSK authentication check ---
             if not self._verify_inbound(env):
                 return
+            # --- embed_nanobot: decrypt payload after auth verification ---
+            self._decrypt_inbound(env)
             logger.debug(
                 f"[Mesh/Transport] received {env.type} from {env.source}"
             )
@@ -164,7 +170,8 @@ class MeshTransport:
 
     async def _send_to(self, peer: PeerInfo, env: MeshEnvelope) -> bool:
         try:
-            # --- embed_nanobot: auto-sign outbound envelopes ---
+            # --- embed_nanobot: encrypt then sign outbound envelopes ---
+            self._encrypt_outbound(env)
             self._sign_outbound(env)
             reader, writer = await asyncio.wait_for(
                 asyncio.open_connection(peer.ip, peer.tcp_port),
@@ -267,3 +274,77 @@ class MeshTransport:
         env.nonce = KeyStore.generate_nonce()
         canonical = env.canonical_bytes()
         env.hmac = KeyStore.compute_hmac(canonical, env.nonce, psk)
+
+    # -- embed_nanobot: AES-256-GCM encryption helpers (task 1.11) -----------
+
+    # Message types whose payloads carry user/device data worth encrypting.
+    _ENCRYPTED_TYPES = {MsgType.CHAT, MsgType.COMMAND, MsgType.RESPONSE}
+
+    def _encrypt_outbound(self, env: MeshEnvelope) -> None:
+        """Encrypt the envelope payload with AES-256-GCM (if enabled).
+
+        Only encrypts actionable message types (CHAT, COMMAND, RESPONSE).
+        Enrollment, heartbeat, and broadcast messages are left in plaintext.
+        Must be called **before** ``_sign_outbound`` (Encrypt-then-MAC).
+        """
+        if not self.encryption_enabled or self.key_store is None:
+            return
+        if not encryption.is_available():
+            return
+        if env.type not in self._ENCRYPTED_TYPES:
+            return
+        if env.target == "*":
+            return  # Cannot encrypt broadcast — no single shared key
+
+        psk = self.key_store.get_psk(env.target)
+        if psk is None:
+            return  # Unknown target — send unencrypted
+
+        result = encryption.encrypt_payload(
+            payload=env.payload,
+            psk_hex=psk,
+            msg_type=env.type,
+            source=env.source,
+            target=env.target,
+            ts=env.ts,
+        )
+        if result:
+            env.encrypted_payload, env.iv = result
+            env.payload = {}  # Clear plaintext
+
+    def _decrypt_inbound(self, env: MeshEnvelope) -> None:
+        """Decrypt the envelope payload if it carries AES-256-GCM ciphertext.
+
+        Must be called **after** ``_verify_inbound`` (Encrypt-then-MAC).
+        If the message is not encrypted, this is a no-op.
+        """
+        if not env.encrypted_payload or not env.iv:
+            return  # Not encrypted — nothing to do
+        if self.key_store is None:
+            return
+
+        psk = self.key_store.get_psk(env.source)
+        if psk is None:
+            logger.warning(
+                f"[Mesh/Encryption] cannot decrypt from {env.source} — "
+                "PSK not found"
+            )
+            return
+
+        payload = encryption.decrypt_payload(
+            encrypted_payload_hex=env.encrypted_payload,
+            iv_hex=env.iv,
+            psk_hex=psk,
+            msg_type=env.type,
+            source=env.source,
+            target=env.target,
+            ts=env.ts,
+        )
+        if payload is not None:
+            env.payload = payload
+            env.encrypted_payload = ""
+            env.iv = ""
+        else:
+            logger.warning(
+                f"[Mesh/Encryption] failed to decrypt message from {env.source}"
+            )
