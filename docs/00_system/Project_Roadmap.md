@@ -2,7 +2,7 @@
 
 > Single source of truth for project progress. Updated after each feature completion.
 
-**Last updated**: 2026-02-18
+**Last updated**: 2026-02-18 (Phase 1 complete)
 
 ---
 
@@ -24,22 +24,15 @@
 | 1.9 | PSK-based device authentication (HMAC signing) | Done | 2026-02-17 | `nanobot/mesh/security.py` — KeyStore, HMAC-SHA256 sign/verify, nonce replay protection. 25 new tests. |
 | 1.9b | Upstream sync (20 commits: 8053193→7f8a3df) | Done | 2026-02-18 | Base class alias_generator, Mochat channel, CustomProvider, Slack enhancements, Docker Compose. Migrated configs to Base. |
 | 1.10 | Device enrollment flow (PIN-based pairing) | Done | 2026-02-18 | `nanobot/mesh/enrollment.py` — EnrollmentService, PBKDF2 PIN-derived key, XOR one-time pad PSK encryption. 35 new tests (146 total). |
+| 1.11 | Mesh message encryption (AES-GCM) | Done | 2026-02-18 | `nanobot/mesh/encryption.py` — AES-256-GCM with PSK-derived keys, Encrypt-then-MAC, AAD binding. 37 new tests (183 total). `cryptography` dep. |
 
-### In Progress
+### Phase 1 complete ✅
 
-| # | Task | Status | Assignee | Notes |
-|---|------|--------|----------|-------|
-| — | (none) | — | — | Ready for task 1.11 |
-
-### Planned (Phase 1 Remaining)
-
-| # | Task | Priority | Complexity | Dependencies |
-|---|------|----------|------------|--------------|
-| 1.11 | Mesh message encryption (AES-GCM) | P0 | M | PSK auth (1.9) ✅ |
+All Phase 1 foundation tasks are done. Ready to begin Phase 2: Device Ecosystem.
 
 ---
 
-## Phase 2: Device Ecosystem
+## Current Phase: Phase 2 — Device Ecosystem
 
 | # | Task | Priority | Complexity | Dependencies |
 |---|------|----------|------------|--------------|
@@ -138,6 +131,19 @@ See [docs/sync/SYNC_LOG.md](../sync/SYNC_LOG.md) for full merge history.
 - **Zero new dependencies** — uses only stdlib (`hashlib.pbkdf2_hmac`, `hmac`, `secrets`).
 - **3 config fields** appended to `MeshConfig` (append-only convention): `enrollmentPinLength`, `enrollmentPinTimeout`, `enrollmentMaxAttempts`.
 - **Next task**: 1.11 (AES-GCM mesh message encryption) — last remaining Phase 1 task.
+
+### 2026-02-18b — Task 1.11: Mesh Encryption Complete — Phase 1 Done
+- **AES-256-GCM payload encryption** added to mesh transport. CHAT, COMMAND, and RESPONSE payloads are encrypted with a key derived from the device's PSK.
+- **New module**: `nanobot/mesh/encryption.py` (~150 LOC) — `derive_encryption_key()` (HMAC-SHA256 PRF with `"mesh-encrypt-v1"` domain separator), `encrypt_payload()`, `decrypt_payload()`, `build_aad()`, `is_available()`.
+- **Encrypt-then-MAC**: Transport encrypts payload before HMAC signing. Receiver verifies HMAC first, then decrypts. Correct security order.
+- **AAD (Additional Authenticated Data)**: GCM binds ciphertext to envelope metadata (`type|source|target|ts`), preventing payload reuse across contexts.
+- **Key separation**: Raw PSK for HMAC authentication; `HMAC-SHA256(PSK, "mesh-encrypt-v1")` for AES key. Both 256-bit.
+- **Selective encryption**: Only user/device data types encrypted. PING/PONG, ENROLL_*, and broadcast messages skip encryption.
+- **First non-stdlib dependency**: `cryptography>=41.0.0` (PyCA-maintained OpenSSL wrapper). Graceful degradation if not installed (`HAS_AESGCM=False`, logs warning).
+- **37 new tests** across 6 test classes (183 total, zero regressions). Covers roundtrips, tampered ciphertext, AAD mismatch, wrong key, unicode payloads, transport integration, config.
+- **1 config field** appended to `MeshConfig`: `encryptionEnabled` (default `true`).
+- **Phase 1 Foundation is now complete**: Hybrid Router (1.2) + LAN Mesh (1.3) + PSK Auth (1.9) + Device Enrollment (1.10) + AES-GCM Encryption (1.11). 183 tests, 7 upstream syncs.
+- **Next phase**: Phase 2 — Device Ecosystem. First task: 2.1 (Device capability registry and state management).
 
 ### Conventions Reminder
 - Feature branches: `copilot/<feature-name>` from `main_embed`
