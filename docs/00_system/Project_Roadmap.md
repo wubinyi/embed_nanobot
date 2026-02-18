@@ -2,7 +2,7 @@
 
 > Single source of truth for project progress. Updated after each feature completion.
 
-**Last updated**: 2026-02-17
+**Last updated**: 2026-02-18
 
 ---
 
@@ -22,6 +22,7 @@
 | 1.8 | Upstream sync (catch up 116 upstream commits) | Done | 2026-02-17 | Merged MCP, Codex, memory redesign, CLI overhaul, security hardening. See SYNC_LOG.md |
 | 1.8b | Upstream sync (remaining 22 commits) | Done | 2026-02-17 | Telegram media, GitHub Copilot provider, cron timezone, ClawHub skill. Fully synced. |
 | 1.9 | PSK-based device authentication (HMAC signing) | Done | 2026-02-17 | `nanobot/mesh/security.py` — KeyStore, HMAC-SHA256 sign/verify, nonce replay protection. 25 new tests. |
+| 1.9b | Upstream sync (20 commits: 8053193→7f8a3df) | Done | 2026-02-18 | Base class alias_generator, Mochat channel, CustomProvider, Slack enhancements, Docker Compose. Migrated configs to Base. |
 
 ### In Progress
 
@@ -81,9 +82,9 @@
 
 | Metric | Value |
 |--------|-------|
-| Last sync date | 2026-02-17 |
-| `origin/main` HEAD | 8053193 |
-| `upstream/main` HEAD | 8053193 |
+| Last sync date | 2026-02-18 |
+| `origin/main` HEAD | 7f8a3df |
+| `upstream/main` HEAD | 7f8a3df |
 | Commits behind | 0 (fully synced) |
 | Next sync target | On-demand, before next feature task |
 
