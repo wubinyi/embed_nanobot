@@ -325,6 +325,10 @@ def _make_provider(config: Config):
             local_model=hr.local_model,
             api_model=hr.api_model,
             difficulty_threshold=hr.difficulty_threshold,
+            # --- embed_nanobot extensions: cloud fallback (task 2.7) ---
+            fallback_to_local=hr.fallback_to_local,
+            circuit_breaker_threshold=hr.circuit_breaker_threshold,
+            circuit_breaker_timeout=hr.circuit_breaker_timeout,
         )
 
     # --- standard single-provider path ---

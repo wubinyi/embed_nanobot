@@ -497,7 +497,10 @@ The hybrid router enables dual-model routing: a local model judges task difficul
     "localModel": "meta-llama/Llama-3.1-8B-Instruct",  // Local model name
     "apiProvider": "openrouter",                 // Config key of API provider
     "apiModel": "anthropic/claude-opus-4-5",     // API model name
-    "difficultyThreshold": 0.5                   // 0–1; higher = more local (default: 0.5)
+    "difficultyThreshold": 0.5,                  // 0-1; higher = more local (default: 0.5)
+    "fallbackToLocal": true,                      // Fall back to local when API is unreachable (default: true)
+    "circuitBreakerThreshold": 3,                 // Consecutive API failures before circuit opens (default: 3)
+    "circuitBreakerTimeout": 300                  // Seconds to route all to local after circuit opens (default: 300)
   }
 }
 ```
@@ -510,6 +513,8 @@ The hybrid router enables dual-model routing: a local model judges task difficul
    - If score > threshold → Continue to step 3
 3. **PII sanitisation**: The local model removes personally identifiable information (names, emails, phone numbers, addresses, etc.)
 4. **API forwarding**: The sanitised message is sent to the API model for processing
+5. **Fallback**: If the API call fails (network error, timeout), the router falls back to the local model using the original (unsanitised) messages
+6. **Circuit breaker**: After N consecutive API failures, the router routes ALL traffic to local for M seconds, then retries
 
 ### Example Setup
 

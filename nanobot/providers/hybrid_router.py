@@ -3,10 +3,18 @@
 The local model (vLLM / Ollama) acts as a difficulty judge.  Easy tasks are
 processed locally.  Difficult tasks are forwarded to the remote API model
 after private information has been stripped by the local model.
+
+Cloud Fallback (task 2.7)
+-------------------------
+When the API model is unreachable (network error, timeout, 5xx), the router
+automatically falls back to the local model.  A circuit breaker tracks
+consecutive failures and, after *threshold* failures, routes **all** traffic
+to the local model for *timeout* seconds — avoiding repeated slow failures.
 """
 
 import json
 import re
+import time
 from typing import Any, Callable
 
 from loguru import logger
@@ -98,6 +106,10 @@ class HybridRouterProvider(LLMProvider):
         local_model: str,
         api_model: str,
         difficulty_threshold: float = 0.5,
+        # --- embed_nanobot extensions: cloud fallback (task 2.7) ---
+        fallback_to_local: bool = True,
+        circuit_breaker_threshold: int = 3,
+        circuit_breaker_timeout: int = 300,
     ):
         super().__init__()
         self.local = local_provider
@@ -109,6 +121,12 @@ class HybridRouterProvider(LLMProvider):
         # Optional callback: (user_text) -> bool. If True, bypass difficulty
         # judge and route directly to the local model (e.g., device commands).
         self.force_local_fn: Callable[[str], bool] | None = None
+        # --- embed_nanobot extensions: cloud fallback (task 2.7) ---
+        self.fallback_to_local = fallback_to_local
+        self._cb_threshold = circuit_breaker_threshold
+        self._cb_timeout = circuit_breaker_timeout
+        self._cb_consecutive_failures: int = 0
+        self._cb_open_until: float = 0.0  # timestamp; 0 = closed
 
     # -- public interface ----------------------------------------------------
 
@@ -139,6 +157,19 @@ class HybridRouterProvider(LLMProvider):
                 logger.warning(f"[HybridRouter] force_local_fn failed: {e}; "
                                "falling through to normal routing")
 
+        # --- embed_nanobot extensions: circuit breaker (task 2.7) ---
+        # If the circuit breaker is open, skip difficulty judge and route
+        # directly to local until the timeout expires.
+        if self._circuit_is_open():
+            logger.info(
+                "[HybridRouter] circuit breaker OPEN — routing to LOCAL "
+                f"({self._cb_consecutive_failures} consecutive API failures)"
+            )
+            return await self.local.chat(
+                messages, tools=tools, model=self.local_model,
+                max_tokens=max_tokens, temperature=temperature,
+            )
+
         # 1. Judge difficulty via the local model
         score = await self._judge_difficulty(user_text)
         logger.info(f"[HybridRouter] difficulty score={score:.2f} "
@@ -155,13 +186,69 @@ class HybridRouterProvider(LLMProvider):
         # 2. Hard → sanitise PII, then use the API model
         logger.info("[HybridRouter] routing to API model (with PII sanitisation)")
         sanitised_messages = await self._sanitise_messages(messages)
-        return await self.api.chat(
-            sanitised_messages, tools=tools, model=self.api_model,
-            max_tokens=max_tokens, temperature=temperature,
-        )
+
+        # --- embed_nanobot extensions: cloud fallback (task 2.7) ---
+        try:
+            result = await self.api.chat(
+                sanitised_messages, tools=tools, model=self.api_model,
+                max_tokens=max_tokens, temperature=temperature,
+            )
+            self._record_api_success()
+            return result
+        except Exception as e:
+            self._record_api_failure()
+            if self.fallback_to_local:
+                logger.warning(
+                    f"[HybridRouter] API call failed ({type(e).__name__}: {e}); "
+                    "falling back to LOCAL model"
+                )
+                return await self.local.chat(
+                    messages, tools=tools, model=self.local_model,
+                    max_tokens=max_tokens, temperature=temperature,
+                )
+            raise
 
     def get_default_model(self) -> str:
         return self.local_model
+
+    # -- circuit breaker (task 2.7) -----------------------------------------
+
+    def _circuit_is_open(self) -> bool:
+        """Return True if the circuit breaker is open (API considered down).
+
+        The breaker opens after ``_cb_threshold`` consecutive API failures
+        and stays open for ``_cb_timeout`` seconds.  After the timeout, the
+        breaker enters a "half-open" state: the next API call is attempted
+        and if it succeeds, the breaker closes; if it fails, the timer
+        resets.
+        """
+        if self._cb_open_until <= 0:
+            return False
+        if time.time() < self._cb_open_until:
+            return True
+        # Timer expired — half-open (allow one attempt through)
+        return False
+
+    def _record_api_success(self) -> None:
+        """Record a successful API call — close the circuit breaker."""
+        if self._cb_consecutive_failures > 0:
+            logger.info(
+                "[HybridRouter] API recovered after "
+                f"{self._cb_consecutive_failures} failures — circuit breaker CLOSED"
+            )
+        self._cb_consecutive_failures = 0
+        self._cb_open_until = 0.0
+
+    def _record_api_failure(self) -> None:
+        """Record a failed API call — may open the circuit breaker."""
+        self._cb_consecutive_failures += 1
+        if self._cb_consecutive_failures >= self._cb_threshold:
+            self._cb_open_until = time.time() + self._cb_timeout
+            logger.warning(
+                f"[HybridRouter] circuit breaker OPEN — "
+                f"{self._cb_consecutive_failures} consecutive API failures; "
+                f"routing to local for {self._cb_timeout}s"
+            )
 
     # -- internal helpers ----------------------------------------------------
 

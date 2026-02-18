@@ -49,7 +49,7 @@ All Phase 1 foundation tasks are done. Ready to begin Phase 2: Device Ecosystem.
 | 2.4 | Command-type routing: device commands always local | Done | 2026-02-18 | `nanobot/mesh/routing.py` — registry-aware device detection. `force_local_fn` callback on HybridRouter. Auto-wired in CLI when mesh + HybridRouter both active. 21 new tests (328 total). |
 | 2.5 | ESP32 SDK (MicroPython mesh client) | P1 | L | Mesh + Auth (1.3, 1.9) |
 | 2.6 | Basic automation rules engine | Done | 2026-02-18 | `nanobot/mesh/automation.py` — AutomationEngine with Condition/RuleAction/AutomationRule, device-indexed evaluation, cooldown, JSON persistence, validation. MeshChannel dispatch hook. 75 new tests (403 total). |
-| 2.7 | Cloud API fallback: degrade to local if unreachable | P2 | S | Hybrid Router (1.2) |
+| 2.7 | Cloud API fallback: degrade to local if unreachable | Done | 2026-02-18 | Try/except fallback on API failure + circuit breaker (3 consecutive failures → route all to local for 300s). Half-open recovery. 3 config fields on HybridRouterConfig. 11 new tests (414 total). |
 
 ---
 
@@ -190,6 +190,14 @@ See [docs/sync/SYNC_LOG.md](../sync/SYNC_LOG.md) for full merge history.
 - **21 new tests** across 3 classes (328 total, zero regressions): detection logic, closure behavior, router integration.
 - **Conflict surface**: +3 lines in hybrid_router.py, +5 lines in commands.py.
 - **Next task**: 2.5 (ESP32 SDK) or 2.6 (Automation rules engine).
+
+### 2026-02-18h — Task 2.7: Cloud API Fallback Complete
+- **Fallback mechanism**: When API call fails (any exception), router falls back to local model using original (unsanitised) messages.
+- **Circuit breaker**: After 3 consecutive API failures, routes ALL traffic to local for 300s. Half-open state after timeout: success closes breaker, failure reopens.
+- **Config**: 3 new fields in HybridRouterConfig (fallback_to_local, circuit_breaker_threshold, circuit_breaker_timeout), all with sensible defaults.
+- **11 new tests** (414 total, zero regressions): fallback, re-raise when disabled, timeout errors, success reset, breaker open/half-open/closed, original messages preserved.
+- **Minimal conflict surface**: +40 LOC in hybrid_router.py, +3 fields in schema.py, +3 lines in commands.py.
+- **Phase 2 assessment**: Tasks 2.1–2.4, 2.6–2.7 all Done. Task 2.5 (ESP32 SDK) is hardware-dependent and deferred. Phase 2 core software tasks complete.
 
 ### 2026-02-18g — Task 2.6: Basic Automation Rules Engine Complete
 - **AutomationEngine** (`nanobot/mesh/automation.py`, ~380 LOC): Evaluates user-defined rules when device state changes, generates DeviceCommands for dispatch.

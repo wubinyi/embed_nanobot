@@ -273,6 +273,10 @@ class HybridRouterConfig(Base):
     api_provider: str = ""         # Config key of the API provider (e.g. "anthropic", "openrouter")
     api_model: str = ""            # Model name on the API side (e.g. "anthropic/claude-sonnet-4-5")
     difficulty_threshold: float = 0.5  # 0–1; higher → more tasks stay local
+    # --- embed_nanobot extensions: cloud fallback (task 2.7) ---
+    fallback_to_local: bool = True            # Fall back to local model when API is unreachable
+    circuit_breaker_threshold: int = 3        # Consecutive API failures before circuit opens
+    circuit_breaker_timeout: int = 300        # Seconds to route all to local after circuit opens
 
 
 class WebSearchConfig(Base):

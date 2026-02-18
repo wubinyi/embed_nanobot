@@ -1,7 +1,9 @@
 """Tests for the hybrid router provider."""
 
 import json
+import time
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 
@@ -44,6 +46,65 @@ class FakeProvider(LLMProvider):
 
     def get_default_model(self) -> str:
         return "fake-model"
+
+
+class FailingProvider(LLMProvider):
+    """Provider that always raises an exception."""
+
+    def __init__(self, error: Exception | None = None):
+        super().__init__()
+        self.error = error or ConnectionError("API unreachable")
+        self.calls: list[dict[str, Any]] = []
+
+    async def chat(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+        model: str | None = None,
+        max_tokens: int = 4096,
+        temperature: float = 0.7,
+    ) -> LLMResponse:
+        self.calls.append({
+            "messages": messages,
+            "tools": tools,
+            "model": model,
+        })
+        raise self.error
+
+    def get_default_model(self) -> str:
+        return "failing-model"
+
+
+class SometimesFailingProvider(LLMProvider):
+    """Provider that fails N times then succeeds."""
+
+    def __init__(self, fail_count: int, success_response: LLMResponse | None = None):
+        super().__init__()
+        self._fail_count = fail_count
+        self._call_count = 0
+        self._success_response = success_response or LLMResponse(content="api recovered")
+        self.calls: list[dict[str, Any]] = []
+
+    async def chat(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+        model: str | None = None,
+        max_tokens: int = 4096,
+        temperature: float = 0.7,
+    ) -> LLMResponse:
+        self.calls.append({
+            "messages": messages,
+            "tools": tools,
+            "model": model,
+        })
+        self._call_count += 1
+        if self._call_count <= self._fail_count:
+            raise ConnectionError(f"API failure #{self._call_count}")
+        return self._success_response
+
+    def get_default_model(self) -> str:
+        return "sometimes-model"
 
 
 def _easy_judge_response(score: float = 0.2) -> LLMResponse:
@@ -260,3 +321,317 @@ async def test_get_default_model():
         local_model="llama3", api_model="claude-sonnet",
     )
     assert router.get_default_model() == "llama3"
+
+
+# ---------------------------------------------------------------------------
+# Cloud fallback (task 2.7)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_api_failure_falls_back_to_local():
+    """When the API provider raises, the router falls back to local."""
+    local = FakeProvider([
+        _hard_judge_response(0.9),          # judge
+        _sanitised_response("sanitised"),   # sanitise
+        LLMResponse(content="local fallback answer"),  # fallback answer
+    ])
+    api = FailingProvider(ConnectionError("network down"))
+
+    router = HybridRouterProvider(
+        local_provider=local,
+        api_provider=api,
+        local_model="llama3",
+        api_model="claude-sonnet",
+        fallback_to_local=True,
+    )
+
+    resp = await router.chat(
+        messages=[{"role": "user", "content": "complex question"}],
+    )
+
+    assert resp.content == "local fallback answer"
+    assert len(api.calls) == 1  # API was attempted
+    assert len(local.calls) == 3  # judge + sanitise + fallback answer
+
+
+@pytest.mark.asyncio
+async def test_api_failure_no_fallback_re_raises():
+    """When fallback is disabled, API failures propagate."""
+    local = FakeProvider([
+        _hard_judge_response(0.9),
+        _sanitised_response("sanitised"),
+    ])
+    api = FailingProvider(ConnectionError("network down"))
+
+    router = HybridRouterProvider(
+        local_provider=local,
+        api_provider=api,
+        local_model="llama3",
+        api_model="claude-sonnet",
+        fallback_to_local=False,
+    )
+
+    with pytest.raises(ConnectionError, match="network down"):
+        await router.chat(
+            messages=[{"role": "user", "content": "complex question"}],
+        )
+
+
+@pytest.mark.asyncio
+async def test_api_failure_timeout_error():
+    """TimeoutError also triggers fallback."""
+    local = FakeProvider([
+        _hard_judge_response(0.9),
+        _sanitised_response("sanitised"),
+        LLMResponse(content="fallback"),
+    ])
+    api = FailingProvider(TimeoutError("request timed out"))
+
+    router = HybridRouterProvider(
+        local_provider=local,
+        api_provider=api,
+        local_model="llama3",
+        api_model="claude-sonnet",
+        fallback_to_local=True,
+    )
+
+    resp = await router.chat(
+        messages=[{"role": "user", "content": "complex question"}],
+    )
+    assert resp.content == "fallback"
+
+
+@pytest.mark.asyncio
+async def test_api_success_resets_failure_count():
+    """After a successful API call, the failure counter resets."""
+    local = FakeProvider([
+        # First call: hard judge + sanitise (API fails)
+        _hard_judge_response(0.9),
+        _sanitised_response("sanitised"),
+        LLMResponse(content="fallback 1"),
+        # Second call: hard judge + sanitise (API succeeds)
+        _hard_judge_response(0.9),
+        _sanitised_response("sanitised"),
+    ])
+    api = SometimesFailingProvider(
+        fail_count=1,
+        success_response=LLMResponse(content="api success"),
+    )
+
+    router = HybridRouterProvider(
+        local_provider=local,
+        api_provider=api,
+        local_model="llama3",
+        api_model="claude-sonnet",
+        fallback_to_local=True,
+        circuit_breaker_threshold=5,  # High so it doesn't trip
+    )
+
+    # First call: API fails, falls back
+    resp1 = await router.chat(
+        messages=[{"role": "user", "content": "q1"}],
+    )
+    assert resp1.content == "fallback 1"
+    assert router._cb_consecutive_failures == 1
+
+    # Second call: API succeeds
+    resp2 = await router.chat(
+        messages=[{"role": "user", "content": "q2"}],
+    )
+    assert resp2.content == "api success"
+    assert router._cb_consecutive_failures == 0  # Reset
+
+
+# ---------------------------------------------------------------------------
+# Circuit breaker (task 2.7)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_circuit_breaker_opens_after_threshold():
+    """After N consecutive API failures, the circuit breaker opens."""
+    # We need enough local responses for 3 calls:
+    # Each call: judge + sanitise + fallback = 3 local calls
+    local_responses = []
+    for _ in range(3):
+        local_responses.extend([
+            _hard_judge_response(0.9),
+            _sanitised_response("sanitised"),
+            LLMResponse(content="fallback"),
+        ])
+    local = FakeProvider(local_responses)
+    api = FailingProvider(ConnectionError("down"))
+
+    router = HybridRouterProvider(
+        local_provider=local,
+        api_provider=api,
+        local_model="llama3",
+        api_model="claude-sonnet",
+        fallback_to_local=True,
+        circuit_breaker_threshold=3,
+        circuit_breaker_timeout=300,
+    )
+
+    # 3 consecutive failures
+    for _ in range(3):
+        await router.chat(messages=[{"role": "user", "content": "q"}])
+
+    assert router._cb_consecutive_failures == 3
+    assert router._cb_open_until > 0  # Breaker is open
+
+
+@pytest.mark.asyncio
+async def test_circuit_breaker_routes_to_local():
+    """When circuit breaker is open, requests bypass difficulty judge."""
+    local = FakeProvider([LLMResponse(content="breaker local")])
+    api = FailingProvider()
+
+    router = HybridRouterProvider(
+        local_provider=local,
+        api_provider=api,
+        local_model="llama3",
+        api_model="claude-sonnet",
+        circuit_breaker_threshold=3,
+    )
+
+    # Force circuit breaker open
+    router._cb_consecutive_failures = 3
+    router._cb_open_until = time.time() + 300
+
+    resp = await router.chat(
+        messages=[{"role": "user", "content": "q"}],
+    )
+
+    assert resp.content == "breaker local"
+    # Only 1 local call (direct answer), no judge/sanitise
+    assert len(local.calls) == 1
+    # API was never attempted
+    assert len(api.calls) == 0
+
+
+@pytest.mark.asyncio
+async def test_circuit_breaker_half_open_success():
+    """After timeout, breaker is half-open: success closes it."""
+    local = FakeProvider([
+        _hard_judge_response(0.9),
+        _sanitised_response("sanitised"),
+    ])
+    api = FakeProvider([LLMResponse(content="api back")])
+
+    router = HybridRouterProvider(
+        local_provider=local,
+        api_provider=api,
+        local_model="llama3",
+        api_model="claude-sonnet",
+        circuit_breaker_threshold=3,
+    )
+
+    # Simulate breaker that was open but timeout expired
+    router._cb_consecutive_failures = 3
+    router._cb_open_until = time.time() - 1  # Expired
+
+    resp = await router.chat(
+        messages=[{"role": "user", "content": "q"}],
+    )
+
+    assert resp.content == "api back"
+    assert router._cb_consecutive_failures == 0
+    assert router._cb_open_until == 0.0
+
+
+@pytest.mark.asyncio
+async def test_circuit_breaker_half_open_failure():
+    """After timeout, breaker is half-open: failure reopens it."""
+    local = FakeProvider([
+        _hard_judge_response(0.9),
+        _sanitised_response("sanitised"),
+        LLMResponse(content="fallback again"),
+    ])
+    api = FailingProvider(ConnectionError("still down"))
+
+    router = HybridRouterProvider(
+        local_provider=local,
+        api_provider=api,
+        local_model="llama3",
+        api_model="claude-sonnet",
+        fallback_to_local=True,
+        circuit_breaker_threshold=3,
+        circuit_breaker_timeout=300,
+    )
+
+    # Simulate breaker that was open but timeout expired (half-open)
+    router._cb_consecutive_failures = 3
+    router._cb_open_until = time.time() - 1  # Expired
+
+    resp = await router.chat(
+        messages=[{"role": "user", "content": "q"}],
+    )
+
+    assert resp.content == "fallback again"
+    # Failure count incremented, breaker re-opened
+    assert router._cb_consecutive_failures == 4
+    assert router._cb_open_until > time.time()
+
+
+@pytest.mark.asyncio
+async def test_circuit_breaker_closed_by_default():
+    """Circuit breaker starts closed."""
+    local = FakeProvider()
+    api = FakeProvider()
+    router = HybridRouterProvider(
+        local_provider=local, api_provider=api,
+        local_model="llama3", api_model="claude-sonnet",
+    )
+    assert router._cb_consecutive_failures == 0
+    assert router._cb_open_until == 0.0
+    assert not router._circuit_is_open()
+
+
+def test_circuit_is_open_logic():
+    """Test _circuit_is_open edge cases."""
+    local = FakeProvider()
+    api = FakeProvider()
+    router = HybridRouterProvider(
+        local_provider=local, api_provider=api,
+        local_model="llama3", api_model="claude-sonnet",
+    )
+
+    # Closed
+    assert not router._circuit_is_open()
+
+    # Open (future timestamp)
+    router._cb_open_until = time.time() + 100
+    assert router._circuit_is_open()
+
+    # Expired (past timestamp) → half-open → returns False
+    router._cb_open_until = time.time() - 1
+    assert not router._circuit_is_open()
+
+
+@pytest.mark.asyncio
+async def test_fallback_uses_original_messages_not_sanitised():
+    """When falling back to local after API failure, use original messages
+    (not sanitised), since local model is trusted."""
+    original_msg = "Alice at alice@example.com wants to know about physics"
+    local = FakeProvider([
+        _hard_judge_response(0.9),
+        _sanitised_response("[NAME] at [EMAIL] wants to know about physics"),
+        LLMResponse(content="local answer"),
+    ])
+    api = FailingProvider(ConnectionError("down"))
+
+    router = HybridRouterProvider(
+        local_provider=local,
+        api_provider=api,
+        local_model="llama3",
+        api_model="claude-sonnet",
+        fallback_to_local=True,
+    )
+
+    await router.chat(
+        messages=[{"role": "user", "content": original_msg}],
+    )
+
+    # The fallback call (3rd local call) should use ORIGINAL messages
+    fallback_call = local.calls[2]
+    user_msgs = [m for m in fallback_call["messages"] if m["role"] == "user"]
+    assert user_msgs[0]["content"] == original_msg
