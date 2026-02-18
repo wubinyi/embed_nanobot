@@ -98,6 +98,10 @@ Each provider has an `apiKey` and optional `apiBase`. Only configure the provide
         "APP-Code": "your-app-code"
       }
     },
+    "siliconflow": {
+      "apiKey": "xxx",
+      "apiBase": ""                  // Default: https://api.siliconflow.cn/v1
+    },
     "vllm": {
       "apiKey": "dummy",            // Any non-empty string for local servers
       "apiBase": "http://localhost:8000/v1"
@@ -139,6 +143,7 @@ Set the default model in `agents.defaults.model`. The provider is auto-detected 
 | `glm`, `zhipu` | zhipu |
 | `ollama` | ollama |
 | `minimax` | minimax |
+| `siliconflow` | siliconflow |
 | `codex`, `openai-codex` | openai_codex (OAuth) |
 | `copilot`, `github_copilot` | github_copilot (OAuth) |
 | `moonshot`, `kimi` | moonshot |
@@ -148,9 +153,9 @@ If you use **OpenRouter** or **AiHubMix**, any model name works — these are ga
 
 ### Gateway Auto-Detection
 
-Gateway providers (OpenRouter, AiHubMix) are detected automatically by:
+Gateway providers (OpenRouter, AiHubMix, SiliconFlow) are detected automatically by:
 - **API key prefix**: `sk-or-` → OpenRouter
-- **API base URL**: URL containing `openrouter` or `aihubmix`
+- **API base URL**: URL containing `openrouter`, `aihubmix`, or `siliconflow`
 
 ---
 

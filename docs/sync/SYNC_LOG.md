@@ -12,6 +12,7 @@ Tracks all merges from `HKUDS/nanobot` (upstream) `main` into our `main_embed` b
 | 2026-02-17 | a219a91 | 116 (77 non-merge) | README.md, commands.py, providers/__init__.py, pyproject.toml | Upstream-first; appended HybridRouter/Codex integration in CLI; kept vLLM/Mesh sections in README. See details below. | `copilot/sync-upstream-and-merge-main-embed` |
 | 2026-02-17b | 8053193 | 22 (11 non-merge) | README.md | Telegram media, GitHub Copilot provider, cron timezone, ClawHub skill, empty content fix | Accept upstream README, preserve embed_nanobot extensions section |
 | 2026-02-18 | 7f8a3df | 20 | schema.py, commands.py | Base(BaseModel) alias_generator, Mochat channel, CustomProvider, Slack reply_in_thread/react_emoji, Docker Compose | Migrated MeshConfig/HybridRouterConfig to Base; restored mochat field |
+| 2026-02-18b | ce4f005 | 9 (4 non-merge) | None | SiliconFlow provider, workspace-scoped sessions with legacy migration, tool metadata in history | Clean merge, no conflicts |
 
 ---
 
