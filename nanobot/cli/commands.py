@@ -463,6 +463,13 @@ def gateway(
                 node_id=mesh_ch.node_id,
             ))
             console.print("[green]✓[/green] Device control tool registered")
+
+            # --- embed_nanobot extensions: device-command routing (task 2.4) ---
+            from nanobot.providers.hybrid_router import HybridRouterProvider
+            if isinstance(provider, HybridRouterProvider):
+                from nanobot.mesh.routing import build_force_local_fn
+                provider.force_local_fn = build_force_local_fn(mesh_ch.registry)
+                console.print("[green]✓[/green] Device-command routing → local LLM")
         except Exception as e:
             logger.warning(f"Device control tool not available: {e}")
 

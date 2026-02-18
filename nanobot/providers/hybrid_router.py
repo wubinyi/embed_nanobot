@@ -7,7 +7,7 @@ after private information has been stripped by the local model.
 
 import json
 import re
-from typing import Any
+from typing import Any, Callable
 
 from loguru import logger
 
@@ -105,6 +105,10 @@ class HybridRouterProvider(LLMProvider):
         self.local_model = local_model
         self.api_model = api_model
         self.difficulty_threshold = difficulty_threshold
+        # --- embed_nanobot extensions: device-command routing (task 2.4) ---
+        # Optional callback: (user_text) -> bool. If True, bypass difficulty
+        # judge and route directly to the local model (e.g., device commands).
+        self.force_local_fn: Callable[[str], bool] | None = None
 
     # -- public interface ----------------------------------------------------
 
@@ -118,6 +122,22 @@ class HybridRouterProvider(LLMProvider):
     ) -> LLMResponse:
         """Route the request to local or API model based on difficulty."""
         user_text = self._last_user_text(messages)
+
+        # --- embed_nanobot extensions: device-command routing (task 2.4) ---
+        # If the caller has set a force_local_fn and it returns True
+        # (e.g., the message references a registered device), skip the
+        # difficulty judge and route straight to the local model.
+        if self.force_local_fn is not None:
+            try:
+                if self.force_local_fn(user_text):
+                    logger.info("[HybridRouter] forced LOCAL (device command detected)")
+                    return await self.local.chat(
+                        messages, tools=tools, model=self.local_model,
+                        max_tokens=max_tokens, temperature=temperature,
+                    )
+            except Exception as e:
+                logger.warning(f"[HybridRouter] force_local_fn failed: {e}; "
+                               "falling through to normal routing")
 
         # 1. Judge difficulty via the local model
         score = await self._judge_difficulty(user_text)

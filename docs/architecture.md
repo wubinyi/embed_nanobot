@@ -203,6 +203,15 @@ User Message
       │
       ▼
 ┌───────────────────────────────────────┐
+│   0. Device-command detection         │
+│   (optional: force_local_fn callback) │
+└────────────┬──────────────────────────┘
+             │
+             ├─ Device detected ──────► Local model handles task
+             │                          (skip difficulty judge)
+             │
+             ▼
+┌───────────────────────────────────────┐
 │   1. Local model judges difficulty   │
 │      (returns score 0.0–1.0)          │
 └────────────┬──────────────────────────┘
@@ -223,7 +232,8 @@ User Message
 ```
 
 **Key methods:**
-- **`chat()`** — Routes the request based on difficulty score.
+- **`chat()`** — Routes the request based on device detection then difficulty score.
+- **`force_local_fn`** — Optional callback `(str) → bool`. When set and returns `True`, routes directly to local model (e.g., device commands detected via `nanobot/mesh/routing.py`).
 - **`_judge_difficulty()`** — Calls local model with a classification prompt to get a difficulty score.
 - **`_sanitise_messages()`** — Strips PII from all user messages using the local model.
 
@@ -389,6 +399,7 @@ JSON structure:
 - **`discovery.py`**: UDP broadcast beacons advertising node presence on port 18799
 - **`transport.py`**: TCP server (port 18800) + client connections, handles envelope routing, auto-sign outbound / verify inbound
 - **`channel.py`**: `MeshChannel` implements `BaseChannel` interface, publishes inbound messages to the bus and subscribes to outbound messages
+- **`routing.py`**: `is_device_related()` — registry-aware text classifier for device-command detection; `build_force_local_fn()` — creates callback for HybridRouter force-local routing
 
 The mesh is registered in `nanobot/channels/manager.py` like any other channel and activated via `channels.mesh.enabled: true` in config.
 

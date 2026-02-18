@@ -46,7 +46,7 @@ All Phase 1 foundation tasks are done. Ready to begin Phase 2: Device Ecosystem.
 |---|------|----------|------------|--------------|
 | 2.2 | Standardized device command schema | Done | 2026-02-18 | `nanobot/mesh/commands.py` — DeviceCommand, CommandResponse, BatchCommand, Action/CommandStatus enums. 6-level validation (action/device/online/capability/compatibility/value). Mesh envelope conversion. LLM command descriptor. 42 new tests (275 total). |
 | 2.3 | Natural language → device command (LLM skill) | Done | 2026-02-18 | `nanobot/agent/tools/device.py` — DeviceControlTool (list/command/state/describe). `nanobot/skills/device-control/SKILL.md` always-active skill. Conditional registration in CLI when mesh enabled. 32 new tests (307 total). |
-| 2.4 | Command-type routing: device commands always local | P1 | S | Hybrid Router (1.2) |
+| 2.4 | Command-type routing: device commands always local | Done | 2026-02-18 | `nanobot/mesh/routing.py` — registry-aware device detection. `force_local_fn` callback on HybridRouter. Auto-wired in CLI when mesh + HybridRouter both active. 21 new tests (328 total). |
 | 2.5 | ESP32 SDK (MicroPython mesh client) | P1 | L | Mesh + Auth (1.3, 1.9) |
 | 2.6 | Basic automation rules engine | P1 | M | Registry (2.1), Commands (2.2) |
 | 2.7 | Cloud API fallback: degrade to local if unreachable | P2 | S | Hybrid Router (1.2) |
@@ -182,6 +182,14 @@ See [docs/sync/SYNC_LOG.md](../sync/SYNC_LOG.md) for full merge history.
 - **32 new tests** across 7 classes (307 total, zero regressions): tool metadata, list/command/state/describe actions, validation failures, transport failures, envelope construction.
 - **Conflict surface**: +1 append block in `commands.py` (guarded try/except).
 - **Next task**: 2.4 (Command-type routing: device commands always local).
+
+### 2026-02-18f — Task 2.4: Device-Command Routing Complete
+- **Routing module** (`nanobot/mesh/routing.py`, ~100 LOC): `is_device_related()` checks text against device names/node_ids/types/capabilities with word-boundary-aware matching. `build_force_local_fn()` creates closure for HybridRouter.
+- **HybridRouter hook**: Added `force_local_fn` callback attribute. Checked before difficulty judge in `chat()` — if True, routes to local model immediately (skips judge + PII sanitization).
+- **CLI wiring**: Conditional setup when both mesh channel and HybridRouter are active.
+- **21 new tests** across 3 classes (328 total, zero regressions): detection logic, closure behavior, router integration.
+- **Conflict surface**: +3 lines in hybrid_router.py, +5 lines in commands.py.
+- **Next task**: 2.5 (ESP32 SDK) or 2.6 (Automation rules engine).
 
 ### Conventions Reminder
 - Feature branches: `copilot/<feature-name>` from `main_embed`
