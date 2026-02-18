@@ -15,6 +15,8 @@ from loguru import logger
 from nanobot.bus.events import OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.channels.base import BaseChannel
+from nanobot.mesh.automation import AutomationEngine
+from nanobot.mesh.commands import command_to_envelope
 from nanobot.mesh.discovery import UDPDiscovery
 from nanobot.mesh.enrollment import EnrollmentService
 from nanobot.mesh.protocol import MeshEnvelope, MsgType
@@ -116,6 +118,19 @@ class MeshChannel(BaseChannel):
         self.discovery.on_peer_seen(self._on_peer_seen)
         self.discovery.on_peer_lost(self._on_peer_lost)
 
+        # --- embed_nanobot: automation rules engine (task 2.6) ---
+        automation_rules_path = getattr(config, "automation_rules_path", "") or ""
+        if not automation_rules_path:
+            workspace = getattr(config, "_workspace_path", None)
+            if workspace:
+                automation_rules_path = str(Path(workspace) / "automation_rules.json")
+            else:
+                automation_rules_path = str(
+                    Path("~/.nanobot/workspace/automation_rules.json").expanduser()
+                )
+        self.automation = AutomationEngine(self.registry, path=automation_rules_path)
+        self.automation.load()
+
     # -- BaseChannel interface -----------------------------------------------
 
     async def start(self) -> None:
@@ -209,6 +224,19 @@ class MeshChannel(BaseChannel):
             logger.warning(
                 f"[MeshChannel] STATE_REPORT from unregistered device {env.source}"
             )
+            return
+
+        # --- embed_nanobot: evaluate automation rules (task 2.6) ---
+        if self.automation:
+            commands = self.automation.evaluate(env.source)
+            for cmd in commands:
+                envelope = command_to_envelope(cmd, source=self.node_id)
+                ok = await self.transport.send(envelope)
+                if not ok:
+                    logger.warning(
+                        f"[MeshChannel] automation dispatch failed: "
+                        f"{cmd.action} {cmd.device}.{cmd.capability}"
+                    )
 
     def _on_peer_seen(self, node_id: str, is_new: bool, beacon: dict) -> None:
         """Called by discovery when a peer beacon is received."""

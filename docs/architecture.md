@@ -400,6 +400,7 @@ JSON structure:
 - **`transport.py`**: TCP server (port 18800) + client connections, handles envelope routing, auto-sign outbound / verify inbound
 - **`channel.py`**: `MeshChannel` implements `BaseChannel` interface, publishes inbound messages to the bus and subscribes to outbound messages
 - **`routing.py`**: `is_device_related()` — registry-aware text classifier for device-command detection; `build_force_local_fn()` — creates callback for HybridRouter force-local routing
+- **`automation.py`**: `AutomationEngine` — evaluates user-defined rules when device state changes; `Condition` (device/capability/operator/value), `RuleAction` (generates `DeviceCommand`), `AutomationRule` (AND-logic conditions + cooldown); indexed by trigger device for O(1) lookup; JSON persistence; `validate_rule()` checks devices/capabilities exist
 
 The mesh is registered in `nanobot/channels/manager.py` like any other channel and activated via `channels.mesh.enabled: true` in config.
 

@@ -186,6 +186,8 @@ class MeshConfig(Base):
     encryption_enabled: bool = True         # Enable AES-256-GCM payload encryption
     # --- embed_nanobot extensions: device registry (task 2.1) ---
     registry_path: str = ""                  # Path to device_registry.json (default: <workspace>/device_registry.json)
+    # --- embed_nanobot extensions: automation rules engine (task 2.6) ---
+    automation_rules_path: str = ""          # Path to automation_rules.json (default: <workspace>/automation_rules.json)
 
 
 class ChannelsConfig(Base):

@@ -48,7 +48,7 @@ All Phase 1 foundation tasks are done. Ready to begin Phase 2: Device Ecosystem.
 | 2.3 | Natural language → device command (LLM skill) | Done | 2026-02-18 | `nanobot/agent/tools/device.py` — DeviceControlTool (list/command/state/describe). `nanobot/skills/device-control/SKILL.md` always-active skill. Conditional registration in CLI when mesh enabled. 32 new tests (307 total). |
 | 2.4 | Command-type routing: device commands always local | Done | 2026-02-18 | `nanobot/mesh/routing.py` — registry-aware device detection. `force_local_fn` callback on HybridRouter. Auto-wired in CLI when mesh + HybridRouter both active. 21 new tests (328 total). |
 | 2.5 | ESP32 SDK (MicroPython mesh client) | P1 | L | Mesh + Auth (1.3, 1.9) |
-| 2.6 | Basic automation rules engine | P1 | M | Registry (2.1), Commands (2.2) |
+| 2.6 | Basic automation rules engine | Done | 2026-02-18 | `nanobot/mesh/automation.py` — AutomationEngine with Condition/RuleAction/AutomationRule, device-indexed evaluation, cooldown, JSON persistence, validation. MeshChannel dispatch hook. 75 new tests (403 total). |
 | 2.7 | Cloud API fallback: degrade to local if unreachable | P2 | S | Hybrid Router (1.2) |
 
 ---
@@ -190,6 +190,18 @@ See [docs/sync/SYNC_LOG.md](../sync/SYNC_LOG.md) for full merge history.
 - **21 new tests** across 3 classes (328 total, zero regressions): detection logic, closure behavior, router integration.
 - **Conflict surface**: +3 lines in hybrid_router.py, +5 lines in commands.py.
 - **Next task**: 2.5 (ESP32 SDK) or 2.6 (Automation rules engine).
+
+### 2026-02-18g — Task 2.6: Basic Automation Rules Engine Complete
+- **AutomationEngine** (`nanobot/mesh/automation.py`, ~380 LOC): Evaluates user-defined rules when device state changes, generates DeviceCommands for dispatch.
+- **Data model**: `Condition` (device/capability/operator/value), `RuleAction` (generates DeviceCommand), `AutomationRule` (AND-logic + cooldown).
+- **Evaluation**: Sync (pure comparisons), indexed by trigger device_id for O(1) lookup. Cooldown prevents re-triggering.
+- **Integration**: `MeshChannel._handle_state_report()` evaluates rules after registry update, dispatches commands via transport.
+- **Validation**: `validate_rule()` checks devices/capabilities exist in registry.
+- **Persistence**: JSON file alongside registry.
+- **75 new tests** across 10 test classes (403 total, zero regressions).
+- **1 config field** appended to MeshConfig: `automation_rules_path`.
+- **Conflict surface**: +26 lines in channel.py, +1 field in schema.py. New file zero conflict.
+- **Next tasks**: 2.7 (Cloud API fallback, P2/S), 2.5 (ESP32 SDK, P1/L — hardware-dependent, may defer).
 
 ### Conventions Reminder
 - Feature branches: `copilot/<feature-name>` from `main_embed`
