@@ -291,6 +291,8 @@ Requires Node.js ≥18 and `nanobot channels login` to scan QR code.
       "botToken": "xoxb-YOUR-BOT-TOKEN",     // Bot User OAuth Token
       "appToken": "xapp-YOUR-APP-TOKEN",     // App-Level Token (for Socket Mode)
       "userTokenReadOnly": true,       // User token is read-only
+      "replyInThread": true,            // Reply in threads (default: true)
+      "reactEmoji": "eyes",              // React to messages with this emoji (default: "eyes")
       "groupPolicy": "mention",        // "mention" (respond when @mentioned), "open" (all messages), "allowlist" (specific channels)
       "groupAllowFrom": [],            // Allowed channel IDs (if groupPolicy is "allowlist")
       "dm": {
@@ -313,6 +315,45 @@ Requires Node.js ≥18 and `nanobot channels login` to scan QR code.
       "appId": "YOUR_APP_ID",          // 机器人 ID (AppID) from q.qq.com
       "secret": "YOUR_APP_SECRET",     // 机器人密钥 (AppSecret) from q.qq.com
       "allowFrom": []                  // Allowed user openids (empty = public access)
+    }
+  }
+}
+```
+
+### Mochat
+
+Mochat is an open-source IM platform. nanobot connects via Socket.IO with support for session/panel watching, per-group mention rules, and reconnect with backoff.
+
+```jsonc
+{
+  "channels": {
+    "mochat": {
+      "enabled": true,
+      "baseUrl": "https://mochat.io",
+      "socketUrl": "",                    // Socket.IO server URL (defaults to baseUrl)
+      "socketPath": "/socket.io",
+      "socketDisableMsgpack": false,      // Disable msgpack encoding
+      "socketReconnectDelayMs": 1000,
+      "socketMaxReconnectDelayMs": 10000,
+      "socketConnectTimeoutMs": 10000,
+      "refreshIntervalMs": 30000,
+      "watchTimeoutMs": 25000,
+      "watchLimit": 100,
+      "retryDelayMs": 500,
+      "maxRetryAttempts": 0,              // 0 = unlimited retries
+      "clawToken": "YOUR_CLAW_TOKEN",
+      "agentUserId": "YOUR_AGENT_USER_ID",
+      "sessions": [],                     // Session IDs to watch
+      "panels": [],                       // Panel IDs to watch
+      "allowFrom": [],                    // Allowed user IDs
+      "mention": {
+        "requireInGroups": false          // Require @mention in group chats
+      },
+      "groups": {                         // Per-group mention overrides
+        "group-id-1": { "requireMention": true }
+      },
+      "replyDelayMode": "non-mention",    // "off" or "non-mention"
+      "replyDelayMs": 120000
     }
   }
 }

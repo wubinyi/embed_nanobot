@@ -17,16 +17,17 @@ Channels are a frequent source of divergence. Follow this exact pattern:
 - Exception: The `nanobot/mesh/` module is our custom feature and remains separate
 
 ### Config registration (`nanobot/config/schema.py`)
-- Define your `XxxConfig(BaseModel)` class **after** all upstream config classes
+- Define your `XxxConfig(Base)` class **after** all upstream config classes (note: `Base` not `BaseModel` — upstream uses `Base(BaseModel)` with `alias_generator=to_camel`)
 - Add the field to `ChannelsConfig` **at the end** of the field list, after all upstream channels:
 
 ```python
-class ChannelsConfig(BaseModel):
+class ChannelsConfig(Base):
     # --- upstream channels (do NOT reorder) ---
     whatsapp: WhatsAppConfig = ...
     telegram: TelegramConfig = ...
     discord: DiscordConfig = ...
     feishu: FeishuConfig = ...
+    mochat: MochatConfig = ...
     dingtalk: DingTalkConfig = ...
     email: EmailConfig = ...
     slack: SlackConfig = ...
@@ -111,7 +112,7 @@ These files are modified by both upstream and our fork. Take extra care:
 Follow the upstream project's conventions:
 
 - **Python**: Type hints, `from __future__ import annotations`, loguru for logging
-- **Config models**: Pydantic `BaseModel` with `Field(default_factory=...)`, `BaseSettings` for root config
+- **Config models**: Pydantic `Base` (inherits `BaseModel` with `alias_generator=to_camel, populate_by_name=True`) with `Field(default_factory=...)`, `BaseSettings` for root config
 - **Provider registry**: `ProviderSpec` supports `is_oauth`, `extra_headers`, `detect_by_base_keyword`
 - **Channel pattern**: Inherit from `BaseChannel`, implement `start()`, `stop()`, `send()`
 - **CLI framework**: `typer` + `prompt_toolkit` for interactive input
