@@ -285,7 +285,10 @@ The LAN Mesh enables **device-to-device communication** on the same local networ
 └────────────────────┬─────────────────────────────────────────┘
                      │
 ┌────────────────────┴─────────────────────────────────────────┐
-│  Layer 4: DeviceRegistry (nanobot/mesh/registry.py)         │
+│  Layer 4b: CommandSchema (nanobot/mesh/commands.py)          │
+│  ↓ Command/response models, validation, LLM context         │
+├──────────────────────────────────────────────────────────────┤
+│  Layer 4a: DeviceRegistry (nanobot/mesh/registry.py)        │
 │  ↓ Device capabilities, state tracking, online/offline      │
 └────────────────────┬─────────────────────────────────────────┘
                      │
@@ -377,6 +380,7 @@ JSON structure:
 **Key components:**
 
 - **`protocol.py`**: Wire format, `MeshEnvelope` serialisation/deserialisation, `read_envelope()` / `write_envelope()`, canonical bytes for HMAC
+- **`commands.py`**: `DeviceCommand`, `CommandResponse`, `BatchCommand` — standardized command/response schema, `validate_command()` validates against registry (action/capability/type/range), envelope conversion helpers, `describe_device_commands()` LLM context generator
 - **`registry.py`**: `DeviceRegistry` — CRUD for device records, capability/state tracking, online/offline status, JSON persistence, event callbacks, LLM context helpers
 - **`security.py`**: `KeyStore` — per-device PSK management, HMAC-SHA256 sign/verify, nonce replay tracking, timestamp validation
 - **`enrollment.py`**: `EnrollmentService` — PIN lifecycle (create/cancel/expire/lock), PIN proof verification, PBKDF2 key derivation, XOR-encrypted PSK transfer

@@ -44,7 +44,7 @@ All Phase 1 foundation tasks are done. Ready to begin Phase 2: Device Ecosystem.
 
 | # | Task | Priority | Complexity | Dependencies |
 |---|------|----------|------------|--------------|
-| 2.2 | Standardized device command schema | P0 | M | Registry (2.1) |
+| 2.2 | Standardized device command schema | Done | 2026-02-18 | `nanobot/mesh/commands.py` — DeviceCommand, CommandResponse, BatchCommand, Action/CommandStatus enums. 6-level validation (action/device/online/capability/compatibility/value). Mesh envelope conversion. LLM command descriptor. 42 new tests (275 total). |
 | 2.3 | Natural language → device command (LLM skill) | P0 | L | Command schema (2.2), Hybrid Router (1.2) |
 | 2.4 | Command-type routing: device commands always local | P1 | S | Hybrid Router (1.2) |
 | 2.5 | ESP32 SDK (MicroPython mesh client) | P1 | L | Mesh + Auth (1.3, 1.9) |
@@ -163,6 +163,17 @@ See [docs/sync/SYNC_LOG.md](../sync/SYNC_LOG.md) for full merge history.
 - **1 config field** appended to MeshConfig: `registry_path`.
 - **Also synced upstream** (7f8a3df→ce4f005): SiliconFlow provider, workspace-scoped sessions.
 - **Next task**: 2.2 (Standardized device command schema).
+
+### 2026-02-18d — Task 2.2: Standardized Device Command Schema Complete
+- **Command schema module** (`nanobot/mesh/commands.py`, ~330 LOC): Standardized JSON-based command/response format for device control.
+- **Data model**: `DeviceCommand` (device, action, capability, params), `CommandResponse` (device, status, value, error), `BatchCommand` (ordered list with stop-on-error).
+- **Action types**: `set`, `get`, `toggle`, `execute` — validated against device capability types.
+- **6-level validation**: action validity → device existence → online status → capability existence → action/capability compatibility → value type/range.
+- **Mesh integration**: Envelope conversion helpers reuse existing COMMAND/RESPONSE message types — zero protocol changes.
+- **LLM context**: `describe_device_commands()` generates structured Markdown for system prompt injection.
+- **42 new tests** across 8 test classes (275 total, zero regressions). Covers model serialization, all validation paths, value type/range checks, envelope roundtrips, LLM output.
+- **Zero conflict surface increase** — pure additive new file, no shared file modifications.
+- **Next task**: 2.3 (Natural language → device command LLM skill).
 
 ### Conventions Reminder
 - Feature branches: `copilot/<feature-name>` from `main_embed`
