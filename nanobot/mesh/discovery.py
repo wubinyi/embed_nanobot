@@ -33,6 +33,9 @@ class PeerInfo:
     tcp_port: int
     roles: list[str] = field(default_factory=list)
     last_seen: float = field(default_factory=time.time)
+    # --- embed_nanobot: device registry (task 2.1) ---
+    capabilities: list[dict] = field(default_factory=list)  # Raw capability dicts from beacon
+    device_type: str = ""
 
 
 class UDPDiscovery:
@@ -74,6 +77,9 @@ class UDPDiscovery:
         self.peers: dict[str, PeerInfo] = {}
         self._running = False
         self._sock: socket.socket | None = None
+        # --- embed_nanobot: device registry (task 2.1) ---
+        self._on_peer_seen_callbacks: list = []
+        self._on_peer_lost_callbacks: list = []
 
     # -- lifecycle -----------------------------------------------------------
 
@@ -147,8 +153,12 @@ class UDPDiscovery:
 
         tcp_port = int(info.get("tcp_port", 0))
         roles = info.get("roles", [])
+        # --- embed_nanobot: device registry (task 2.1) ---
+        capabilities = info.get("capabilities", [])
+        device_type = info.get("device_type", "")
 
-        if nid not in self.peers:
+        is_new = nid not in self.peers
+        if is_new:
             logger.info(f"[Mesh/Discovery] new peer: {nid} @ {ip}:{tcp_port} roles={roles}")
 
         self.peers[nid] = PeerInfo(
@@ -157,7 +167,16 @@ class UDPDiscovery:
             tcp_port=tcp_port,
             roles=roles,
             last_seen=time.time(),
+            capabilities=capabilities,
+            device_type=device_type,
         )
+
+        # Notify callbacks about new / returning peers
+        for cb in self._on_peer_seen_callbacks:
+            try:
+                cb(nid, is_new, info)
+            except Exception as exc:
+                logger.debug(f"[Mesh/Discovery] peer callback error: {exc}")
 
     # -- queries -------------------------------------------------------------
 
@@ -176,6 +195,20 @@ class UDPDiscovery:
             if (now - p.last_seen) < self.peer_timeout
         ]
 
+    def on_peer_seen(self, callback: Any) -> None:
+        """Register callback invoked when a peer beacon is received.
+
+        Callback signature: ``(node_id: str, is_new: bool, beacon: dict) -> None``
+        """
+        self._on_peer_seen_callbacks.append(callback)
+
+    def on_peer_lost(self, callback: Any) -> None:
+        """Register callback invoked when a peer is pruned as offline.
+
+        Callback signature: ``(node_id: str) -> None``
+        """
+        self._on_peer_lost_callbacks.append(callback)
+
     def prune(self) -> None:
         """Remove peers that have not been seen within the timeout."""
         now = time.time()
@@ -183,3 +216,9 @@ class UDPDiscovery:
         for nid in stale:
             logger.debug(f"[Mesh/Discovery] pruning stale peer: {nid}")
             del self.peers[nid]
+            # --- embed_nanobot: notify peer-lost callbacks ---
+            for cb in self._on_peer_lost_callbacks:
+                try:
+                    cb(nid)
+                except Exception as exc:
+                    logger.debug(f"[Mesh/Discovery] peer-lost callback error: {exc}")

@@ -276,12 +276,17 @@ class BaseChannel(ABC):
 
 The LAN Mesh enables **device-to-device communication** on the same local network without requiring internet. This is ideal for smart home scenarios where nanobot acts as an AI hub controlling household appliances, or for nanobot-to-nanobot communication across multiple instances.
 
-**Architecture** — Four-layer design:
+**Architecture** — Five-layer design:
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  Layer 4: MeshChannel (nanobot/mesh/channel.py)             │
+│  Layer 5: MeshChannel (nanobot/mesh/channel.py)             │
 │  ↓ Bridges mesh transport into nanobot's message bus        │
+└────────────────────┬─────────────────────────────────────────┘
+                     │
+┌────────────────────┴─────────────────────────────────────────┐
+│  Layer 4: DeviceRegistry (nanobot/mesh/registry.py)         │
+│  ↓ Device capabilities, state tracking, online/offline      │
 └────────────────────┬─────────────────────────────────────────┘
                      │
 ┌────────────────────┴─────────────────────────────────────────┐
@@ -367,10 +372,12 @@ JSON structure:
 | `PING` / `PONG` | Heartbeat for presence tracking |
 | `ENROLL_REQUEST` | New device requests PSK enrollment (PIN-based) |
 | `ENROLL_RESPONSE` | Hub responds with encrypted PSK or error |
+| `STATE_REPORT` | Device pushes state changes to the hub |
 
 **Key components:**
 
 - **`protocol.py`**: Wire format, `MeshEnvelope` serialisation/deserialisation, `read_envelope()` / `write_envelope()`, canonical bytes for HMAC
+- **`registry.py`**: `DeviceRegistry` — CRUD for device records, capability/state tracking, online/offline status, JSON persistence, event callbacks, LLM context helpers
 - **`security.py`**: `KeyStore` — per-device PSK management, HMAC-SHA256 sign/verify, nonce replay tracking, timestamp validation
 - **`enrollment.py`**: `EnrollmentService` — PIN lifecycle (create/cancel/expire/lock), PIN proof verification, PBKDF2 key derivation, XOR-encrypted PSK transfer
 - **`encryption.py`**: AES-256-GCM payload encrypt/decrypt, HMAC-SHA256-based key derivation from PSK, AAD binding to envelope metadata. Requires `cryptography` library.

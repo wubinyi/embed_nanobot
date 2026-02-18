@@ -2,7 +2,7 @@
 
 > Single source of truth for project progress. Updated after each feature completion.
 
-**Last updated**: 2026-02-18 (Phase 1 complete)
+**Last updated**: 2026-02-18 (Task 2.1 complete)
 
 ---
 
@@ -34,9 +34,16 @@ All Phase 1 foundation tasks are done. Ready to begin Phase 2: Device Ecosystem.
 
 ## Current Phase: Phase 2 — Device Ecosystem
 
+### Completed Tasks
+
+| # | Task | Status | Completed | Notes |
+|---|------|--------|-----------|-------|
+| 2.1 | Device capability registry and state management | Done | 2026-02-18 | `nanobot/mesh/registry.py` — DeviceRegistry, DeviceCapability, DeviceInfo. STATE_REPORT msg type, discovery callbacks. 50 new tests (233 total). |
+
+### Planned Tasks
+
 | # | Task | Priority | Complexity | Dependencies |
 |---|------|----------|------------|--------------|
-| 2.1 | Device capability registry and state management | P0 | L | Mesh (1.3) |
 | 2.2 | Standardized device command schema | P0 | M | Registry (2.1) |
 | 2.3 | Natural language → device command (LLM skill) | P0 | L | Command schema (2.2), Hybrid Router (1.2) |
 | 2.4 | Command-type routing: device commands always local | P1 | S | Hybrid Router (1.2) |
@@ -144,6 +151,18 @@ See [docs/sync/SYNC_LOG.md](../sync/SYNC_LOG.md) for full merge history.
 - **1 config field** appended to `MeshConfig`: `encryptionEnabled` (default `true`).
 - **Phase 1 Foundation is now complete**: Hybrid Router (1.2) + LAN Mesh (1.3) + PSK Auth (1.9) + Device Enrollment (1.10) + AES-GCM Encryption (1.11). 183 tests, 7 upstream syncs.
 - **Next phase**: Phase 2 — Device Ecosystem. First task: 2.1 (Device capability registry and state management).
+
+### 2026-02-18c — Task 2.1: Device Capability Registry Complete
+- **DeviceRegistry module** (`nanobot/mesh/registry.py`, ~350 LOC): Central registry for all mesh devices with CRUD, state management, JSON persistence, event callbacks, and LLM context helpers.
+- **Data model**: `DeviceCapability` (sensor/actuator/property with typed values), `DeviceInfo` (node_id, type, capabilities, state, online status).
+- **Protocol extended**: `STATE_REPORT` message type for devices pushing state changes.
+- **Discovery enhanced**: `PeerInfo` now carries `capabilities`/`device_type`; `on_peer_seen`/`on_peer_lost` callbacks for registry integration.
+- **Channel integrated**: MeshChannel auto-registers devices from discovery beacons, handles STATE_REPORT messages, tracks online/offline via discovery hooks.
+- **50 new tests** across 12 test classes (233 total, zero regressions). Covers CRUD, state updates, persistence, events, LLM context, protocol, channel integration.
+- **Zero new dependencies** — stdlib only.
+- **1 config field** appended to MeshConfig: `registry_path`.
+- **Also synced upstream** (7f8a3df→ce4f005): SiliconFlow provider, workspace-scoped sessions.
+- **Next task**: 2.2 (Standardized device command schema).
 
 ### Conventions Reminder
 - Feature branches: `copilot/<feature-name>` from `main_embed`

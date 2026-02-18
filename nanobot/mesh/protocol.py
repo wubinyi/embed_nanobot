@@ -39,6 +39,8 @@ class MsgType(str, Enum):
     # --- embed_nanobot extensions: device enrollment (task 1.10) ---
     ENROLL_REQUEST = "enroll_request"
     ENROLL_RESPONSE = "enroll_response"
+    # --- embed_nanobot extensions: device registry (task 2.1) ---
+    STATE_REPORT = "state_report"
 
 
 @dataclass

@@ -18,6 +18,7 @@ from nanobot.channels.base import BaseChannel
 from nanobot.mesh.discovery import UDPDiscovery
 from nanobot.mesh.enrollment import EnrollmentService
 from nanobot.mesh.protocol import MeshEnvelope, MsgType
+from nanobot.mesh.registry import DeviceCapability, DeviceRegistry
 from nanobot.mesh.security import KeyStore
 from nanobot.mesh.transport import MeshTransport
 
@@ -98,6 +99,23 @@ class MeshChannel(BaseChannel):
             )
             self.transport.enrollment_service = self.enrollment
 
+        # --- embed_nanobot: device registry (task 2.1) ---
+        registry_path = getattr(config, "registry_path", "") or ""
+        if not registry_path:
+            workspace = getattr(config, "_workspace_path", None)
+            if workspace:
+                registry_path = str(Path(workspace) / "device_registry.json")
+            else:
+                registry_path = str(
+                    Path("~/.nanobot/workspace/device_registry.json").expanduser()
+                )
+        self.registry = DeviceRegistry(path=registry_path)
+        self.registry.load()
+
+        # Hook discovery events to keep registry online/offline status in sync
+        self.discovery.on_peer_seen(self._on_peer_seen)
+        self.discovery.on_peer_lost(self._on_peer_lost)
+
     # -- BaseChannel interface -----------------------------------------------
 
     async def start(self) -> None:
@@ -141,6 +159,11 @@ class MeshChannel(BaseChannel):
                 await self.enrollment.handle_enroll_request(env)
             return
 
+        # --- embed_nanobot: handle state reports (task 2.1) ---
+        if env.type == MsgType.STATE_REPORT:
+            await self._handle_state_report(env)
+            return
+
         # Only route actionable types into the agent loop
         if env.type not in (MsgType.CHAT, MsgType.COMMAND):
             return
@@ -172,6 +195,58 @@ class MeshChannel(BaseChannel):
         if self.enrollment is None:
             return False
         return self.enrollment.cancel_pin()
+
+    # -- device registry convenience -----------------------------------------
+
+    async def _handle_state_report(self, env: MeshEnvelope) -> None:
+        """Process a STATE_REPORT message and update the device registry."""
+        state_data = env.payload.get("state", {})
+        if not state_data:
+            logger.debug(f"[MeshChannel] empty STATE_REPORT from {env.source}")
+            return
+        updated = await self.registry.update_state(env.source, state_data)
+        if not updated:
+            logger.warning(
+                f"[MeshChannel] STATE_REPORT from unregistered device {env.source}"
+            )
+
+    def _on_peer_seen(self, node_id: str, is_new: bool, beacon: dict) -> None:
+        """Called by discovery when a peer beacon is received."""
+        self.registry.mark_online(node_id)
+
+        # Auto-register device if beacon includes device info and it's unknown
+        if is_new or self.registry.get_device(node_id) is None:
+            device_type = beacon.get("device_type", "")
+            raw_caps = beacon.get("capabilities", [])
+            if device_type and raw_caps:
+                caps = []
+                for c in raw_caps:
+                    try:
+                        caps.append(DeviceCapability.from_dict(c))
+                    except (KeyError, TypeError):
+                        pass
+                # Schedule async registration
+                import asyncio
+                try:
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(
+                        self.registry.register_device(
+                            node_id,
+                            device_type,
+                            capabilities=caps,
+                            metadata=beacon.get("metadata", {}),
+                        )
+                    )
+                except RuntimeError:
+                    pass  # No running loop — skip auto-registration
+
+    def _on_peer_lost(self, node_id: str) -> None:
+        """Called by discovery when a peer is pruned as offline."""
+        self.registry.mark_offline(node_id)
+
+    def get_device_summary(self) -> str:
+        """Return human-readable device summary for LLM context."""
+        return self.registry.summary()
 
 
 def _default_node_id() -> str:

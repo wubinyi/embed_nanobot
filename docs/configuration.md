@@ -393,7 +393,8 @@ The LAN Mesh enables **device-to-device communication** on the same local networ
       \"enrollmentPinLength\": 6,          // Number of digits in enrollment PIN
       \"enrollmentPinTimeout\": 300,       // Seconds before PIN expires (default 5 min)
       "enrollmentMaxAttempts": 3,        // Max failed PIN attempts before lockout
-      "encryptionEnabled": true           // Enable AES-256-GCM payload encryption (requires cryptography package)
+      "encryptionEnabled": true,          // Enable AES-256-GCM payload encryption (requires cryptography package)
+      "registryPath": ""                    // Path to device_registry.json (default: <workspace>/device_registry.json)
     }
   }
 }
@@ -415,6 +416,7 @@ The LAN Mesh enables **device-to-device communication** on the same local networ
 | `enrollmentPinTimeout` | int | `300` | Seconds before PIN expires (default 5 min) |
 | `enrollmentMaxAttempts` | int | `3` | Max failed PIN attempts before lockout |
 | `encryptionEnabled` | bool | `true` | Enable AES-256-GCM payload encryption. Requires `cryptography` package. |
+| `registryPath` | string | `""` | Path to device registry file. Empty = `<workspace>/device_registry.json` |
 
 ### Example: Smart Home Setup
 

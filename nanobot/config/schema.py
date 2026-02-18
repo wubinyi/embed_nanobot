@@ -184,6 +184,8 @@ class MeshConfig(Base):
     enrollment_max_attempts: int = 3        # Max failed PIN attempts before lockout
     # --- embed_nanobot extensions: payload encryption (task 1.11) ---
     encryption_enabled: bool = True         # Enable AES-256-GCM payload encryption
+    # --- embed_nanobot extensions: device registry (task 2.1) ---
+    registry_path: str = ""                  # Path to device_registry.json (default: <workspace>/device_registry.json)
 
 
 class ChannelsConfig(Base):
