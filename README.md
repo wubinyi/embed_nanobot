@@ -16,7 +16,7 @@
 
 ⚡️ Delivers core agent functionality in just **~4,000** lines of code — **99% smaller** than Clawdbot's 430k+ lines.
 
-📏 Real-time line count: **3,689 lines** (run `bash core_agent_lines.sh` to verify anytime)
+📏 Real-time line count: **3,696 lines** (run `bash core_agent_lines.sh` to verify anytime)
 
 ## 📢 News
 
@@ -574,7 +574,7 @@ Config file: `~/.nanobot/config.json`
 
 | Provider | Purpose | Get API Key |
 |----------|---------|-------------|
-| `custom` | Any OpenAI-compatible endpoint | — |
+| `custom` | Any OpenAI-compatible endpoint (direct, no LiteLLM) | — |
 | `openrouter` | LLM (recommended, access to all models) | [openrouter.ai](https://openrouter.ai) |
 | `anthropic` | LLM (Claude direct) | [console.anthropic.com](https://console.anthropic.com) |
 | `openai` | LLM (GPT direct) | [platform.openai.com](https://platform.openai.com) |
@@ -588,7 +588,7 @@ Config file: `~/.nanobot/config.json`
 | `zhipu` | LLM (Zhipu GLM) | [open.bigmodel.cn](https://open.bigmodel.cn) |
 | `vllm` | LLM (local, any OpenAI-compatible server) | — |
 | `openai_codex` | LLM (Codex, OAuth) | `nanobot provider login openai-codex` |
-| `github_copilot` | LLM (GitHub Copilot, OAuth) | Requires [GitHub Copilot](https://github.com/features/copilot) subscription |
+| `github_copilot` | LLM (GitHub Copilot, OAuth) | `nanobot provider login github-copilot` |
 
 <details>
 <summary><b>OpenAI Codex (OAuth)</b></summary>
@@ -623,7 +623,7 @@ nanobot agent -m "Hello!"
 <details>
 <summary><b>Custom Provider (Any OpenAI-compatible API)</b></summary>
 
-If your provider is not listed above but exposes an **OpenAI-compatible API** (e.g. Together AI, Fireworks, Azure OpenAI, self-hosted endpoints), use the `custom` provider:
+Connects directly to any OpenAI-compatible endpoint — LM Studio, llama.cpp, Together AI, Fireworks, Azure OpenAI, or any self-hosted server. Bypasses LiteLLM; model name is passed as-is.
 
 ```json
 {
@@ -641,7 +641,7 @@ If your provider is not listed above but exposes an **OpenAI-compatible API** (e
 }
 ```
 
-> The `custom` provider routes through LiteLLM's OpenAI-compatible path. It works with any endpoint that follows the OpenAI chat completions API format. The model name is passed directly to the endpoint without any prefix.
+> For local servers that don't require a key, set `apiKey` to any non-empty string (e.g. `"no-key"`).
 
 </details>
 
@@ -811,7 +811,21 @@ nanobot cron remove <job_id>
 > [!TIP]
 > The `-v ~/.nanobot:/root/.nanobot` flag mounts your local config directory into the container, so your config and workspace persist across container restarts.
 
-Build and run nanobot in a container:
+### Docker Compose
+
+```bash
+docker compose run --rm nanobot-cli onboard   # first-time setup
+vim ~/.nanobot/config.json                     # add API keys
+docker compose up -d nanobot-gateway           # start gateway
+```
+
+```bash
+docker compose run --rm nanobot-cli agent -m "Hello!"   # run CLI
+docker compose logs -f nanobot-gateway                   # view logs
+docker compose down                                      # stop
+```
+
+### Docker
 
 ```bash
 # Build the image
