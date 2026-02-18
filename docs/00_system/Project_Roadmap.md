@@ -45,7 +45,7 @@ All Phase 1 foundation tasks are done. Ready to begin Phase 2: Device Ecosystem.
 | # | Task | Priority | Complexity | Dependencies |
 |---|------|----------|------------|--------------|
 | 2.2 | Standardized device command schema | Done | 2026-02-18 | `nanobot/mesh/commands.py` — DeviceCommand, CommandResponse, BatchCommand, Action/CommandStatus enums. 6-level validation (action/device/online/capability/compatibility/value). Mesh envelope conversion. LLM command descriptor. 42 new tests (275 total). |
-| 2.3 | Natural language → device command (LLM skill) | P0 | L | Command schema (2.2), Hybrid Router (1.2) |
+| 2.3 | Natural language → device command (LLM skill) | Done | 2026-02-18 | `nanobot/agent/tools/device.py` — DeviceControlTool (list/command/state/describe). `nanobot/skills/device-control/SKILL.md` always-active skill. Conditional registration in CLI when mesh enabled. 32 new tests (307 total). |
 | 2.4 | Command-type routing: device commands always local | P1 | S | Hybrid Router (1.2) |
 | 2.5 | ESP32 SDK (MicroPython mesh client) | P1 | L | Mesh + Auth (1.3, 1.9) |
 | 2.6 | Basic automation rules engine | P1 | M | Registry (2.1), Commands (2.2) |
@@ -174,6 +174,14 @@ See [docs/sync/SYNC_LOG.md](../sync/SYNC_LOG.md) for full merge history.
 - **42 new tests** across 8 test classes (275 total, zero regressions). Covers model serialization, all validation paths, value type/range checks, envelope roundtrips, LLM output.
 - **Zero conflict surface increase** — pure additive new file, no shared file modifications.
 - **Next task**: 2.3 (Natural language → device command LLM skill).
+
+### 2026-02-18e — Task 2.3: NL → Device Command (LLM Skill) Complete
+- **DeviceControlTool** (`nanobot/agent/tools/device.py`, ~190 LOC): Agent tool with 4 actions — list (device summary), command (validate+dispatch), state (query device), describe (full capabilities).
+- **device-control skill** (`nanobot/skills/device-control/SKILL.md`, `always: true`): NL→command translation patterns, quick reference, action types, important notes (~200 tokens).
+- **CLI integration**: Tool registered conditionally in `cli/commands.py` when mesh channel enabled. Gets registry+transport refs from MeshChannel.
+- **32 new tests** across 7 classes (307 total, zero regressions): tool metadata, list/command/state/describe actions, validation failures, transport failures, envelope construction.
+- **Conflict surface**: +1 append block in `commands.py` (guarded try/except).
+- **Next task**: 2.4 (Command-type routing: device commands always local).
 
 ### Conventions Reminder
 - Feature branches: `copilot/<feature-name>` from `main_embed`

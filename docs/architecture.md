@@ -140,8 +140,9 @@ class Tool(ABC):
 | `spawn` | `spawn.py` | Spawn background subagent |
 | `cron` | `cron.py` | Schedule tasks |
 | MCP tools | `mcp.py` | Dynamic tools from external MCP servers (stdio/HTTP) |
+| `device_control` | `device.py` | Control IoT devices via mesh: list, command, state, describe (registered when mesh enabled) |
 
-Tools are registered in `AgentLoop._register_default_tools()` and presented to the LLM as OpenAI-format function definitions via `ToolRegistry.to_schemas()`. MCP tools are connected dynamically via `AgentLoop._connect_mcp()` at startup.
+Tools are registered in `AgentLoop._register_default_tools()` and presented to the LLM as OpenAI-format function definitions via `ToolRegistry.to_schemas()`. MCP tools are connected dynamically via `AgentLoop._connect_mcp()` at startup. The `device_control` tool is registered conditionally in `nanobot/cli/commands.py` when the mesh channel is active.
 
 ---
 
@@ -535,6 +536,9 @@ Step-by-step instructions the agent follows when this skill is activated.
 **Loading strategy:**
 1. Skills with `always: true` have their full content included in every system prompt.
 2. Other skills appear as metadata summaries; the agent loads them on demand.
+
+**embed_nanobot skills:**
+- **`device-control`** (`always: true`): Teaches the agent to translate natural language device requests into `device_control` tool calls. Covers set/get/toggle/execute patterns, NL→command workflow, and validation notes.
 
 ---
 

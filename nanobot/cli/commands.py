@@ -452,6 +452,20 @@ def gateway(
     else:
         console.print("[yellow]Warning: No channels enabled[/yellow]")
     
+    # --- embed_nanobot extensions: device control tool (task 2.3) ---
+    if "mesh" in channels.channels:
+        try:
+            from nanobot.agent.tools.device import DeviceControlTool
+            mesh_ch = channels.channels["mesh"]
+            agent.tools.register(DeviceControlTool(
+                registry=mesh_ch.registry,
+                transport=mesh_ch.transport,
+                node_id=mesh_ch.node_id,
+            ))
+            console.print("[green]✓[/green] Device control tool registered")
+        except Exception as e:
+            logger.warning(f"Device control tool not available: {e}")
+
     cron_status = cron.status()
     if cron_status["jobs"] > 0:
         console.print(f"[green]✓[/green] Cron: {cron_status['jobs']} scheduled jobs")
