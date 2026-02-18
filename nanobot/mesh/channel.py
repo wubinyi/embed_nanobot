@@ -16,6 +16,7 @@ from nanobot.bus.events import OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.channels.base import BaseChannel
 from nanobot.mesh.discovery import UDPDiscovery
+from nanobot.mesh.enrollment import EnrollmentService
 from nanobot.mesh.protocol import MeshEnvelope, MsgType
 from nanobot.mesh.security import KeyStore
 from nanobot.mesh.transport import MeshTransport
@@ -77,6 +78,23 @@ class MeshChannel(BaseChannel):
         )
         self.transport.on_message(self._on_mesh_message)
 
+        # --- embed_nanobot: device enrollment (task 1.10) ---
+        enrollment_pin_length = getattr(config, "enrollment_pin_length", 6)
+        enrollment_pin_timeout = getattr(config, "enrollment_pin_timeout", 300)
+        enrollment_max_attempts = getattr(config, "enrollment_max_attempts", 3)
+
+        self.enrollment: EnrollmentService | None = None
+        if psk_auth_enabled and self.key_store is not None:
+            self.enrollment = EnrollmentService(
+                key_store=self.key_store,
+                transport=self.transport,
+                node_id=self.node_id,
+                pin_length=enrollment_pin_length,
+                pin_timeout=enrollment_pin_timeout,
+                max_attempts=enrollment_max_attempts,
+            )
+            self.transport.enrollment_service = self.enrollment
+
     # -- BaseChannel interface -----------------------------------------------
 
     async def start(self) -> None:
@@ -114,6 +132,12 @@ class MeshChannel(BaseChannel):
 
     async def _on_mesh_message(self, env: MeshEnvelope) -> None:
         """Convert an incoming mesh envelope to an InboundMessage."""
+        # --- embed_nanobot: handle enrollment requests (task 1.10) ---
+        if env.type == MsgType.ENROLL_REQUEST:
+            if self.enrollment:
+                await self.enrollment.handle_enroll_request(env)
+            return
+
         # Only route actionable types into the agent loop
         if env.type not in (MsgType.CHAT, MsgType.COMMAND):
             return
@@ -126,6 +150,25 @@ class MeshChannel(BaseChannel):
             content=content,
             metadata={"mesh_type": env.type, "mesh_ts": env.ts},
         )
+
+    # -- enrollment convenience ----------------------------------------------
+
+    def create_enrollment_pin(self) -> tuple[str, float] | None:
+        """Generate an enrollment PIN for device pairing.
+
+        Returns ``(pin, expires_at)`` or ``None`` if enrollment is unavailable
+        (e.g., PSK auth is disabled).
+        """
+        if self.enrollment is None:
+            logger.warning("[MeshChannel] enrollment unavailable (PSK auth disabled)")
+            return None
+        return self.enrollment.create_pin()
+
+    def cancel_enrollment_pin(self) -> bool:
+        """Cancel the active enrollment PIN."""
+        if self.enrollment is None:
+            return False
+        return self.enrollment.cancel_pin()
 
 
 def _default_node_id() -> str:

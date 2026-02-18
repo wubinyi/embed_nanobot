@@ -285,7 +285,10 @@ The LAN Mesh enables **device-to-device communication** on the same local networ
 └────────────────────┬─────────────────────────────────────────┘
                      │
 ┌────────────────────┴─────────────────────────────────────────┐
-│  Layer 3: PSK Security (nanobot/mesh/security.py)           │
+│  Layer 3b: Enrollment (nanobot/mesh/enrollment.py)          │
+│  ↓ PIN-based device pairing, PBKDF2 key derivation          │
+├─────────────────────────────────────────────────────────────-┤
+│  Layer 3a: PSK Security (nanobot/mesh/security.py)          │
 │  ↓ HMAC-SHA256 signing/verification, key store, nonce guard │
 └────────────────────┬─────────────────────────────────────────┘
                      │
@@ -359,11 +362,14 @@ JSON structure:
 | `COMMAND` | Commands directed at a device (e.g., "turn on AC") |
 | `RESPONSE` | Acknowledgements / responses from devices |
 | `PING` / `PONG` | Heartbeat for presence tracking |
+| `ENROLL_REQUEST` | New device requests PSK enrollment (PIN-based) |
+| `ENROLL_RESPONSE` | Hub responds with encrypted PSK or error |
 
 **Key components:**
 
 - **`protocol.py`**: Wire format, `MeshEnvelope` serialisation/deserialisation, `read_envelope()` / `write_envelope()`, canonical bytes for HMAC
 - **`security.py`**: `KeyStore` — per-device PSK management, HMAC-SHA256 sign/verify, nonce replay tracking, timestamp validation
+- **`enrollment.py`**: `EnrollmentService` — PIN lifecycle (create/cancel/expire/lock), PIN proof verification, PBKDF2 key derivation, XOR-encrypted PSK transfer
 - **`discovery.py`**: UDP broadcast beacons advertising node presence on port 18799
 - **`transport.py`**: TCP server (port 18800) + client connections, handles envelope routing, auto-sign outbound / verify inbound
 - **`channel.py`**: `MeshChannel` implements `BaseChannel` interface, publishes inbound messages to the bus and subscribes to outbound messages

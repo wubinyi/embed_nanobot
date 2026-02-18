@@ -384,7 +384,10 @@ The LAN Mesh enables **device-to-device communication** on the same local networ
       "pskAuthEnabled": true,            // Enable HMAC-PSK authentication for mesh messages
       "keyStorePath": "",                // Path to mesh_keys.json (default: <workspace>/mesh_keys.json)
       "allowUnauthenticated": false,     // If true, log warning but still process unsigned messages
-      "nonceWindow": 60                  // Seconds; reject messages with ts outside this window
+      \"nonceWindow\": 60,                 // Seconds; reject messages with ts outside this window
+      \"enrollmentPinLength\": 6,          // Number of digits in enrollment PIN
+      \"enrollmentPinTimeout\": 300,       // Seconds before PIN expires (default 5 min)
+      \"enrollmentMaxAttempts\": 3         // Max failed PIN attempts before lockout
     }
   }
 }

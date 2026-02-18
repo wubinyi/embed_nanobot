@@ -4,12 +4,13 @@ import asyncio
 import json
 import struct
 import time
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from nanobot.mesh.channel import MeshChannel, _default_node_id
 from nanobot.mesh.discovery import PeerInfo, UDPDiscovery
+from nanobot.mesh.enrollment import EnrollmentService, PendingEnrollment, _PBKDF2_ITERATIONS, _PSK_BYTES
 from nanobot.mesh.protocol import MeshEnvelope, MsgType, read_envelope, write_envelope
 from nanobot.mesh.security import KeyStore
 from nanobot.mesh.transport import MeshTransport
@@ -799,3 +800,559 @@ class TestTransportAuth:
 
         import shutil
         shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+# ---------------------------------------------------------------------------
+# Enrollment tests (task 1.10)
+# ---------------------------------------------------------------------------
+
+
+class TestPendingEnrollment:
+    """Tests for PendingEnrollment state tracking."""
+
+    def test_active_when_fresh(self):
+        pe = PendingEnrollment(
+            pin="123456",
+            created_at=time.time(),
+            expires_at=time.time() + 300,
+        )
+        assert pe.is_active
+        assert not pe.is_expired
+        assert not pe.is_locked
+        assert not pe.used
+
+    def test_expired(self):
+        pe = PendingEnrollment(
+            pin="123456",
+            created_at=time.time() - 600,
+            expires_at=time.time() - 1,
+        )
+        assert pe.is_expired
+        assert not pe.is_active
+
+    def test_locked_after_max_attempts(self):
+        pe = PendingEnrollment(
+            pin="123456",
+            created_at=time.time(),
+            expires_at=time.time() + 300,
+            max_attempts=3,
+        )
+        pe.attempts = 3
+        assert pe.is_locked
+        assert not pe.is_active
+
+    def test_used(self):
+        pe = PendingEnrollment(
+            pin="123456",
+            created_at=time.time(),
+            expires_at=time.time() + 300,
+        )
+        pe.used = True
+        assert not pe.is_active
+
+
+class TestEnrollmentCrypto:
+    """Tests for enrollment cryptographic helpers."""
+
+    def test_pin_proof_deterministic(self):
+        proof1 = EnrollmentService.compute_pin_proof("482917", "esp32-kitchen")
+        proof2 = EnrollmentService.compute_pin_proof("482917", "esp32-kitchen")
+        assert proof1 == proof2
+        assert len(proof1) == 64  # SHA-256 hex digest
+
+    def test_pin_proof_different_pin(self):
+        proof_a = EnrollmentService.compute_pin_proof("111111", "device-1")
+        proof_b = EnrollmentService.compute_pin_proof("222222", "device-1")
+        assert proof_a != proof_b
+
+    def test_pin_proof_different_node(self):
+        proof_a = EnrollmentService.compute_pin_proof("111111", "device-1")
+        proof_b = EnrollmentService.compute_pin_proof("111111", "device-2")
+        assert proof_a != proof_b
+
+    def test_derive_temp_key_deterministic(self):
+        salt = b"\x00" * 16
+        key1 = EnrollmentService.derive_temp_key("482917", salt)
+        key2 = EnrollmentService.derive_temp_key("482917", salt)
+        assert key1 == key2
+        assert len(key1) == 32
+
+    def test_derive_temp_key_different_pin(self):
+        salt = b"\x00" * 16
+        key_a = EnrollmentService.derive_temp_key("111111", salt)
+        key_b = EnrollmentService.derive_temp_key("222222", salt)
+        assert key_a != key_b
+
+    def test_derive_temp_key_different_salt(self):
+        key_a = EnrollmentService.derive_temp_key("111111", b"\x00" * 16)
+        key_b = EnrollmentService.derive_temp_key("111111", b"\xff" * 16)
+        assert key_a != key_b
+
+    def test_encrypt_decrypt_psk_roundtrip(self):
+        """XOR one-time pad: encrypt then decrypt recovers the original PSK."""
+        import secrets
+
+        psk = secrets.token_bytes(32)
+        salt = secrets.token_bytes(16)
+        temp_key = EnrollmentService.derive_temp_key("482917", salt)
+        encrypted = EnrollmentService.encrypt_psk(psk, temp_key)
+        decrypted = EnrollmentService.encrypt_psk(encrypted, temp_key)
+        assert decrypted == psk
+
+    def test_encrypt_psk_rejects_wrong_length(self):
+        with pytest.raises(ValueError):
+            EnrollmentService.encrypt_psk(b"\x00" * 16, b"\x00" * 32)
+        with pytest.raises(ValueError):
+            EnrollmentService.encrypt_psk(b"\x00" * 32, b"\x00" * 16)
+
+
+class TestEnrollmentService:
+    """Tests for the EnrollmentService PIN lifecycle and enrollment flow."""
+
+    def _make_service(self, tmp_path, pin_length=6, pin_timeout=300, max_attempts=3):
+        """Create an EnrollmentService with a real KeyStore and mock transport."""
+        ks = KeyStore(path=tmp_path / "mesh_keys.json")
+        transport = MagicMock()
+        transport.send = AsyncMock(return_value=True)
+        transport.send_to_address = AsyncMock(return_value=True)
+        svc = EnrollmentService(
+            key_store=ks,
+            transport=transport,
+            node_id="hub-node",
+            pin_length=pin_length,
+            pin_timeout=pin_timeout,
+            max_attempts=max_attempts,
+        )
+        return svc, ks, transport
+
+    def test_create_pin(self, tmp_path):
+        svc, _, _ = self._make_service(tmp_path)
+        pin, expires_at = svc.create_pin()
+        assert len(pin) == 6
+        assert pin.isdigit()
+        assert expires_at > time.time()
+        assert svc.is_enrollment_active
+
+    def test_cancel_pin(self, tmp_path):
+        svc, _, _ = self._make_service(tmp_path)
+        svc.create_pin()
+        assert svc.cancel_pin() is True
+        assert not svc.is_enrollment_active
+        # Cancel again should return False
+        assert svc.cancel_pin() is False
+
+    def test_cancel_without_active_pin(self, tmp_path):
+        svc, _, _ = self._make_service(tmp_path)
+        assert svc.cancel_pin() is False
+
+    def test_pin_replaces_previous(self, tmp_path):
+        svc, _, _ = self._make_service(tmp_path)
+        pin1, _ = svc.create_pin()
+        pin2, _ = svc.create_pin()
+        # Second PIN replaces first; first is no longer the active PIN
+        assert svc.is_enrollment_active
+        # The active PIN is pin2
+        assert svc._pending.pin == pin2
+
+    @pytest.mark.asyncio
+    async def test_enroll_happy_path(self, tmp_path):
+        """Full successful enrollment flow."""
+        svc, ks, transport = self._make_service(tmp_path)
+        pin, _ = svc.create_pin()
+        device_id = "esp32-sensor"
+        pin_proof = EnrollmentService.compute_pin_proof(pin, device_id)
+
+        env = MeshEnvelope(
+            type=MsgType.ENROLL_REQUEST,
+            source=device_id,
+            target="*",
+            payload={"name": "Kitchen Sensor", "pin_proof": pin_proof},
+        )
+        await svc.handle_enroll_request(env)
+
+        # Device should now be enrolled
+        assert ks.has_device(device_id)
+        psk = ks.get_psk(device_id)
+        assert psk is not None
+        assert len(psk) == 64  # 32 bytes = 64 hex chars
+
+        # PIN should be used up
+        assert not svc.is_enrollment_active
+
+        # Transport.send should have been called with ENROLL_RESPONSE
+        transport.send.assert_called_once()
+        response_env = transport.send.call_args[0][0]
+        assert response_env.type == MsgType.ENROLL_RESPONSE
+        assert response_env.target == device_id
+        assert response_env.payload["status"] == "ok"
+
+        # Verify the device can decrypt the PSK
+        encrypted_psk_hex = response_env.payload["encrypted_psk"]
+        salt_hex = response_env.payload["salt"]
+        temp_key = EnrollmentService.derive_temp_key(pin, bytes.fromhex(salt_hex))
+        decrypted_psk = EnrollmentService.encrypt_psk(
+            bytes.fromhex(encrypted_psk_hex), temp_key
+        )
+        assert decrypted_psk.hex() == psk
+
+    @pytest.mark.asyncio
+    async def test_enroll_wrong_pin(self, tmp_path):
+        """Wrong PIN proof should be rejected."""
+        svc, ks, transport = self._make_service(tmp_path)
+        svc.create_pin()
+
+        env = MeshEnvelope(
+            type=MsgType.ENROLL_REQUEST,
+            source="bad-device",
+            target="*",
+            payload={"name": "Bad", "pin_proof": "wrong_proof"},
+        )
+        await svc.handle_enroll_request(env)
+
+        assert not ks.has_device("bad-device")
+        assert svc._pending.attempts == 1
+        assert svc.is_enrollment_active  # Still active, 2 attempts left
+
+        # Check error response
+        transport.send.assert_called_once()
+        resp = transport.send.call_args[0][0]
+        assert resp.payload["status"] == "error"
+        assert resp.payload["reason"] == "invalid_pin"
+
+    @pytest.mark.asyncio
+    async def test_enroll_max_attempts_lockout(self, tmp_path):
+        """After max_attempts failures, PIN is locked."""
+        svc, ks, transport = self._make_service(tmp_path, max_attempts=2)
+        svc.create_pin()
+
+        env = MeshEnvelope(
+            type=MsgType.ENROLL_REQUEST,
+            source="bad-device",
+            target="*",
+            payload={"name": "Bad", "pin_proof": "wrong"},
+        )
+        # Attempt 1 → invalid_pin
+        await svc.handle_enroll_request(env)
+        assert svc.is_enrollment_active  # 1 attempt left
+        # Attempt 2 → locked
+        await svc.handle_enroll_request(env)
+        assert not svc.is_enrollment_active
+        resp = transport.send.call_args[0][0]
+        assert resp.payload["reason"] == "locked"
+
+    @pytest.mark.asyncio
+    async def test_enroll_expired_pin(self, tmp_path):
+        """Expired PIN should be rejected."""
+        svc, _, transport = self._make_service(tmp_path, pin_timeout=1)
+        pin, _ = svc.create_pin()
+        # Force expiry
+        svc._pending.expires_at = time.time() - 1
+
+        pin_proof = EnrollmentService.compute_pin_proof(pin, "device-1")
+        env = MeshEnvelope(
+            type=MsgType.ENROLL_REQUEST,
+            source="device-1",
+            target="*",
+            payload={"pin_proof": pin_proof},
+        )
+        await svc.handle_enroll_request(env)
+
+        resp = transport.send.call_args[0][0]
+        assert resp.payload["status"] == "error"
+        assert resp.payload["reason"] == "expired"
+
+    @pytest.mark.asyncio
+    async def test_enroll_already_used_pin(self, tmp_path):
+        """PIN used for a successful enrollment cannot be reused."""
+        svc, _, transport = self._make_service(tmp_path)
+        pin, _ = svc.create_pin()
+
+        # First enrollment succeeds
+        proof1 = EnrollmentService.compute_pin_proof(pin, "device-1")
+        env1 = MeshEnvelope(
+            type=MsgType.ENROLL_REQUEST,
+            source="device-1",
+            target="*",
+            payload={"name": "D1", "pin_proof": proof1},
+        )
+        await svc.handle_enroll_request(env1)
+        assert not svc.is_enrollment_active
+
+        # Second enrollment request with same PIN should fail
+        proof2 = EnrollmentService.compute_pin_proof(pin, "device-2")
+        env2 = MeshEnvelope(
+            type=MsgType.ENROLL_REQUEST,
+            source="device-2",
+            target="*",
+            payload={"name": "D2", "pin_proof": proof2},
+        )
+        await svc.handle_enroll_request(env2)
+
+        # Latest transport.send call should be error
+        last_resp = transport.send.call_args[0][0]
+        assert last_resp.payload["status"] == "error"
+        assert last_resp.payload["reason"] == "already_used"
+
+    @pytest.mark.asyncio
+    async def test_enroll_no_active_enrollment(self, tmp_path):
+        """Request without any active PIN should be rejected."""
+        svc, _, transport = self._make_service(tmp_path)
+
+        env = MeshEnvelope(
+            type=MsgType.ENROLL_REQUEST,
+            source="device-1",
+            target="*",
+            payload={"pin_proof": "xxx"},
+        )
+        await svc.handle_enroll_request(env)
+
+        resp = transport.send.call_args[0][0]
+        assert resp.payload["status"] == "error"
+        assert resp.payload["reason"] == "no_active_enrollment"
+
+    @pytest.mark.asyncio
+    async def test_enroll_re_enrollment_rotates_psk(self, tmp_path):
+        """Enrolling an already-enrolled device rotates its PSK."""
+        svc, ks, _ = self._make_service(tmp_path)
+
+        # First enrollment
+        pin1, _ = svc.create_pin()
+        proof1 = EnrollmentService.compute_pin_proof(pin1, "device-1")
+        env1 = MeshEnvelope(
+            type=MsgType.ENROLL_REQUEST,
+            source="device-1",
+            target="*",
+            payload={"pin_proof": proof1},
+        )
+        await svc.handle_enroll_request(env1)
+        psk1 = ks.get_psk("device-1")
+
+        # Second enrollment with new PIN
+        pin2, _ = svc.create_pin()
+        proof2 = EnrollmentService.compute_pin_proof(pin2, "device-1")
+        env2 = MeshEnvelope(
+            type=MsgType.ENROLL_REQUEST,
+            source="device-1",
+            target="*",
+            payload={"pin_proof": proof2},
+        )
+        await svc.handle_enroll_request(env2)
+        psk2 = ks.get_psk("device-1")
+
+        assert psk1 != psk2  # PSK was rotated
+
+
+class TestMsgTypeEnrollment:
+    """Tests for ENROLL_REQUEST/ENROLL_RESPONSE message types."""
+
+    def test_enroll_request_type(self):
+        assert MsgType.ENROLL_REQUEST == "enroll_request"
+
+    def test_enroll_response_type(self):
+        assert MsgType.ENROLL_RESPONSE == "enroll_response"
+
+    def test_enroll_request_roundtrip(self):
+        env = MeshEnvelope(
+            type=MsgType.ENROLL_REQUEST,
+            source="esp32-1",
+            target="*",
+            payload={"name": "Sensor", "pin_proof": "abc123"},
+        )
+        raw = env.to_bytes()
+        restored = MeshEnvelope.from_bytes(raw[4:])
+        assert restored.type == MsgType.ENROLL_REQUEST
+        assert restored.payload["pin_proof"] == "abc123"
+
+
+class TestTransportEnrollmentBypass:
+    """Tests for transport auth bypass during active enrollment."""
+
+    @pytest.mark.asyncio
+    async def test_enroll_request_allowed_when_active(self):
+        """ENROLL_REQUEST bypasses auth when enrollment is active."""
+        disc = UDPDiscovery(node_id="hub", tcp_port=0, udp_port=0)
+        ks = KeyStore(path="/tmp/test_enroll_bypass_keys.json", nonce_window=60)
+        transport = MeshTransport(
+            node_id="hub",
+            discovery=disc,
+            tcp_port=0,
+            key_store=ks,
+            psk_auth_enabled=True,
+            allow_unauthenticated=False,
+        )
+
+        # Mock enrollment service with active enrollment
+        mock_enrollment = MagicMock()
+        mock_enrollment.is_enrollment_active = True
+        transport.enrollment_service = mock_enrollment
+
+        env = MeshEnvelope(
+            type=MsgType.ENROLL_REQUEST,
+            source="new-device",
+            target="*",
+            payload={"pin_proof": "xxx"},
+        )
+        assert transport._verify_inbound(env) is True
+
+    @pytest.mark.asyncio
+    async def test_enroll_request_blocked_when_inactive(self):
+        """ENROLL_REQUEST is blocked when no enrollment is active."""
+        disc = UDPDiscovery(node_id="hub", tcp_port=0, udp_port=0)
+        ks = KeyStore(path="/tmp/test_enroll_bypass_keys2.json", nonce_window=60)
+        transport = MeshTransport(
+            node_id="hub",
+            discovery=disc,
+            tcp_port=0,
+            key_store=ks,
+            psk_auth_enabled=True,
+            allow_unauthenticated=False,
+        )
+
+        # No enrollment service set → enrollment inactive
+        env = MeshEnvelope(
+            type=MsgType.ENROLL_REQUEST,
+            source="new-device",
+            target="*",
+            payload={"pin_proof": "xxx"},
+        )
+        assert transport._verify_inbound(env) is False
+
+    @pytest.mark.asyncio
+    async def test_enroll_request_blocked_when_enrollment_expired(self):
+        """ENROLL_REQUEST is blocked when enrollment exists but is expired."""
+        disc = UDPDiscovery(node_id="hub", tcp_port=0, udp_port=0)
+        ks = KeyStore(path="/tmp/test_enroll_bypass_keys3.json", nonce_window=60)
+        transport = MeshTransport(
+            node_id="hub",
+            discovery=disc,
+            tcp_port=0,
+            key_store=ks,
+            psk_auth_enabled=True,
+            allow_unauthenticated=False,
+        )
+
+        mock_enrollment = MagicMock()
+        mock_enrollment.is_enrollment_active = False
+        transport.enrollment_service = mock_enrollment
+
+        env = MeshEnvelope(
+            type=MsgType.ENROLL_REQUEST,
+            source="new-device",
+            target="*",
+            payload={"pin_proof": "xxx"},
+        )
+        assert transport._verify_inbound(env) is False
+
+
+class TestChannelEnrollment:
+    """Tests for MeshChannel enrollment integration."""
+
+    def test_channel_creates_enrollment_service(self):
+        """MeshChannel should create an EnrollmentService when PSK auth is enabled."""
+        mock_config = MagicMock()
+        mock_config.node_id = "hub-1"
+        mock_config.tcp_port = 18800
+        mock_config.udp_port = 18799
+        mock_config.roles = ["nanobot"]
+        mock_config.psk_auth_enabled = True
+        mock_config.allow_unauthenticated = False
+        mock_config.nonce_window = 60
+        mock_config.key_store_path = ""
+        mock_config._workspace_path = "/tmp/test_channel_enrollment"
+        mock_config.enrollment_pin_length = 6
+        mock_config.enrollment_pin_timeout = 300
+        mock_config.enrollment_max_attempts = 3
+
+        bus = MagicMock()
+        ch = MeshChannel(config=mock_config, bus=bus)
+        assert ch.enrollment is not None
+        assert ch.transport.enrollment_service is ch.enrollment
+
+    def test_channel_no_enrollment_without_psk(self):
+        """MeshChannel should NOT create enrollment if PSK auth is disabled."""
+        mock_config = MagicMock()
+        mock_config.node_id = "hub-1"
+        mock_config.tcp_port = 18800
+        mock_config.udp_port = 18799
+        mock_config.roles = ["nanobot"]
+        mock_config.psk_auth_enabled = False
+        mock_config.allow_unauthenticated = False
+        mock_config.nonce_window = 60
+        mock_config.key_store_path = ""
+        mock_config._workspace_path = None
+        mock_config.enrollment_pin_length = 6
+        mock_config.enrollment_pin_timeout = 300
+        mock_config.enrollment_max_attempts = 3
+
+        bus = MagicMock()
+        ch = MeshChannel(config=mock_config, bus=bus)
+        assert ch.enrollment is None
+
+    def test_create_enrollment_pin(self):
+        """MeshChannel.create_enrollment_pin() should create a PIN."""
+        mock_config = MagicMock()
+        mock_config.node_id = "hub-1"
+        mock_config.tcp_port = 18800
+        mock_config.udp_port = 18799
+        mock_config.roles = ["nanobot"]
+        mock_config.psk_auth_enabled = True
+        mock_config.allow_unauthenticated = False
+        mock_config.nonce_window = 60
+        mock_config.key_store_path = ""
+        mock_config._workspace_path = "/tmp/test_channel_pin"
+        mock_config.enrollment_pin_length = 4
+        mock_config.enrollment_pin_timeout = 60
+        mock_config.enrollment_max_attempts = 3
+
+        bus = MagicMock()
+        ch = MeshChannel(config=mock_config, bus=bus)
+        result = ch.create_enrollment_pin()
+        assert result is not None
+        pin, expires_at = result
+        assert len(pin) == 4
+        assert pin.isdigit()
+        assert expires_at > time.time()
+
+    def test_create_enrollment_pin_unavailable(self):
+        """create_enrollment_pin returns None when PSK auth is disabled."""
+        mock_config = MagicMock()
+        mock_config.node_id = "hub-1"
+        mock_config.tcp_port = 18800
+        mock_config.udp_port = 18799
+        mock_config.roles = ["nanobot"]
+        mock_config.psk_auth_enabled = False
+        mock_config.allow_unauthenticated = False
+        mock_config.nonce_window = 60
+        mock_config.key_store_path = ""
+        mock_config._workspace_path = None
+        mock_config.enrollment_pin_length = 6
+        mock_config.enrollment_pin_timeout = 300
+        mock_config.enrollment_max_attempts = 3
+
+        bus = MagicMock()
+        ch = MeshChannel(config=mock_config, bus=bus)
+        assert ch.create_enrollment_pin() is None
+
+
+class TestEnrollmentConfig:
+    """Tests for enrollment config fields in MeshConfig."""
+
+    def test_enrollment_defaults(self):
+        from nanobot.config.schema import MeshConfig
+
+        mc = MeshConfig()
+        assert mc.enrollment_pin_length == 6
+        assert mc.enrollment_pin_timeout == 300
+        assert mc.enrollment_max_attempts == 3
+
+    def test_enrollment_custom_values(self):
+        from nanobot.config.schema import MeshConfig
+
+        mc = MeshConfig(
+            enrollment_pin_length=8,
+            enrollment_pin_timeout=60,
+            enrollment_max_attempts=5,
+        )
+        assert mc.enrollment_pin_length == 8
+        assert mc.enrollment_pin_timeout == 60
+        assert mc.enrollment_max_attempts == 5

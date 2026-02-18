@@ -20,6 +20,12 @@ from nanobot.mesh.discovery import PeerInfo, UDPDiscovery
 from nanobot.mesh.protocol import MeshEnvelope, MsgType, read_envelope, write_envelope
 from nanobot.mesh.security import KeyStore
 
+# Avoid circular imports; enrollment is only needed for type checking.
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from nanobot.mesh.enrollment import EnrollmentService
+
 # Callback type: receives a MeshEnvelope and returns nothing.
 MessageHandler = Callable[[MeshEnvelope], Awaitable[None]]
 
@@ -59,6 +65,8 @@ class MeshTransport:
         self.key_store = key_store
         self.psk_auth_enabled = psk_auth_enabled
         self.allow_unauthenticated = allow_unauthenticated
+        # --- embed_nanobot extensions: device enrollment (task 1.10) ---
+        self.enrollment_service: EnrollmentService | None = None
 
     # -- handler registration ------------------------------------------------
 
@@ -183,6 +191,20 @@ class MeshTransport:
         """
         if not self.psk_auth_enabled or self.key_store is None:
             return True  # auth disabled — pass through
+
+        # --- embed_nanobot: allow ENROLL_REQUEST when enrollment is active ---
+        if env.type == MsgType.ENROLL_REQUEST:
+            if self.enrollment_service and self.enrollment_service.is_enrollment_active:
+                logger.debug(
+                    f"[Mesh/Security] allowing ENROLL_REQUEST from {env.source} "
+                    "(enrollment active)"
+                )
+                return True
+            logger.warning(
+                f"[Mesh/Security] REJECTED ENROLL_REQUEST from {env.source} "
+                "(no active enrollment)"
+            )
+            return False
 
         # Check if the message carries auth fields
         if not env.hmac or not env.nonce:

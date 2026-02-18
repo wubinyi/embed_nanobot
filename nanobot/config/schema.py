@@ -178,6 +178,10 @@ class MeshConfig(Base):
     key_store_path: str = ""            # Path to mesh_keys.json (default: <workspace>/mesh_keys.json)
     allow_unauthenticated: bool = False # If True, log warning but still process unsigned messages
     nonce_window: int = 60              # Seconds; reject messages with ts outside this window
+    # --- embed_nanobot extensions: device enrollment (task 1.10) ---
+    enrollment_pin_length: int = 6          # Number of digits in enrollment PIN
+    enrollment_pin_timeout: int = 300       # Seconds before PIN expires (default 5 min)
+    enrollment_max_attempts: int = 3        # Max failed PIN attempts before lockout
 
 
 class ChannelsConfig(Base):

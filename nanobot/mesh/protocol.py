@@ -36,6 +36,9 @@ class MsgType(str, Enum):
     # Heartbeat for presence tracking
     PING = "ping"
     PONG = "pong"
+    # --- embed_nanobot extensions: device enrollment (task 1.10) ---
+    ENROLL_REQUEST = "enroll_request"
+    ENROLL_RESPONSE = "enroll_response"
 
 
 @dataclass
