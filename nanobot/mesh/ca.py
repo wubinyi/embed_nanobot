@@ -16,6 +16,7 @@ Requires the ``cryptography`` package (already a project dependency).
 from __future__ import annotations
 
 import datetime
+import json
 import ssl
 from pathlib import Path
 from typing import Any
@@ -37,6 +38,7 @@ except ImportError:  # pragma: no cover
 # ---------------------------------------------------------------------------
 CA_VALIDITY_DAYS = 3650  # ~10 years
 DEVICE_CERT_VALIDITY_DAYS = 365  # 1 year
+CRL_VALIDITY_DAYS = 30  # CRL next-update window
 _KEY_CURVE = "SECP256R1"
 
 
@@ -74,6 +76,7 @@ class MeshCA:
         self.device_cert_validity_days = device_cert_validity_days
         self._ca_key: Any = None  # ec.EllipticCurvePrivateKey
         self._ca_cert: Any = None  # x509.Certificate
+        self._revoked: dict[str, dict[str, Any]] = {}  # node_id -> {serial, date}
 
     # -- paths ---------------------------------------------------------------
 
@@ -84,6 +87,16 @@ class MeshCA:
     @property
     def ca_cert_path(self) -> Path:
         return self.ca_dir / "ca.crt"
+
+    @property
+    def crl_path(self) -> Path:
+        """Path to the CRL PEM file."""
+        return self.ca_dir / "crl.pem"
+
+    @property
+    def revoked_json_path(self) -> Path:
+        """Path to the revocation metadata JSON file."""
+        return self.ca_dir / "revoked.json"
 
     @property
     def devices_dir(self) -> Path:
@@ -158,6 +171,7 @@ class MeshCA:
 
         self._ca_key = key
         self._ca_cert = cert
+        self._load_revoked()
         logger.info("[Mesh/CA] initialized new CA in {}", self.ca_dir)
 
     def _load_ca(self) -> None:
@@ -169,6 +183,119 @@ class MeshCA:
         self._ca_cert = x509.load_pem_x509_certificate(
             self.ca_cert_path.read_bytes(),
         )
+        self._load_revoked()
+
+    # -- revocation management -----------------------------------------------
+
+    def _load_revoked(self) -> None:
+        """Load revocation metadata from ``revoked.json``."""
+        if self.revoked_json_path.exists():
+            try:
+                self._revoked = json.loads(self.revoked_json_path.read_text())
+            except (json.JSONDecodeError, OSError) as exc:
+                logger.warning("[Mesh/CA] failed to load revoked.json: {}", exc)
+                self._revoked = {}
+        else:
+            self._revoked = {}
+
+    def _save_revoked(self) -> None:
+        """Persist revocation metadata to ``revoked.json``."""
+        self.revoked_json_path.write_text(
+            json.dumps(self._revoked, indent=2, sort_keys=True)
+        )
+
+    def _generate_crl(self) -> None:
+        """Generate (or regenerate) the CRL from current revocation data."""
+        if self._ca_key is None or self._ca_cert is None:
+            raise RuntimeError("CA not initialized — call initialize() first")
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        builder = (
+            x509.CertificateRevocationListBuilder()
+            .issuer_name(self._ca_cert.subject)
+            .last_update(now)
+            .next_update(now + datetime.timedelta(days=CRL_VALIDITY_DAYS))
+        )
+
+        for _node_id, info in self._revoked.items():
+            serial = info["serial"]
+            rev_date = datetime.datetime.fromisoformat(info["date"])
+            revoked_cert = (
+                x509.RevokedCertificateBuilder()
+                .serial_number(serial)
+                .revocation_date(rev_date)
+                .build()
+            )
+            builder = builder.add_revoked_certificate(revoked_cert)
+
+        crl = builder.sign(self._ca_key, hashes.SHA256())
+        self.crl_path.write_bytes(crl.public_bytes(serialization.Encoding.PEM))
+        logger.info("[Mesh/CA] CRL generated with {} revoked cert(s)", len(self._revoked))
+
+    def revoke_device_cert(self, node_id: str) -> bool:
+        """Revoke the certificate for *node_id*.
+
+        Adds the serial to the CRL, deletes the device cert+key files,
+        and regenerates the CRL PEM.
+
+        Returns ``True`` if the cert was revoked, ``False`` if the device
+        has no certificate or is already revoked.
+        """
+        if self._ca_key is None or self._ca_cert is None:
+            raise RuntimeError("CA not initialized — call initialize() first")
+
+        if node_id in self._revoked:
+            logger.warning("[Mesh/CA] {} is already revoked", node_id)
+            return False
+
+        cert_path = self.devices_dir / f"{node_id}.crt"
+        key_path = self.devices_dir / f"{node_id}.key"
+
+        if not cert_path.exists():
+            logger.warning("[Mesh/CA] no certificate found for {}", node_id)
+            return False
+
+        # Read cert to capture serial number
+        cert_data = x509.load_pem_x509_certificate(cert_path.read_bytes())
+        serial = cert_data.serial_number
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        self._revoked[node_id] = {
+            "serial": serial,
+            "date": now.isoformat(),
+        }
+        self._save_revoked()
+        self._generate_crl()
+
+        # Delete device cert+key to prevent re-use
+        cert_path.unlink(missing_ok=True)
+        key_path.unlink(missing_ok=True)
+
+        logger.info("[Mesh/CA] revoked certificate for node {} (serial={})", node_id, serial)
+        return True
+
+    def is_revoked(self, node_id: str) -> bool:
+        """Return ``True`` if *node_id*'s certificate has been revoked."""
+        return node_id in self._revoked
+
+    def list_revoked(self) -> list[dict[str, Any]]:
+        """Return metadata for all revoked certificates."""
+        return [
+            {"node_id": nid, "serial": info["serial"], "date": info["date"]}
+            for nid, info in sorted(self._revoked.items())
+        ]
+
+    def rebuild_crl(self) -> None:
+        """Rebuild the CRL from ``revoked.json``.
+
+        Useful if the CRL file was deleted or corrupted.
+        """
+        if not self._revoked:
+            # Remove stale CRL if no revocations
+            if self.crl_path.exists():
+                self.crl_path.unlink()
+            return
+        self._generate_crl()
 
     # -- device certificate issuance -----------------------------------------
 
@@ -273,6 +400,10 @@ class MeshCA:
         """Create an SSL context for the Hub's TCP server (mTLS).
 
         The context requires client certificates signed by this CA.
+        Revocation checking is done at the application level (see
+        ``MeshTransport`` revocation callback), not via CRL in the
+        SSL context, because Python's ``ssl`` module does not support
+        loading CRL files.
         """
         if not self.is_initialized:
             raise RuntimeError("CA not initialized")
@@ -334,10 +465,17 @@ class MeshCA:
         return None
 
     def list_device_certs(self) -> list[dict[str, Any]]:
-        """List all issued device certificates with metadata."""
+        """List all issued device certificates with metadata.
+
+        Includes both active certs on disk and revoked entries from metadata.
+        """
         certs: list[dict[str, Any]] = []
+        seen: set[str] = set()
+
+        # Active certs on disk
         for cert_file in sorted(self.devices_dir.glob("*.crt")):
             node_id = cert_file.stem
+            seen.add(node_id)
             try:
                 cert_data = x509.load_pem_x509_certificate(cert_file.read_bytes())
                 certs.append({
@@ -349,7 +487,22 @@ class MeshCA:
                         cert_data.not_valid_after_utc
                         < datetime.datetime.now(datetime.timezone.utc)
                     ),
+                    "revoked": False,
                 })
             except Exception as exc:
                 logger.warning("[Mesh/CA] failed to read cert {}: {}", cert_file, exc)
+
+        # Revoked certs (cert files deleted, only metadata remains)
+        for node_id, info in sorted(self._revoked.items()):
+            if node_id not in seen:
+                certs.append({
+                    "node_id": node_id,
+                    "serial": info["serial"],
+                    "not_before": "",
+                    "not_after": "",
+                    "expired": False,
+                    "revoked": True,
+                    "revoked_date": info["date"],
+                })
+
         return certs

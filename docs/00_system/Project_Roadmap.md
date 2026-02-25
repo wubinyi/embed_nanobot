@@ -2,7 +2,7 @@
 
 > Single source of truth for project progress. Updated after each feature completion.
 
-**Last updated**: 2026-02-25 (Task 3.1 complete)
+**Last updated**: 2026-02-25 (Task 3.2 complete)
 
 ---
 
@@ -60,12 +60,12 @@ All Phase 1 foundation tasks are done. Ready to begin Phase 2: Device Ecosystem.
 | # | Task | Status | Completed | Notes |
 |---|------|--------|-----------|-------|
 | 3.1 | mTLS for device authentication (local CA) | Done | 2026-02-25 | `nanobot/mesh/ca.py` — MeshCA: EC P-256 local CA, per-device X.509 cert issuance (CN=node_id), mutual TLS on transport (CERT_REQUIRED), auto-issues hub cert, HMAC+AES-GCM skipped when TLS active, cert during enrollment. 49 new tests (487 total). |
+| 3.2 | Certificate revocation (CRL) | Done | 2026-02-25 | App-level CRL: `revocation_check_fn` callback in transport, `revoke_device_cert()` in CA, dual persistence (revoked.json + crl.pem). Python ssl can't load CRL files — app-level check after TLS handshake. 36 new tests (523 total). |
 
 ### Planned Tasks
 
 | # | Task | Priority | Complexity | Dependencies |
 |---|------|----------|------------|--------------|
-| 3.2 | Certificate revocation (CRL) | P1 | M | mTLS (3.1) |
 | 3.3 | OTA firmware update protocol | P1 | L | Mesh + Auth |
 | 3.4 | Device grouping and scenes | P1 | M | Registry (2.1) |
 | 3.5 | Error recovery and fault tolerance | P1 | M | All mesh components |
@@ -241,6 +241,19 @@ See [docs/sync/SYNC_LOG.md](../sync/SYNC_LOG.md) for full merge history.
 - **Modified 4 files** (transport.py, enrollment.py, channel.py, schema.py) + 1 new (ca.py) + docs.
 - **Conflict surface**: +1 ssl import in transport.py (our file), +3 fields in schema.py, minor wiring in channel.py. ca.py is new (zero conflict).
 - **Next task**: 3.2 (Certificate revocation / CRL), which depends on this CA infrastructure.
+
+### 2026-02-25c — Task 3.2: Certificate Revocation (CRL) Complete
+- **Application-level revocation** — Python's `ssl` module cannot load CRL files (`load_verify_locations()` only loads CA certs). Switched from OpenSSL CRL enforcement to app-level check in `MeshTransport._handle_connection()`.
+- **Revocation flow**: `ca.revoke_device_cert(node_id)` reads cert serial, adds to `_revoked` dict, persists `revoked.json`, generates `crl.pem` (X.509 CRL for external tooling), deletes cert+key files.
+- **Transport enforcement**: `revocation_check_fn` callback checked after TLS handshake, before message processing. Revoked device connections dropped immediately.
+- **Instant revocation**: No SSL context rebuild needed — in-memory dict lookup on each new connection.
+- **Dual persistence**: `revoked.json` (fast, survives restart) + `crl.pem` (standard X.509 CRL for ESP32/mbedTLS/external tools).
+- **Channel integration**: `MeshChannel.revoke_device()` delegates to CA, optionally removes from registry.
+- **36 new tests** across 8 classes (523 total, zero regressions): lifecycle, CRL file validation, rebuild, transport rejection (real TLS), channel integration, re-enrollment after revocation.
+- **Zero new config fields** — CRL is automatic when mTLS is active.
+- **Zero new dependencies** — uses existing `cryptography` for CRL generation.
+- **Conflict surface unchanged**: Changes only in our mesh module files (ca.py, transport.py, channel.py).
+- **Next task**: 3.3 (OTA firmware update protocol).
 
 ### Conventions Reminder
 - Feature branches: `copilot/<feature-name>` from `main_embed`

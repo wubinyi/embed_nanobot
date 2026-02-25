@@ -114,6 +114,9 @@ class MeshChannel(BaseChannel):
             server_ssl_context=server_ssl_ctx,
             client_ssl_context_factory=client_ssl_factory,
         )
+        # --- embed_nanobot: CRL revocation check (task 3.2) ---
+        if self.ca is not None:
+            self.transport.revocation_check_fn = self.ca.is_revoked
         self.transport.on_message(self._on_mesh_message)
 
         # --- embed_nanobot: device enrollment (task 1.10) ---
@@ -172,6 +175,39 @@ class MeshChannel(BaseChannel):
             return None
         # Use the Hub's own cert for outgoing mTLS connections.
         return self.ca.create_client_ssl_context("hub")
+
+    # -- embed_nanobot: certificate revocation (task 3.2) --------------------
+
+    async def revoke_device(self, node_id: str, *, remove_from_registry: bool = False) -> bool:
+        """Revoke a device's certificate.
+
+        The revocation takes effect immediately for new connections because
+        the transport checks ``ca.is_revoked()`` on each inbound connection
+        (application-level CRL enforcement).
+
+        Parameters
+        ----------
+        node_id:
+            The device whose certificate should be revoked.
+        remove_from_registry:
+            If ``True``, also remove the device from the device registry.
+
+        Returns ``True`` if the certificate was revoked, ``False`` if the
+        device has no certificate or is already revoked.
+        """
+        if self.ca is None:
+            logger.warning("[MeshChannel] cannot revoke — mTLS not enabled")
+            return False
+
+        revoked = self.ca.revoke_device_cert(node_id)
+        if not revoked:
+            return False
+
+        if remove_from_registry:
+            await self.registry.remove_device(node_id)
+            logger.info("[MeshChannel] device {} removed from registry", node_id)
+
+        return True
 
     # -- BaseChannel interface -----------------------------------------------
 

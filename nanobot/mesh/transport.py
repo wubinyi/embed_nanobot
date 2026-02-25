@@ -78,6 +78,8 @@ class MeshTransport:
         self.server_ssl_context = server_ssl_context
         self._client_ssl_factory = client_ssl_context_factory
         self.tls_enabled = server_ssl_context is not None
+        # --- embed_nanobot extensions: CRL revocation check (task 3.2) ---
+        self.revocation_check_fn: Callable[[str], bool] | None = None
 
     # -- handler registration ------------------------------------------------
 
@@ -117,6 +119,20 @@ class MeshTransport:
     ) -> None:
         """Handle one inbound TCP connection (one envelope per connection)."""
         try:
+            # --- embed_nanobot: CRL revocation check (task 3.2) ---
+            # Check if the peer's certificate has been revoked before
+            # processing any data.  Done at application level because
+            # Python's ssl module doesn't support CRL file loading.
+            if self.tls_enabled and self.revocation_check_fn is not None:
+                from nanobot.mesh.ca import MeshCA
+                peer_id = MeshCA.get_peer_node_id(writer.transport)
+                if peer_id and self.revocation_check_fn(peer_id):
+                    logger.warning(
+                        "[Mesh/Transport] rejected connection from revoked node {}",
+                        peer_id,
+                    )
+                    return
+
             env = await asyncio.wait_for(read_envelope(reader), timeout=10.0)
             if env is None:
                 return
@@ -222,6 +238,18 @@ class MeshTransport:
                 target_node_id, exc,
             )
             return None
+
+    # -- embed_nanobot: CRL hot-reload (task 3.2) ----------------------------
+
+    def update_server_ssl_context(self, ctx: _ssl.SSLContext) -> None:
+        """Replace the server SSL context (e.g. after CRL update).
+
+        Only affects new incoming connections — existing connections are not
+        forcibly terminated.
+        """
+        self.server_ssl_context = ctx
+        self.tls_enabled = ctx is not None
+        logger.info("[Mesh/Transport] server SSL context updated")
 
     # -- embed_nanobot: PSK authentication helpers (task 1.9) ----------------
 
