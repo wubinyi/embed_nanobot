@@ -50,6 +50,14 @@ class MsgType(str, Enum):
     OTA_VERIFY = "ota_verify"
     OTA_COMPLETE = "ota_complete"
     OTA_ABORT = "ota_abort"
+    # --- embed_nanobot extensions: hub-to-hub federation (task 4.2) ---
+    FEDERATION_HELLO = "federation_hello"
+    FEDERATION_SYNC = "federation_sync"
+    FEDERATION_COMMAND = "federation_command"
+    FEDERATION_RESPONSE = "federation_response"
+    FEDERATION_STATE = "federation_state"
+    FEDERATION_PING = "federation_ping"
+    FEDERATION_PONG = "federation_pong"
 
 
 @dataclass

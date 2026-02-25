@@ -2,7 +2,7 @@
 
 > Single source of truth for project progress. Updated after each feature completion.
 
-**Last updated**: 2026-02-26 (Task 4.1 complete)
+**Last updated**: 2026-02-26 (Task 4.2 complete)
 
 ---
 
@@ -80,12 +80,12 @@ All Phase 1 foundation tasks are done. Ready to begin Phase 2: Device Ecosystem.
 | # | Task | Status | Completed | Notes |
 |---|------|--------|-----------|-------|
 | 4.1 | PLC/industrial device integration | Done | 2026-02-26 | `nanobot/mesh/industrial.py` — IndustrialBridge with protocol adapter framework (Modbus TCP via pymodbus, StubAdapter fallback). JSON config, auto-polling, device registry integration, automation hooks. 54 new tests (728 total). |
+| 4.2 | Multi-Hub federation (hub-to-hub mesh) | Done | 2026-02-26 | `nanobot/mesh/federation.py` — FederationManager with HubLink (persistent TCP, auto-reconnect), registry sync, command forwarding, state propagation. 7 new protocol messages. 44 new tests (772 total). |
 
 ### Planned Tasks
 
 | # | Task | Priority | Complexity | Dependencies |
 |---|------|----------|------------|--------------|
-| 4.2 | Multi-Hub federation (hub-to-hub mesh) | P1 | XL | Mesh + mTLS |
 | 4.3 | Device reprogramming (AI-generated code push) | P2 | XL | OTA (3.3), Commands (2.2) |
 | 4.4 | Sensor data pipeline and analytics | P2 | L | Registry (2.1) |
 | 4.5 | BLE mesh support for battery-powered sensors | P2 | L | Mesh transport abstraction |
@@ -326,3 +326,17 @@ See [docs/sync/SYNC_LOG.md](../sync/SYNC_LOG.md) for full merge history.
 - **54 new tests** across 14 classes (728 total, zero regressions): data type codec roundtrips, config parsing, MockAdapter protocol, bridge lifecycle, command dispatch, polling, channel integration.
 - **Zero conflict surface increase**: industrial.py is a new file, schema.py/channel.py have append-only changes.
 - **Phase 4 started**: First smart factory task done. Next task: 4.2 (Multi-Hub federation).
+
+### 2026-02-26c — Task 4.2: Multi-Hub Federation Complete
+- **Federation module** (`nanobot/mesh/federation.py`, ~500 LOC): `FederationManager` with `HubLink` persistent TCP connections, auto-reconnect (exponential backoff 2s→60s), periodic registry sync, command forwarding (future-based with timeout), state propagation.
+- **7 new protocol messages**: FEDERATION_HELLO (handshake), FEDERATION_SYNC (registry snapshot), FEDERATION_COMMAND/RESPONSE (forwarded command+reply), FEDERATION_STATE (state push), FEDERATION_PING/PONG (keepalive).
+- **HubLink**: Bidirectional TCP connection with background receive loop, ping loop (15s), auto-reconnect on connection loss, exponential backoff (2s base, 60s max).
+- **Registry sync**: Periodic broadcast of local device list (capabilities, state, online status) to all connected peers. Stale devices automatically removed on re-sync.
+- **Command forwarding**: `forward_command()` sends FEDERATION_COMMAND, waits for FEDERATION_RESPONSE via asyncio.Future with configurable timeout (default 10s).
+- **State propagation**: Local state changes broadcast to federated peers. Remote state changes trigger local automation rules with proper command routing (industrial/federation/mesh).
+- **Channel integration**: `_execute_local_command()` handles forwarded commands (tries industrial bridge first, falls back to mesh transport). `_on_federation_state_update()` routes automation output. `_handle_state_report()` broadcasts to federation.
+- **1 config field** appended to MeshConfig: `federation_config_path`.
+- **44 new tests** across 18 test classes (772 total, zero regressions): config parsing, HubLink send/lifecycle, sync/stale removal, command forward/timeout/handling, response resolution, state propagation, ping/pong, queries, message dispatch, channel integration.
+- **Zero new dependencies** — uses stdio asyncio TCP only.
+- **Zero conflict surface increase**: federation.py is a new file, protocol.py/schema.py/channel.py have append-only changes.
+- **Next tasks**: 4.3 (Device reprogramming, P2/XL), 4.4 (Sensor data pipeline, P2/L), 4.5 (BLE mesh, P2/L).

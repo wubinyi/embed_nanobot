@@ -204,6 +204,8 @@ class MeshConfig(Base):
     dashboard_port: int = 0                  # HTTP port for mesh dashboard. 0 = disabled.
     # --- embed_nanobot extensions: PLC/industrial integration (task 4.1) ---
     industrial_config_path: str = ""         # Path to industrial_config.json. Empty = disabled.
+    # --- embed_nanobot extensions: hub-to-hub federation (task 4.2) ---
+    federation_config_path: str = ""         # Path to federation.json. Empty = disabled.
 
 
 class ChannelsConfig(Base):

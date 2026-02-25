@@ -22,6 +22,7 @@ from nanobot.mesh.commands import command_to_envelope
 from nanobot.mesh.dashboard import MeshDashboard
 from nanobot.mesh.discovery import UDPDiscovery
 from nanobot.mesh.enrollment import EnrollmentService
+from nanobot.mesh.federation import FederationManager
 from nanobot.mesh.groups import GroupManager
 from nanobot.mesh.industrial import IndustrialBridge
 from nanobot.mesh.ota import FirmwareStore, OTAManager, OTASession
@@ -241,6 +242,19 @@ class MeshChannel(BaseChannel):
             )
             self.industrial.load()
 
+        # --- embed_nanobot: hub-to-hub federation (task 4.2) ---
+        federation_config_path = getattr(config, "federation_config_path", "") or ""
+        self.federation: FederationManager | None = None
+        if federation_config_path:
+            self.federation = FederationManager(
+                hub_id=self.node_id,
+                config_path=federation_config_path,
+                registry=self.registry,
+                on_remote_state=self._on_federation_state_update,
+            )
+            self.federation.set_local_command_handler(self._execute_local_command)
+            self.federation.load()
+
     # -- mTLS helpers --------------------------------------------------------
 
     def _make_client_ssl(self, target_node_id: str) -> ssl.SSLContext | None:
@@ -316,6 +330,12 @@ class MeshChannel(BaseChannel):
                 await self.industrial.start()
             except Exception as exc:
                 logger.error("[MeshChannel] industrial bridge start failed: {}", exc)
+        # --- embed_nanobot: hub-to-hub federation (task 4.2) ---
+        if self.federation is not None:
+            try:
+                await self.federation.start()
+            except Exception as exc:
+                logger.error("[MeshChannel] federation start failed: {}", exc)
         logger.info(
             f"[MeshChannel] started: node={self.node_id} "
             f"tcp={self.tcp_port} udp={self.udp_port}"
@@ -345,6 +365,12 @@ class MeshChannel(BaseChannel):
                 await self.industrial.stop()
             except Exception as exc:
                 logger.error("[MeshChannel] industrial bridge stop error: {}", exc)
+        # --- embed_nanobot: hub-to-hub federation (task 4.2) ---
+        if self.federation is not None:
+            try:
+                await self.federation.stop()
+            except Exception as exc:
+                logger.error("[MeshChannel] federation stop error: {}", exc)
         logger.info("[MeshChannel] stopped")
 
     async def send(self, msg: OutboundMessage) -> None:
@@ -445,6 +471,13 @@ class MeshChannel(BaseChannel):
                         f"[MeshChannel] automation dispatch failed: "
                         f"{cmd.action} {cmd.device}.{cmd.capability}"
                     )
+
+        # --- embed_nanobot: propagate state to federated hubs (task 4.2) ---
+        if self.federation:
+            supervised_task(
+                self.federation.broadcast_state_update(env.source, state_data),
+                name=f"federation-state-{env.source}",
+            )
 
     def _on_peer_seen(self, node_id: str, is_new: bool, beacon: dict) -> None:
         """Called by discovery when a peer beacon is received."""
@@ -570,6 +603,62 @@ class MeshChannel(BaseChannel):
             logger.warning("[MeshChannel] industrial bridge not configured")
             return False
         return await self.industrial.execute_command(node_id, capability, value)
+
+    # -- Federation convenience methods (task 4.2) --------------------------
+
+    async def _execute_local_command(
+        self, node_id: str, capability: str, value: Any,
+    ) -> bool:
+        """Execute a command on a local device (called by federation for forwarded commands)."""
+        # Try industrial bridge first
+        if self.industrial and self.industrial.is_industrial_device(node_id):
+            return await self.industrial.execute_command(node_id, capability, value)
+        # Fall back to mesh transport
+        from nanobot.mesh.commands import DeviceCommand
+        cmd = DeviceCommand(
+            device=node_id,
+            action="set",
+            capability=capability,
+            params={"value": value},
+        )
+        env = command_to_envelope(cmd, source=self.node_id)
+        return await self.transport.send(env)
+
+    def _on_federation_state_update(self, node_id: str, state: dict) -> None:
+        """Callback from FederationManager when a remote device state changes."""
+        if self.automation:
+            commands = self.automation.evaluate(node_id)
+            for cmd in commands:
+                # Route command to appropriate destination
+                if self.industrial and self.industrial.is_industrial_device(cmd.device):
+                    supervised_task(
+                        self.industrial.execute_command(
+                            cmd.device, cmd.capability, cmd.params.get("value"),
+                        ),
+                        name=f"fed-industrial-cmd-{cmd.device}",
+                    )
+                elif self.federation and self.federation.is_remote_device(cmd.device):
+                    supervised_task(
+                        self.federation.forward_command(
+                            cmd.device, cmd.capability, cmd.params.get("value"),
+                        ),
+                        name=f"fed-forward-cmd-{cmd.device}",
+                    )
+                else:
+                    env = command_to_envelope(cmd, source=self.node_id)
+                    supervised_task(
+                        self.transport.send(env),
+                        name=f"fed-local-cmd-{cmd.device}",
+                    )
+
+    async def forward_to_federation(
+        self, node_id: str, capability: str, value: Any,
+    ) -> bool:
+        """Forward a command to a device on a remote hub. Returns True on success."""
+        if self.federation is None:
+            logger.warning("[MeshChannel] federation not configured")
+            return False
+        return await self.federation.forward_command(node_id, capability, value)
 
 
 def _default_node_id() -> str:
