@@ -285,7 +285,7 @@ class BaseChannel(ABC):
 
 ### LAN Mesh (`nanobot/mesh/`)
 
-The LAN Mesh enables **device-to-device communication** on the same local network without requiring internet. This is ideal for smart home scenarios where nanobot acts as an AI hub controlling household appliances, or for nanobot-to-nanobot communication across multiple instances.
+The LAN Mesh enables **device-to-device communication** on the same local network without requiring internet. This is ideal for smart home scenarios where nanobot acts as an AI hub controlling household appliances, smart factory environments with PLC/industrial devices, or for nanobot-to-nanobot communication across multiple instances.
 
 **Architecture** — Five-layer design:
 
@@ -387,6 +387,11 @@ JSON structure:
 | `ENROLL_REQUEST` | New device requests PSK enrollment (PIN-based) |
 | `ENROLL_RESPONSE` | Hub responds with encrypted PSK or error |
 | `STATE_REPORT` | Device pushes state changes to the hub |
+| `OTA_OFFER` | Hub offers firmware update to a device |
+| `OTA_ACCEPT` / `OTA_REJECT` | Device accepts or rejects firmware offer |
+| `OTA_CHUNK` / `OTA_CHUNK_ACK` | Chunked firmware data transfer |
+| `OTA_VERIFY` | Device reports firmware hash verification result |
+| `OTA_COMPLETE` / `OTA_ABORT` | Firmware update finalized or aborted |
 
 **Key components:**
 
@@ -401,6 +406,12 @@ JSON structure:
 - **`channel.py`**: `MeshChannel` implements `BaseChannel` interface, publishes inbound messages to the bus and subscribes to outbound messages
 - **`routing.py`**: `is_device_related()` — registry-aware text classifier for device-command detection; `build_force_local_fn()` — creates callback for HybridRouter force-local routing
 - **`automation.py`**: `AutomationEngine` — evaluates user-defined rules when device state changes; `Condition` (device/capability/operator/value), `RuleAction` (generates `DeviceCommand`), `AutomationRule` (AND-logic conditions + cooldown); indexed by trigger device for O(1) lookup; JSON persistence; `validate_rule()` checks devices/capabilities exist
+- **`ca.py`**: `MeshCA` — local Certificate Authority with EC P-256 keys; self-signed root CA (10-year), per-device X.509 cert issuance (CN=node_id), mutual TLS on transport, cert issuance during enrollment. Requires `cryptography`.
+- **`groups.py`**: `GroupManager` — device groups (named sets of node_ids) and scenes (named command batches); CRUD, JSON persistence, fan-out command dispatch, LLM context helpers
+- **`resilience.py`**: `RetryPolicy`, `retry_send()` (exponential backoff), `Watchdog` (periodic async health checks), `supervised_task()` (fire-and-forget with error logging)
+- **`ota.py`**: `FirmwareStore` (dir-based + JSON manifest), `OTASession` (state machine), `OTAManager` (hub-initiated push OTA over mesh TCP, chunked base64 transfer, SHA-256 integrity)
+- **`dashboard.py`**: `MeshDashboard` — zero-dependency HTTP server (stdlib `asyncio.start_server`) with 9 REST API endpoints and embedded single-page HTML dashboard for monitoring devices, peers, groups, rules, OTA sessions
+- **`industrial.py`**: `IndustrialBridge` — PLC/industrial device integration via protocol adapters; `IndustrialProtocol` ABC, `ModbusTCPAdapter` (pymodbus, Modbus TCP), `StubAdapter` (fallback); JSON config, periodic register polling, device registry integration, automation hooks
 
 The mesh is registered in `nanobot/channels/manager.py` like any other channel and activated via `channels.mesh.enabled: true` in config.
 

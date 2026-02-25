@@ -23,6 +23,7 @@ from nanobot.mesh.dashboard import MeshDashboard
 from nanobot.mesh.discovery import UDPDiscovery
 from nanobot.mesh.enrollment import EnrollmentService
 from nanobot.mesh.groups import GroupManager
+from nanobot.mesh.industrial import IndustrialBridge
 from nanobot.mesh.ota import FirmwareStore, OTAManager, OTASession
 from nanobot.mesh.protocol import MeshEnvelope, MsgType
 from nanobot.mesh.registry import DeviceCapability, DeviceRegistry
@@ -229,6 +230,17 @@ class MeshChannel(BaseChannel):
                 },
             )
 
+        # --- embed_nanobot: PLC/industrial integration (task 4.1) ---
+        industrial_config_path = getattr(config, "industrial_config_path", "") or ""
+        self.industrial: IndustrialBridge | None = None
+        if industrial_config_path:
+            self.industrial = IndustrialBridge(
+                config_path=industrial_config_path,
+                registry=self.registry,
+                on_state_update=self._on_industrial_state_update,
+            )
+            self.industrial.load()
+
     # -- mTLS helpers --------------------------------------------------------
 
     def _make_client_ssl(self, target_node_id: str) -> ssl.SSLContext | None:
@@ -298,6 +310,12 @@ class MeshChannel(BaseChannel):
                 await self.dashboard.start()
             except Exception as exc:
                 logger.error("[MeshChannel] dashboard start failed: {}", exc)
+        # --- embed_nanobot: PLC/industrial integration (task 4.1) ---
+        if self.industrial is not None:
+            try:
+                await self.industrial.start()
+            except Exception as exc:
+                logger.error("[MeshChannel] industrial bridge start failed: {}", exc)
         logger.info(
             f"[MeshChannel] started: node={self.node_id} "
             f"tcp={self.tcp_port} udp={self.udp_port}"
@@ -321,6 +339,12 @@ class MeshChannel(BaseChannel):
                 await self.dashboard.stop()
             except Exception as exc:
                 logger.error("[MeshChannel] dashboard stop error: {}", exc)
+        # --- embed_nanobot: PLC/industrial integration (task 4.1) ---
+        if self.industrial is not None:
+            try:
+                await self.industrial.stop()
+            except Exception as exc:
+                logger.error("[MeshChannel] industrial bridge stop error: {}", exc)
         logger.info("[MeshChannel] stopped")
 
     async def send(self, msg: OutboundMessage) -> None:
@@ -515,6 +539,37 @@ class MeshChannel(BaseChannel):
             ok = await self.transport.send(env)
             results.append(ok)
         return results
+
+    # -- Industrial/PLC convenience methods (task 4.1) -----------------------
+
+    def _on_industrial_state_update(self, node_id: str, state: dict) -> None:
+        """Callback from IndustrialBridge after polling. Triggers automation."""
+        if self.automation:
+            commands = self.automation.evaluate(node_id)
+            for cmd in commands:
+                # Industrial commands go through the bridge, not mesh transport
+                if self.industrial and self.industrial.is_industrial_device(cmd.device):
+                    supervised_task(
+                        self.industrial.execute_command(
+                            cmd.device, cmd.capability, cmd.params.get("value"),
+                        ),
+                        name=f"industrial-cmd-{cmd.device}",
+                    )
+                else:
+                    env = command_to_envelope(cmd, source=self.node_id)
+                    supervised_task(
+                        self.transport.send(env),
+                        name=f"automation-cmd-{cmd.device}",
+                    )
+
+    async def execute_industrial_command(
+        self, node_id: str, capability: str, value: Any,
+    ) -> bool:
+        """Write a value to a PLC device. Returns True on success."""
+        if self.industrial is None:
+            logger.warning("[MeshChannel] industrial bridge not configured")
+            return False
+        return await self.industrial.execute_command(node_id, capability, value)
 
 
 def _default_node_id() -> str:
