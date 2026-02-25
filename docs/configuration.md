@@ -403,7 +403,8 @@ The LAN Mesh enables **device-to-device communication** on the same local networ
       "otaChunkSize": 4096,                   // Bytes per OTA transfer chunk (default 4KB)
       "otaChunkTimeout": 30,                  // Seconds to wait for chunk ACK
       "groupsPath": "",                       // Path to groups.json (default: <workspace>/groups.json)
-      "scenesPath": ""                        // Path to scenes.json (default: <workspace>/scenes.json)
+      "scenesPath": "",                       // Path to scenes.json (default: <workspace>/scenes.json)
+      "dashboardPort": 0                        // HTTP port for monitoring dashboard (0 = disabled)
     }
   }
 }
@@ -435,6 +436,7 @@ The LAN Mesh enables **device-to-device communication** on the same local networ
 | `otaChunkTimeout` | int | `30` | Seconds to wait for a device to acknowledge a firmware chunk before considering it lost. |
 | `groupsPath` | string | `""` | Path to device groups JSON file. Empty = `<workspace>/groups.json`. Groups are named collections of device node_ids (e.g., "living_room"). |
 | `scenesPath` | string | `""` | Path to scenes JSON file. Empty = `<workspace>/scenes.json`. Scenes are named batches of device commands (e.g., "good_night"). |
+| `dashboardPort` | int | `0` | HTTP port for the monitoring dashboard. When > 0, an embedded web dashboard starts at `http://<host>:<port>/` with JSON API at `/api/*`. Set to `0` (default) to disable. |
 
 ### Example: Smart Home Setup
 

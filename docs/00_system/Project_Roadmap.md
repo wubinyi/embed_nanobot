@@ -69,7 +69,7 @@ All Phase 1 foundation tasks are done. Ready to begin Phase 2: Device Ecosystem.
 |---|------|----------|------------|--------------|
 | 3.4 | Device grouping and scenes | P1 | M | Registry (2.1) | **Done** (2026-02-25) |
 | 3.5 | Error recovery and fault tolerance | P1 | M | All mesh components | **Done** (2026-02-25) |
-| 3.6 | Monitoring dashboard (web UI) | P2 | L | Registry (2.1) |
+| 3.6 | Monitoring dashboard (web UI) | P2 | L | Registry (2.1) | **Done** (2026-02-26) |
 
 ---
 
@@ -296,3 +296,14 @@ See [docs/sync/SYNC_LOG.md](../sync/SYNC_LOG.md) for full merge history.
 - Docs per feature: `docs/01_features/fXX_<name>/{01_Design_Log, 02_Dev_Implementation, 03_Test_Report}.md`
 - Code placement: Custom code in separate modules, append to existing configs
 - Tests: `tests/test_<module>.py`, pytest + pytest-asyncio
+### 2026-02-26 — Task 3.6: Monitoring Dashboard Complete — Phase 3 Done
+- **Zero-dependency HTTP dashboard** (`nanobot/mesh/dashboard.py`, ~478 LOC): `MeshDashboard` class built on stdlib `asyncio.start_server`. No aiohttp/flask/fastapi.
+- **9 API endpoints**: `/api/status`, `/api/devices`, `/api/peers`, `/api/groups`, `/api/scenes`, `/api/rules`, `/api/ota`, `/api/firmware`, `/` (HTML).
+- **Embedded single-page HTML dashboard**: Dark theme, auto-refresh (5s polling), stat cards, device/peer/group/rule/OTA tables, status badges, timeAgo formatting. Zero external JS/CSS dependencies.
+- **Data access pattern**: `data_fn` closure returns dict of existing managers — dashboard is read-only observer, zero coupling to mesh state.
+- **Channel integration**: Dashboard created when `dashboard_port > 0`, started after transport (non-critical), stopped with error isolation.
+- **`isinstance(raw, int)` pattern**: Discovered that `getattr(config, "field", 0) or 0` fails with MagicMock configs (returns truthy MagicMock). Defensive `isinstance` guard adopted.
+- **1 config field** appended to MeshConfig: `dashboard_port` (default 0 = disabled).
+- **31 new tests** across 12 test classes (674 total, zero regressions): lifecycle, all 9 endpoints, error handling (404/405/500), CORS, serialization edge cases, concurrency, channel integration config wiring.
+- **Phase 3 Production Hardening complete**: mTLS (3.1) + CRL (3.2) + OTA (3.3) + Groups/Scenes (3.4) + Error Recovery (3.5) + Dashboard (3.6). 674 tests.
+- **Next phase**: Phase 4 — Smart Factory Extension. First task: 4.1 (PLC/industrial device integration).
