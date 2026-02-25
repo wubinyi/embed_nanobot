@@ -405,7 +405,8 @@ The LAN Mesh enables **device-to-device communication** on the same local networ
       "groupsPath": "",                       // Path to groups.json (default: <workspace>/groups.json)
       "scenesPath": "",                       // Path to scenes.json (default: <workspace>/scenes.json)
       "dashboardPort": 0,                       // HTTP port for monitoring dashboard (0 = disabled)
-      "industrialConfigPath": ""                 // Path to PLC/industrial bridge config JSON (empty = disabled)
+      "industrialConfigPath": "",                 // Path to PLC/industrial bridge config JSON (empty = disabled)
+      "federationConfigPath": ""                 // Path to hub federation config JSON (empty = disabled)
     }
   }
 }
@@ -439,6 +440,7 @@ The LAN Mesh enables **device-to-device communication** on the same local networ
 | `scenesPath` | string | `""` | Path to scenes JSON file. Empty = `<workspace>/scenes.json`. Scenes are named batches of device commands (e.g., "good_night"). |
 | `dashboardPort` | int | `0` | HTTP port for the monitoring dashboard. When > 0, an embedded web dashboard starts at `http://<host>:<port>/` with JSON API at `/api/*`. Set to `0` (default) to disable. |
 | `industrialConfigPath` | string | `""` | Path to PLC/industrial bridge configuration JSON file. When set, the Hub loads Modbus TCP (or other protocol) bridges and polls PLC registers. Devices appear in the device registry alongside mesh devices. Empty = disabled. |
+| `federationConfigPath` | string | `""` | Path to hub federation configuration JSON file. When set, the Hub connects to peer hubs for cross-subnet device sharing, command forwarding, and state propagation. Empty = disabled. |
 
 ### Example: Smart Home Setup
 
@@ -568,6 +570,41 @@ In this setup:
 - Automation rules can reference PLC devices (e.g., stop motor when temperature sensor exceeds threshold)
 - Natural language commands work: "Set the assembly line motor speed to 1500 RPM"
 - Requires `pymodbus >= 3.0` (`pip install pymodbus`). Without it, a stub adapter is used (read/write no-ops).
+
+### Example: Multi-Hub Federation
+
+Connect multiple nanobot hubs across different subnets or sites:
+
+**config.json** (on hub-factory-1):
+```jsonc
+{
+  "channels": {
+    "mesh": {
+      "enabled": true,
+      "nodeId": "hub-factory-1",
+      "federationConfigPath": "/path/to/federation.json"
+    }
+  }
+}
+```
+
+**federation.json**:
+```jsonc
+{
+  "peers": [
+    {"hub_id": "hub-factory-2", "host": "192.168.2.100", "port": 18800},
+    {"hub_id": "hub-home", "host": "10.0.0.5", "port": 18800}
+  ],
+  "sync_interval": 30.0
+}
+```
+
+In this setup:
+- Hub connects to peer hubs via persistent TCP connections
+- Device registries are synced every 30 seconds — all hubs see all devices
+- Commands to remote devices are automatically forwarded to the owning hub
+- State changes are propagated across hubs for cross-hub automation
+- If a hub link goes down, remote devices gracefully disappear; reconnection is automatic with exponential backoff
 
 ---
 

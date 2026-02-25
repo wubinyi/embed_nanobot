@@ -412,6 +412,7 @@ JSON structure:
 - **`ota.py`**: `FirmwareStore` (dir-based + JSON manifest), `OTASession` (state machine), `OTAManager` (hub-initiated push OTA over mesh TCP, chunked base64 transfer, SHA-256 integrity)
 - **`dashboard.py`**: `MeshDashboard` — zero-dependency HTTP server (stdlib `asyncio.start_server`) with 9 REST API endpoints and embedded single-page HTML dashboard for monitoring devices, peers, groups, rules, OTA sessions
 - **`industrial.py`**: `IndustrialBridge` — PLC/industrial device integration via protocol adapters; `IndustrialProtocol` ABC, `ModbusTCPAdapter` (pymodbus, Modbus TCP), `StubAdapter` (fallback); JSON config, periodic register polling, device registry integration, automation hooks
+- **`federation.py`**: `FederationManager` — hub-to-hub federation for cross-subnet device access; `HubLink` (persistent bidirectional TCP with auto-reconnect), periodic registry sync, command forwarding (future-based with timeout), state propagation; JSON config with peer hub addresses; 7 new protocol message types (HELLO, SYNC, COMMAND, RESPONSE, STATE, PING, PONG)
 
 The mesh is registered in `nanobot/channels/manager.py` like any other channel and activated via `channels.mesh.enabled: true` in config.
 
