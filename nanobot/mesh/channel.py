@@ -21,6 +21,7 @@ from nanobot.mesh.ca import MeshCA, is_available as ca_is_available
 from nanobot.mesh.commands import command_to_envelope
 from nanobot.mesh.discovery import UDPDiscovery
 from nanobot.mesh.enrollment import EnrollmentService
+from nanobot.mesh.groups import GroupManager
 from nanobot.mesh.ota import FirmwareStore, OTAManager, OTASession
 from nanobot.mesh.protocol import MeshEnvelope, MsgType
 from nanobot.mesh.registry import DeviceCapability, DeviceRegistry
@@ -185,6 +186,28 @@ class MeshChannel(BaseChannel):
                 chunk_size=ota_chunk_size,
                 chunk_ack_timeout=ota_chunk_timeout,
             )
+
+        # --- embed_nanobot: device grouping and scenes (task 3.4) ---
+        groups_path = getattr(config, "groups_path", "") or ""
+        scenes_path = getattr(config, "scenes_path", "") or ""
+        if not groups_path:
+            workspace = getattr(config, "_workspace_path", None)
+            if workspace:
+                groups_path = str(Path(workspace) / "device_groups.json")
+            else:
+                groups_path = str(
+                    Path("~/.nanobot/workspace/device_groups.json").expanduser()
+                )
+        if not scenes_path:
+            workspace = getattr(config, "_workspace_path", None)
+            if workspace:
+                scenes_path = str(Path(workspace) / "device_scenes.json")
+            else:
+                scenes_path = str(
+                    Path("~/.nanobot/workspace/device_scenes.json").expanduser()
+                )
+        self.groups = GroupManager(groups_path, scenes_path)
+        self.groups.load()
 
     # -- mTLS helpers --------------------------------------------------------
 
@@ -405,6 +428,38 @@ class MeshChannel(BaseChannel):
         if self.ota is None:
             return None
         return self.ota.get_status(node_id)
+
+    # -- Groups/Scenes convenience methods (task 3.4) -----------------------
+
+    async def execute_scene(self, scene_id: str) -> list[bool]:
+        """Execute all commands in a scene. Returns per-command send results."""
+        commands = self.groups.get_scene_commands(scene_id)
+        if not commands:
+            return []
+        results: list[bool] = []
+        for cmd in commands:
+            env = command_to_envelope(cmd, source=self.node_id)
+            ok = await self.transport.send(env)
+            results.append(ok)
+        return results
+
+    async def execute_group_command(
+        self,
+        group_id: str,
+        action: str,
+        capability: str = "",
+        params: dict | None = None,
+    ) -> list[bool]:
+        """Fan out a command to all devices in a group. Returns per-device send results."""
+        commands = self.groups.fan_out_group_command(group_id, action, capability, params)
+        if not commands:
+            return []
+        results: list[bool] = []
+        for cmd in commands:
+            env = command_to_envelope(cmd, source=self.node_id)
+            ok = await self.transport.send(env)
+            results.append(ok)
+        return results
 
 
 def _default_node_id() -> str:

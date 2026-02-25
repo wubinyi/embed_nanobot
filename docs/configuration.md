@@ -401,7 +401,9 @@ The LAN Mesh enables **device-to-device communication** on the same local networ
       "deviceCertValidityDays": 365,          // Validity period for device certificates in days
       "firmwareDir": "",                      // Directory for firmware images (empty = OTA disabled)
       "otaChunkSize": 4096,                   // Bytes per OTA transfer chunk (default 4KB)
-      "otaChunkTimeout": 30                   // Seconds to wait for chunk ACK
+      "otaChunkTimeout": 30,                  // Seconds to wait for chunk ACK
+      "groupsPath": "",                       // Path to groups.json (default: <workspace>/groups.json)
+      "scenesPath": ""                        // Path to scenes.json (default: <workspace>/scenes.json)
     }
   }
 }
@@ -431,6 +433,8 @@ The LAN Mesh enables **device-to-device communication** on the same local networ
 | `firmwareDir` | string | `""` | Directory for OTA firmware images and manifest. Empty = OTA disabled. When set, the Hub can push firmware updates to mesh devices. |
 | `otaChunkSize` | int | `4096` | Bytes per OTA transfer chunk. Default 4KB is suitable for ESP32 SRAM. |
 | `otaChunkTimeout` | int | `30` | Seconds to wait for a device to acknowledge a firmware chunk before considering it lost. |
+| `groupsPath` | string | `""` | Path to device groups JSON file. Empty = `<workspace>/groups.json`. Groups are named collections of device node_ids (e.g., "living_room"). |
+| `scenesPath` | string | `""` | Path to scenes JSON file. Empty = `<workspace>/scenes.json`. Scenes are named batches of device commands (e.g., "good_night"). |
 
 ### Example: Smart Home Setup
 
