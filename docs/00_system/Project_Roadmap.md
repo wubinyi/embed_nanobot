@@ -2,7 +2,7 @@
 
 > Single source of truth for project progress. Updated after each feature completion.
 
-**Last updated**: 2026-02-25 (Task 3.3 complete)
+**Last updated**: 2026-02-26 (Task 4.1 complete)
 
 ---
 
@@ -75,9 +75,16 @@ All Phase 1 foundation tasks are done. Ready to begin Phase 2: Device Ecosystem.
 
 ## Phase 4: Smart Factory Extension
 
+### Completed Tasks
+
+| # | Task | Status | Completed | Notes |
+|---|------|--------|-----------|-------|
+| 4.1 | PLC/industrial device integration | Done | 2026-02-26 | `nanobot/mesh/industrial.py` — IndustrialBridge with protocol adapter framework (Modbus TCP via pymodbus, StubAdapter fallback). JSON config, auto-polling, device registry integration, automation hooks. 54 new tests (728 total). |
+
+### Planned Tasks
+
 | # | Task | Priority | Complexity | Dependencies |
 |---|------|----------|------------|--------------|
-| 4.1 | PLC/industrial device integration | P1 | L | Registry (2.1), Commands (2.2) |
 | 4.2 | Multi-Hub federation (hub-to-hub mesh) | P1 | XL | Mesh + mTLS |
 | 4.3 | Device reprogramming (AI-generated code push) | P2 | XL | OTA (3.3), Commands (2.2) |
 | 4.4 | Sensor data pipeline and analytics | P2 | L | Registry (2.1) |
@@ -307,3 +314,15 @@ See [docs/sync/SYNC_LOG.md](../sync/SYNC_LOG.md) for full merge history.
 - **31 new tests** across 12 test classes (674 total, zero regressions): lifecycle, all 9 endpoints, error handling (404/405/500), CORS, serialization edge cases, concurrency, channel integration config wiring.
 - **Phase 3 Production Hardening complete**: mTLS (3.1) + CRL (3.2) + OTA (3.3) + Groups/Scenes (3.4) + Error Recovery (3.5) + Dashboard (3.6). 674 tests.
 - **Next phase**: Phase 4 — Smart Factory Extension. First task: 4.1 (PLC/industrial device integration).
+
+### 2026-02-26b — Task 4.1: PLC/Industrial Device Integration Complete
+- **Protocol adapter framework** (`nanobot/mesh/industrial.py`, ~430 LOC): `IndustrialProtocol` ABC + `ModbusTCPAdapter` (pymodbus >= 3.0, async) + `StubAdapter` (fallback). Protocol registry for extensibility (`register_protocol()`).
+- **Data model**: `PLCPointConfig` (capability/register_type/address/data_type/unit/scale/value_range), `PLCDeviceConfig` (node_id/device_type/name/points), `BridgeConfig` (bridge_id/protocol/host/port/unit_id/poll_interval/devices). All with `from_dict()` constructors.
+- **IndustrialBridge orchestrator**: JSON config loader, lifecycle (connect/disconnect all adapters), periodic polling (per-bridge interval, auto-reconnect), command dispatch (node_id→bridge→adapter routing), device registry integration (registers PLC devices with proper capabilities).
+- **Data types**: bool, uint16, int16, uint32, int32, float32, float64 — decoded from Modbus registers with big-endian struct packing.
+- **Channel integration**: Industrial bridge created when `industrial_config_path` configured, started/stopped with error isolation, state updates trigger automation rules, commands routed to industrial bridge when target is PLC device.
+- **Optional dependency**: `pymodbus >= 3.0` — graceful degradation to StubAdapter when not installed.
+- **1 config field** appended to MeshConfig: `industrial_config_path`.
+- **54 new tests** across 14 classes (728 total, zero regressions): data type codec roundtrips, config parsing, MockAdapter protocol, bridge lifecycle, command dispatch, polling, channel integration.
+- **Zero conflict surface increase**: industrial.py is a new file, schema.py/channel.py have append-only changes.
+- **Phase 4 started**: First smart factory task done. Next task: 4.2 (Multi-Hub federation).

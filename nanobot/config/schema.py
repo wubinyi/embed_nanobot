@@ -202,6 +202,8 @@ class MeshConfig(Base):
     scenes_path: str = ""                    # Path to scenes JSON. Empty = <workspace>/device_scenes.json
     # --- embed_nanobot extensions: monitoring dashboard (task 3.6) ---
     dashboard_port: int = 0                  # HTTP port for mesh dashboard. 0 = disabled.
+    # --- embed_nanobot extensions: PLC/industrial integration (task 4.1) ---
+    industrial_config_path: str = ""         # Path to industrial_config.json. Empty = disabled.
 
 
 class ChannelsConfig(Base):

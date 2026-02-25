@@ -404,7 +404,8 @@ The LAN Mesh enables **device-to-device communication** on the same local networ
       "otaChunkTimeout": 30,                  // Seconds to wait for chunk ACK
       "groupsPath": "",                       // Path to groups.json (default: <workspace>/groups.json)
       "scenesPath": "",                       // Path to scenes.json (default: <workspace>/scenes.json)
-      "dashboardPort": 0                        // HTTP port for monitoring dashboard (0 = disabled)
+      "dashboardPort": 0,                       // HTTP port for monitoring dashboard (0 = disabled)
+      "industrialConfigPath": ""                 // Path to PLC/industrial bridge config JSON (empty = disabled)
     }
   }
 }
@@ -437,6 +438,7 @@ The LAN Mesh enables **device-to-device communication** on the same local networ
 | `groupsPath` | string | `""` | Path to device groups JSON file. Empty = `<workspace>/groups.json`. Groups are named collections of device node_ids (e.g., "living_room"). |
 | `scenesPath` | string | `""` | Path to scenes JSON file. Empty = `<workspace>/scenes.json`. Scenes are named batches of device commands (e.g., "good_night"). |
 | `dashboardPort` | int | `0` | HTTP port for the monitoring dashboard. When > 0, an embedded web dashboard starts at `http://<host>:<port>/` with JSON API at `/api/*`. Set to `0` (default) to disable. |
+| `industrialConfigPath` | string | `""` | Path to PLC/industrial bridge configuration JSON file. When set, the Hub loads Modbus TCP (or other protocol) bridges and polls PLC registers. Devices appear in the device registry alongside mesh devices. Empty = disabled. |
 
 ### Example: Smart Home Setup
 
@@ -499,6 +501,73 @@ Use cases:
 - **`allowUnauthenticated` (dev only)**: Set to `true` during development to accept unsigned messages with a warning. **Never enable in production.**
 - **Encryption (default: enabled)**: Message payloads are encrypted with AES-256-GCM using a key derived from the device's PSK (`HMAC-SHA256(PSK, "mesh-encrypt-v1")`). Only CHAT, COMMAND, and RESPONSE payloads are encrypted; heartbeats and enrollment messages are plaintext. Requires the `cryptography` package (`pip install cryptography`). Set `encryptionEnabled` to `false` to disable.
 - **mTLS (optional)**: When `mtlsEnabled` is `true`, the Hub runs a local Certificate Authority and wraps all TCP connections with mutual TLS (EC P-256 certs). Devices receive certificates during enrollment. TLS provides both authentication and encryption at the transport layer, so HMAC and AES-GCM layers are automatically skipped (redundant). CA and device private keys are stored with `0600` permissions.
+
+### Example: PLC / Industrial Device Integration
+
+Connect Modbus TCP PLCs to nanobot using an industrial bridge config file:
+
+**config.json** (nanobot main config):
+```jsonc
+{
+  "channels": {
+    "mesh": {
+      "enabled": true,
+      "nodeId": "factory-hub",
+      "industrialConfigPath": "/path/to/plc_bridges.json"
+    }
+  }
+}
+```
+
+**plc_bridges.json** (industrial bridge config):
+```jsonc
+{
+  "bridges": [
+    {
+      "bridge_id": "plc-line-1",
+      "protocol": "modbus_tcp",
+      "host": "192.168.1.100",
+      "port": 502,
+      "unit_id": 1,
+      "poll_interval": 2.0,
+      "devices": [
+        {
+          "node_id": "plc-line-1-motor",
+          "device_type": "motor_controller",
+          "name": "Assembly Line 1 Motor",
+          "points": [
+            {
+              "capability": "speed",
+              "cap_type": "number",
+              "register_type": "holding",
+              "address": 0,
+              "data_type": "uint16",
+              "unit": "RPM",
+              "scale": 1.0,
+              "value_range": [0, 3000]
+            },
+            {
+              "capability": "running",
+              "cap_type": "boolean",
+              "register_type": "coil",
+              "address": 0,
+              "data_type": "bool"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+In this setup:
+- The Hub connects to PLC at 192.168.1.100:502 via Modbus TCP
+- Registers are polled every 2 seconds
+- PLC devices appear in the device registry alongside mesh devices
+- Automation rules can reference PLC devices (e.g., stop motor when temperature sensor exceeds threshold)
+- Natural language commands work: "Set the assembly line motor speed to 1500 RPM"
+- Requires `pymodbus >= 3.0` (`pip install pymodbus`). Without it, a stub adapter is used (read/write no-ops).
 
 ---
 
