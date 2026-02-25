@@ -25,6 +25,7 @@ from nanobot.mesh.enrollment import EnrollmentService
 from nanobot.mesh.federation import FederationManager
 from nanobot.mesh.groups import GroupManager
 from nanobot.mesh.industrial import IndustrialBridge
+from nanobot.mesh.pipeline import SensorPipeline
 from nanobot.mesh.ota import FirmwareStore, OTAManager, OTASession
 from nanobot.mesh.protocol import MeshEnvelope, MsgType
 from nanobot.mesh.registry import DeviceCapability, DeviceRegistry
@@ -228,6 +229,7 @@ class MeshChannel(BaseChannel):
                     "ota": self.ota,
                     "firmware_store": self.firmware_store,
                     "node_id": self.node_id,
+                    "pipeline": self.pipeline,
                 },
             )
 
@@ -254,6 +256,30 @@ class MeshChannel(BaseChannel):
             )
             self.federation.set_local_command_handler(self._execute_local_command)
             self.federation.load()
+
+        # --- embed_nanobot: sensor data pipeline (task 4.4) ---
+        pipeline_enabled = getattr(config, "pipeline_enabled", False) is True
+        pipeline_path = getattr(config, "pipeline_path", "") or ""
+        _raw_max = getattr(config, "pipeline_max_points", 10000)
+        pipeline_max_points = _raw_max if isinstance(_raw_max, int) else 10000
+        _raw_flush = getattr(config, "pipeline_flush_interval", 60)
+        pipeline_flush_interval = _raw_flush if isinstance(_raw_flush, int) else 60
+        self.pipeline: SensorPipeline | None = None
+        if pipeline_enabled:
+            if not pipeline_path:
+                workspace = getattr(config, "_workspace_path", None)
+                if workspace:
+                    pipeline_path = str(Path(workspace) / "sensor_data.json")
+                else:
+                    pipeline_path = str(
+                        Path("~/.nanobot/workspace/sensor_data.json").expanduser()
+                    )
+            self.pipeline = SensorPipeline(
+                path=pipeline_path,
+                max_points=pipeline_max_points,
+                flush_interval=float(pipeline_flush_interval),
+            )
+            self.pipeline.load()
 
     # -- mTLS helpers --------------------------------------------------------
 
@@ -336,6 +362,12 @@ class MeshChannel(BaseChannel):
                 await self.federation.start()
             except Exception as exc:
                 logger.error("[MeshChannel] federation start failed: {}", exc)
+        # --- embed_nanobot: sensor data pipeline (task 4.4) ---
+        if self.pipeline is not None:
+            try:
+                await self.pipeline.start()
+            except Exception as exc:
+                logger.error("[MeshChannel] pipeline start failed: {}", exc)
         logger.info(
             f"[MeshChannel] started: node={self.node_id} "
             f"tcp={self.tcp_port} udp={self.udp_port}"
@@ -371,6 +403,12 @@ class MeshChannel(BaseChannel):
                 await self.federation.stop()
             except Exception as exc:
                 logger.error("[MeshChannel] federation stop error: {}", exc)
+        # --- embed_nanobot: sensor data pipeline (task 4.4) ---
+        if self.pipeline is not None:
+            try:
+                await self.pipeline.stop()
+            except Exception as exc:
+                logger.error("[MeshChannel] pipeline stop error: {}", exc)
         logger.info("[MeshChannel] stopped")
 
     async def send(self, msg: OutboundMessage) -> None:
@@ -459,6 +497,10 @@ class MeshChannel(BaseChannel):
                 f"[MeshChannel] STATE_REPORT from unregistered device {env.source}"
             )
             return
+
+        # --- embed_nanobot: record sensor data (task 4.4) ---
+        if self.pipeline is not None:
+            self.pipeline.record_state(env.source, state_data)
 
         # --- embed_nanobot: evaluate automation rules (task 2.6) ---
         if self.automation:

@@ -87,7 +87,7 @@ All Phase 1 foundation tasks are done. Ready to begin Phase 2: Device Ecosystem.
 | # | Task | Priority | Complexity | Dependencies |
 |---|------|----------|------------|--------------|
 | 4.3 | Device reprogramming (AI-generated code push) | P2 | XL | OTA (3.3), Commands (2.2) |
-| 4.4 | Sensor data pipeline and analytics | P2 | L | Registry (2.1) |
+| ~~4.4~~ | ~~Sensor data pipeline and analytics~~ | ~~P2~~ | ~~L~~ | ~~Registry (2.1)~~ | **Done** 2026-02-26 |
 | 4.5 | BLE mesh support for battery-powered sensors | P2 | L | Mesh transport abstraction |
 
 ---
@@ -339,4 +339,15 @@ See [docs/sync/SYNC_LOG.md](../sync/SYNC_LOG.md) for full merge history.
 - **44 new tests** across 18 test classes (772 total, zero regressions): config parsing, HubLink send/lifecycle, sync/stale removal, command forward/timeout/handling, response resolution, state propagation, ping/pong, queries, message dispatch, channel integration.
 - **Zero new dependencies** — uses stdio asyncio TCP only.
 - **Zero conflict surface increase**: federation.py is a new file, protocol.py/schema.py/channel.py have append-only changes.
-- **Next tasks**: 4.3 (Device reprogramming, P2/XL), 4.4 (Sensor data pipeline, P2/L), 4.5 (BLE mesh, P2/L).
+- **Next tasks**: 4.3 (Device reprogramming, P2/XL), 4.5 (BLE mesh, P2/L).
+
+### Strategic Note — Task 4.4 (Sensor Data Pipeline) — 2026-02-26
+
+- **Architecture**: In-memory ring buffers (`collections.deque(maxlen=N)`) per (device, capability). JSON persistence with configurable auto-flush. Zero external dependencies.
+- **Auto-recording**: Hooks into `_handle_state_report()` in channel.py. Every numeric/boolean STATE_REPORT value is automatically recorded.
+- **Analytics**: 7 aggregation functions (min/max/avg/sum/count/median/stdev) with time-range filtering. `summary()` produces LLM-friendly Markdown.
+- **Config**: 4 fields appended to MeshConfig: `pipeline_enabled`, `pipeline_path`, `pipeline_max_points`, `pipeline_flush_interval`.
+- **Integration**: Pipeline added to dashboard `data_fn` for monitoring. Channel auto-creates when `pipeline_enabled=True`.
+- **72 new tests** across 14 test classes (844 total, zero regressions).
+- **Zero conflict surface increase**: pipeline.py is a new file, schema.py/channel.py have append-only changes.
+- **Next**: This completes all L-complexity tasks. Remaining: 4.3 (XL) and 4.5 (L).
