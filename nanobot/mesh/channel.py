@@ -7,6 +7,7 @@ when multiple nanobots run on the same network.
 
 from __future__ import annotations
 
+import ssl
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,7 @@ from nanobot.bus.events import OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.channels.base import BaseChannel
 from nanobot.mesh.automation import AutomationEngine
+from nanobot.mesh.ca import MeshCA, is_available as ca_is_available
 from nanobot.mesh.commands import command_to_envelope
 from nanobot.mesh.discovery import UDPDiscovery
 from nanobot.mesh.enrollment import EnrollmentService
@@ -71,6 +73,34 @@ class MeshChannel(BaseChannel):
             udp_port=self.udp_port,
             roles=roles,
         )
+        # --- embed_nanobot: mTLS certificate authority (task 3.1) ---
+        mtls_enabled = getattr(config, "mtls_enabled", False) is True
+        ca_dir = getattr(config, "ca_dir", "") or ""
+        device_cert_validity_days = getattr(config, "device_cert_validity_days", None)
+        if not isinstance(device_cert_validity_days, int) or device_cert_validity_days <= 0:
+            device_cert_validity_days = 365
+
+        self.ca: MeshCA | None = None
+        server_ssl_ctx = None
+        client_ssl_factory = None
+
+        if mtls_enabled and ca_is_available():
+            if not ca_dir:
+                workspace = getattr(config, "_workspace_path", None)
+                if workspace:
+                    ca_dir = str(Path(workspace) / "mesh_ca")
+                else:
+                    ca_dir = str(
+                        Path("~/.nanobot/workspace/mesh_ca").expanduser()
+                    )
+            self.ca = MeshCA(
+                ca_dir=ca_dir,
+                device_cert_validity_days=device_cert_validity_days,
+            )
+            self.ca.initialize()
+            server_ssl_ctx = self.ca.create_server_ssl_context()
+            client_ssl_factory = self._make_client_ssl
+
         # --- embed_nanobot: payload encryption (task 1.11) ---
         encryption_enabled = getattr(config, "encryption_enabled", True)
         self.transport = MeshTransport(
@@ -81,6 +111,8 @@ class MeshChannel(BaseChannel):
             psk_auth_enabled=psk_auth_enabled,
             allow_unauthenticated=allow_unauthenticated,
             encryption_enabled=encryption_enabled,
+            server_ssl_context=server_ssl_ctx,
+            client_ssl_context_factory=client_ssl_factory,
         )
         self.transport.on_message(self._on_mesh_message)
 
@@ -98,6 +130,7 @@ class MeshChannel(BaseChannel):
                 pin_length=enrollment_pin_length,
                 pin_timeout=enrollment_pin_timeout,
                 max_attempts=enrollment_max_attempts,
+                ca=self.ca,
             )
             self.transport.enrollment_service = self.enrollment
 
@@ -130,6 +163,15 @@ class MeshChannel(BaseChannel):
                 )
         self.automation = AutomationEngine(self.registry, path=automation_rules_path)
         self.automation.load()
+
+    # -- mTLS helpers --------------------------------------------------------
+
+    def _make_client_ssl(self, target_node_id: str) -> ssl.SSLContext | None:
+        """Create a client SSL context for connecting to *target_node_id*."""
+        if self.ca is None:
+            return None
+        # Use the Hub's own cert for outgoing mTLS connections.
+        return self.ca.create_client_ssl_context("hub")
 
     # -- BaseChannel interface -----------------------------------------------
 

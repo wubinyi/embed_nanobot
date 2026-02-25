@@ -12,6 +12,7 @@ on a low-latency LAN.
 from __future__ import annotations
 
 import asyncio
+import ssl as _ssl
 from typing import Awaitable, Callable
 
 from loguru import logger
@@ -56,6 +57,8 @@ class MeshTransport:
         psk_auth_enabled: bool = True,
         allow_unauthenticated: bool = False,
         encryption_enabled: bool = True,
+        server_ssl_context: _ssl.SSLContext | None = None,
+        client_ssl_context_factory: Callable[[str], _ssl.SSLContext | None] | None = None,
     ):
         self.node_id = node_id
         self.discovery = discovery
@@ -71,6 +74,10 @@ class MeshTransport:
         self.encryption_enabled = encryption_enabled
         # --- embed_nanobot extensions: device enrollment (task 1.10) ---
         self.enrollment_service: EnrollmentService | None = None
+        # --- embed_nanobot extensions: mTLS (task 3.1) ---
+        self.server_ssl_context = server_ssl_context
+        self._client_ssl_factory = client_ssl_context_factory
+        self.tls_enabled = server_ssl_context is not None
 
     # -- handler registration ------------------------------------------------
 
@@ -86,10 +93,12 @@ class MeshTransport:
             self._handle_connection,
             self.host,
             self.tcp_port,
+            ssl=self.server_ssl_context,
         )
+        tls_tag = " (mTLS)" if self.tls_enabled else ""
         logger.info(
             f"[Mesh/Transport] listening on {self.host}:{self.tcp_port} "
-            f"as node={self.node_id}"
+            f"as node={self.node_id}{tls_tag}"
         )
 
     async def stop(self) -> None:
@@ -112,10 +121,13 @@ class MeshTransport:
             if env is None:
                 return
             # --- embed_nanobot: PSK authentication check ---
-            if not self._verify_inbound(env):
-                return
-            # --- embed_nanobot: decrypt payload after auth verification ---
-            self._decrypt_inbound(env)
+            # When TLS is active, transport-level auth is already done;
+            # skip HMAC verification and AES-GCM decryption.
+            if not self.tls_enabled:
+                if not self._verify_inbound(env):
+                    return
+                # --- embed_nanobot: decrypt payload after auth verification ---
+                self._decrypt_inbound(env)
             logger.debug(
                 f"[Mesh/Transport] received {env.type} from {env.source}"
             )
@@ -171,10 +183,13 @@ class MeshTransport:
     async def _send_to(self, peer: PeerInfo, env: MeshEnvelope) -> bool:
         try:
             # --- embed_nanobot: encrypt then sign outbound envelopes ---
-            self._encrypt_outbound(env)
-            self._sign_outbound(env)
+            # When TLS is active, skip HMAC/AES-GCM (TLS handles both).
+            if not self.tls_enabled:
+                self._encrypt_outbound(env)
+                self._sign_outbound(env)
+            client_ssl = self._get_client_ssl(env.target) if self.tls_enabled else None
             reader, writer = await asyncio.wait_for(
-                asyncio.open_connection(peer.ip, peer.tcp_port),
+                asyncio.open_connection(peer.ip, peer.tcp_port, ssl=client_ssl),
                 timeout=5.0,
             )
             write_envelope(writer, env)
@@ -188,6 +203,25 @@ class MeshTransport:
                 f"@ {peer.ip}:{peer.tcp_port}: {exc}"
             )
             return False
+
+    # -- embed_nanobot: mTLS helpers (task 3.1) ------------------------------
+
+    def _get_client_ssl(self, target_node_id: str) -> _ssl.SSLContext | None:
+        """Return an SSL context for connecting to *target_node_id*.
+
+        Uses the factory callback set by the channel, which queries the CA
+        for the device's certificate.
+        """
+        if self._client_ssl_factory is None:
+            return None
+        try:
+            return self._client_ssl_factory(target_node_id)
+        except Exception as exc:
+            logger.warning(
+                "[Mesh/Transport] failed to create client SSL for {}: {}",
+                target_node_id, exc,
+            )
+            return None
 
     # -- embed_nanobot: PSK authentication helpers (task 1.9) ----------------
 

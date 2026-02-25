@@ -34,6 +34,7 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 if TYPE_CHECKING:
+    from nanobot.mesh.ca import MeshCA
     from nanobot.mesh.security import KeyStore
     from nanobot.mesh.transport import MeshTransport
 
@@ -104,6 +105,7 @@ class EnrollmentService:
         pin_length: int = 6,
         pin_timeout: int = 300,
         max_attempts: int = 3,
+        ca: MeshCA | None = None,
     ) -> None:
         self.key_store = key_store
         self.transport = transport
@@ -111,6 +113,8 @@ class EnrollmentService:
         self.pin_length = pin_length
         self.pin_timeout = pin_timeout
         self.max_attempts = max_attempts
+        # --- embed_nanobot extensions: mTLS certificate issuance (task 3.1) ---
+        self.ca: MeshCA | None = ca
 
         self._pending: PendingEnrollment | None = None
 
@@ -208,16 +212,36 @@ class EnrollmentService:
         # Mark PIN as used
         self._pending.used = True
 
+        # Build response payload
+        resp_payload: dict[str, str] = {
+            "status": "ok",
+            "encrypted_psk": encrypted_psk.hex(),
+            "salt": salt.hex(),
+        }
+
+        # --- embed_nanobot: issue mTLS certificate if CA is available (task 3.1) ---
+        if self.ca is not None:
+            try:
+                cert_pem, key_pem = self.ca.issue_device_cert(device_id)
+                resp_payload["cert_pem"] = cert_pem.decode("utf-8")
+                resp_payload["key_pem"] = key_pem.decode("utf-8")
+                resp_payload["ca_cert_pem"] = self.ca.get_ca_cert_pem().decode("utf-8")
+                logger.info(
+                    "[Mesh/Enrollment] issued mTLS certificate for {}",
+                    device_id,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "[Mesh/Enrollment] cert issuance failed for {}: {}",
+                    device_id, exc,
+                )
+
         # Send response
         response = MeshEnvelope(
             type=MsgType.ENROLL_RESPONSE,
             source=self.node_id,
             target=device_id,
-            payload={
-                "status": "ok",
-                "encrypted_psk": encrypted_psk.hex(),
-                "salt": salt.hex(),
-            },
+            payload=resp_payload,
         )
         ok = await self.transport.send_to_address(
             ip=env.payload.get("_reply_ip", ""),
