@@ -197,6 +197,9 @@ class MeshConfig(Base):
     firmware_dir: str = ""                   # Directory for firmware images. Empty = OTA disabled.
     ota_chunk_size: int = 4096               # Bytes per OTA chunk (default 4KB, suitable for ESP32)
     ota_chunk_timeout: int = 30              # Seconds to wait for chunk ACK before retry
+    # --- embed_nanobot extensions: device grouping and scenes (task 3.4) ---
+    groups_path: str = ""                    # Path to device groups JSON. Empty = <workspace>/device_groups.json
+    scenes_path: str = ""                    # Path to scenes JSON. Empty = <workspace>/device_scenes.json
 
 
 class ChannelsConfig(Base):

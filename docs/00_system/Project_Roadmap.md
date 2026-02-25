@@ -67,7 +67,7 @@ All Phase 1 foundation tasks are done. Ready to begin Phase 2: Device Ecosystem.
 
 | # | Task | Priority | Complexity | Dependencies |
 |---|------|----------|------------|--------------|
-| 3.4 | Device grouping and scenes | P1 | M | Registry (2.1) |
+| 3.4 | Device grouping and scenes | P1 | M | Registry (2.1) | **Done** (2026-02-25) |
 | 3.5 | Error recovery and fault tolerance | P1 | M | All mesh components |
 | 3.6 | Monitoring dashboard (web UI) | P2 | L | Registry (2.1) |
 
@@ -253,6 +253,16 @@ See [docs/sync/SYNC_LOG.md](../sync/SYNC_LOG.md) for full merge history.
 - **Zero new dependencies** — uses stdlib only (hashlib, base64, json, pathlib).
 - **Conflict surface**: +8 enum entries in protocol.py (append-only), +3 fields in schema.py, OTA routing in channel.py. ota.py is new (zero conflict).
 - **Next task**: 3.4 (Device grouping and scenes).
+
+### 2026-02-25e — Task 3.4: Device Grouping and Scenes Complete
+- **DeviceGroup** (named set of node_ids) and **Scene** (named command batch) with CRUD and JSON persistence.
+- **New module** `nanobot/mesh/groups.py` (~306 LOC): `GroupManager` with dual JSON persistence (groups.json, scenes.json), group CRUD (add/remove/list, add/remove device), scene CRUD, execution helpers (`get_scene_commands`, `fan_out_group_command`), LLM context helpers (`describe_groups`, `describe_scenes`).
+- **Channel integration**: `MeshChannel.groups` attribute, `execute_scene(scene_id)` sends all scene commands via transport, `execute_group_command(group_id, action, capability, params)` fans out to all group members.
+- **2 config fields** appended to MeshConfig: `groups_path`, `scenes_path`.
+- **35 new tests** across 8 classes (607 total, zero regressions): data model roundtrips, CRUD, persistence, fan-out, LLM descriptions, channel integration.
+- **Zero new dependencies** — pure stdlib.
+- **Conflict surface**: +2 fields in schema.py, GroupManager import+init+methods in channel.py. groups.py is new (zero conflict).
+- **Next task**: 3.5 (Error recovery and fault tolerance).
 
 ### 2026-02-25c — Task 3.2: Certificate Revocation (CRL) Complete
 - **Application-level revocation** — Python's `ssl` module cannot load CRL files (`load_verify_locations()` only loads CA certs). Switched from OpenSSL CRL enforcement to app-level check in `MeshTransport._handle_connection()`.
