@@ -82,9 +82,9 @@ All Phase 1 foundation tasks are done. Ready to begin Phase 2: Device Ecosystem.
 
 | Metric | Value |
 |--------|-------|
-| Last sync date | 2026-02-18b |
-| `origin/main` HEAD | ce4f005 |
-| `upstream/main` HEAD | ce4f005 |
+| Last sync date | 2026-02-25 |
+| `origin/main` HEAD | 9e806d7 |
+| `upstream/main` HEAD | 9e806d7 |
 | Commits behind | 0 (fully synced) |
 | Next sync target | On-demand, before next feature task |
 
@@ -210,6 +210,16 @@ See [docs/sync/SYNC_LOG.md](../sync/SYNC_LOG.md) for full merge history.
 - **1 config field** appended to MeshConfig: `automation_rules_path`.
 - **Conflict surface**: +26 lines in channel.py, +1 field in schema.py. New file zero conflict.
 - **Next tasks**: 2.7 (Cloud API fallback, P2/S), 2.5 (ESP32 SDK, P1/L — hardware-dependent, may defer).
+
+### 2026-02-25 — Major Upstream Sync (276 commits, v0.1.4 era)
+- **276 upstream commits merged** (148 non-merge) — largest sync to date. Tags: v0.1.4, v0.1.4.post1, v0.1.4.post2.
+- **Key upstream changes**: workspace/→nanobot/templates/ migration, memory consolidation extraction, CLI bus routing refactor, BaseChannel._handle_message session_key param, VolcEngine provider, Mochat channel, prompt caching, progress streaming, tool hints, HeartbeatService refactored to virtual tool-call decision (HEARTBEAT_OK_TOKEN removed), agent defaults changed (temp 0.1, max_iter 40, memory_window 100), dependencies pinned with upper bounds.
+- **3 conflicts resolved**: manager.py (accept Mochat block + adopt loguru format for QQ, re-append mesh), commands.py (accept skills mkdir), pyproject.toml (accept upstream pinned versions, re-append cryptography).
+- **1 upstream test fixed**: test_heartbeat_service.py imported removed HEARTBEAT_OK_TOKEN and used obsolete on_heartbeat constructor — updated to use mock provider with current API.
+- **All 438 tests pass** (was 414 pre-sync — gained 24 upstream tests: heartbeat, memory consolidation types, context prompt cache, cron commands/service).
+- **Convention updates**: loguru `{}` formatting now mandatory (no f-strings in loggers), dep versions must have upper bounds, workspace dir gone (use nanobot/templates/).
+- **Conflict surface updated**: Removed providers/registry.py (no custom mods). Added tests/test_heartbeat_service.py.
+- **Phase 2 remains complete**. Ready for Phase 3 (Production Hardening) when user chooses.
 
 ### Conventions Reminder
 - Feature branches: `copilot/<feature-name>` from `main_embed`

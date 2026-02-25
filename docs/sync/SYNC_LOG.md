@@ -2,7 +2,7 @@
 
 Tracks all merges from `HKUDS/nanobot` (upstream) `main` into our `main_embed` branch.
 
-**Last updated**: 2026-02-18
+**Last updated**: 2026-02-25
 
 ---
 
@@ -17,8 +17,9 @@ Tracks all merges from `HKUDS/nanobot` (upstream) `main` into our `main_embed` b
 | 2026-02-17b | 8053193 | 22 (11 non-merge) | README.md | Telegram media, GitHub Copilot provider, cron timezone, ClawHub skill | [2026-02-17b details](2026-02-17b_sync_details.md) |
 | 2026-02-18 | 7f8a3df | 20 | schema.py, commands.py | Pydantic Base class, Mochat channel, CustomProvider, Slack enhancements, Docker Compose | [2026-02-18 details](2026-02-18_sync_details.md) |
 | 2026-02-18b | ce4f005 | 9 (4 non-merge) | None | SiliconFlow provider, workspace-scoped sessions, tool metadata in history | [2026-02-18b details](2026-02-18b_sync_details.md) |
+| 2026-02-25 | 9e806d7 | 276 (148 non-merge) | manager.py (×2), commands.py, pyproject.toml | v0.1.4 era: workspace→templates migration, memory consolidation types, VolcEngine provider, Mochat channel, HeartbeatService refactor, prompt caching, progress streaming, agent defaults (temp 0.1, max_iter 40), pinned dep versions | [2026-02-25 details](2026-02-25_sync_details.md) |
 
-**Current status**: Fully synced with upstream/main (`ce4f005`). 0 commits pending.
+**Current status**: Fully synced with upstream/main (`9e806d7`). 0 commits pending.
 
 ---
 
@@ -49,13 +50,13 @@ Files we modify that also exist upstream — the merge conflict risk area:
 
 | Our File | Our Changes | Risk |
 |----------|-------------|------|
-| `nanobot/config/schema.py` | Appended `MeshConfig(Base)`, `HybridRouterConfig(Base)` fields | Medium — upstream changed BaseModel→Base |
-| `nanobot/channels/manager.py` | Appended mesh channel registration | Low — append-only |
-| `nanobot/cli/commands.py` | Added HybridRouterProvider + CustomProvider in `_make_provider()` | Medium — upstream active |
+| `nanobot/config/schema.py` | Appended `MeshConfig(Base)`, `HybridRouterConfig(Base)` fields | Medium — upstream adds fields/models frequently |
+| `nanobot/channels/manager.py` | Appended mesh channel registration (loguru format) | Low — append-only |
+| `nanobot/cli/commands.py` | Added HybridRouterProvider in `_make_provider()`, DeviceControlTool + routing in `gateway()` | Medium — upstream active |
 | `nanobot/providers/__init__.py` | Added hybrid_router export | Low — append-only |
-| `nanobot/providers/registry.py` | Appended hybrid_router ProviderSpec entry | Low — append-only |
 | `README.md` | Added embed_nanobot section at bottom | Medium — upstream updates frequently |
-| `pyproject.toml` | Added deps at end | Low |
+| `pyproject.toml` | Appended `cryptography` dep | Low |
+| `tests/test_heartbeat_service.py` | Fixed stale upstream test (HEARTBEAT_OK_TOKEN removed, constructor changed) | Low — upstream-only file |
 
 ---
 
@@ -72,5 +73,9 @@ Files we modify that also exist upstream — the merge conflict risk area:
 ## Active Convention Notes
 
 - **BaseModel → Base**: All config models must inherit `Base` (not `BaseModel`) since 2026-02-18 upstream change.
+- **Loguru `{}` formatting**: All `logger.warning()`/`logger.info()` use `{}` (loguru native), NOT f-strings. Adopted in 2026-02-25 sync.
 - **Append-only markers**: Our additions in shared files are marked with `# --- embed_nanobot extensions ---`.
+- **Pinned deps with upper bounds**: Upstream now uses version ranges like `>=X.Y.Z,<X+1.0.0`. Our custom deps should follow same pattern.
+- **Agent defaults changed**: temperature=0.1, max_tool_iterations=40, memory_window=100 (upstream 2026-02-25).
+- **workspace/ → nanobot/templates/**: Template files now bundled as package data, not separate workspace/ dir (upstream 2026-02-25).
 - **Next sync**: On-demand, before starting next feature task.
