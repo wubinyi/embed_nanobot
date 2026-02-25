@@ -21,6 +21,7 @@ from nanobot.mesh.ca import MeshCA, is_available as ca_is_available
 from nanobot.mesh.commands import command_to_envelope
 from nanobot.mesh.discovery import UDPDiscovery
 from nanobot.mesh.enrollment import EnrollmentService
+from nanobot.mesh.ota import FirmwareStore, OTAManager, OTASession
 from nanobot.mesh.protocol import MeshEnvelope, MsgType
 from nanobot.mesh.registry import DeviceCapability, DeviceRegistry
 from nanobot.mesh.security import KeyStore
@@ -167,6 +168,24 @@ class MeshChannel(BaseChannel):
         self.automation = AutomationEngine(self.registry, path=automation_rules_path)
         self.automation.load()
 
+        # --- embed_nanobot: OTA firmware update (task 3.3) ---
+        firmware_dir = getattr(config, "firmware_dir", "") or ""
+        ota_chunk_size = getattr(config, "ota_chunk_size", 4096)
+        ota_chunk_timeout = getattr(config, "ota_chunk_timeout", 30)
+
+        self.firmware_store: FirmwareStore | None = None
+        self.ota: OTAManager | None = None
+        if firmware_dir:
+            self.firmware_store = FirmwareStore(firmware_dir)
+            self.firmware_store.load()
+            self.ota = OTAManager(
+                store=self.firmware_store,
+                send_fn=self.transport.send,
+                node_id=self.node_id,
+                chunk_size=ota_chunk_size,
+                chunk_ack_timeout=ota_chunk_timeout,
+            )
+
     # -- mTLS helpers --------------------------------------------------------
 
     def _make_client_ssl(self, target_node_id: str) -> ssl.SSLContext | None:
@@ -255,6 +274,16 @@ class MeshChannel(BaseChannel):
         # --- embed_nanobot: handle state reports (task 2.1) ---
         if env.type == MsgType.STATE_REPORT:
             await self._handle_state_report(env)
+            return
+
+        # --- embed_nanobot: handle OTA messages (task 3.3) ---
+        _OTA_TYPES = (
+            MsgType.OTA_ACCEPT, MsgType.OTA_REJECT,
+            MsgType.OTA_CHUNK_ACK, MsgType.OTA_VERIFY, MsgType.OTA_ABORT,
+        )
+        if env.type in _OTA_TYPES:
+            if self.ota:
+                await self.ota.handle_ota_message(env)
             return
 
         # Only route actionable types into the agent loop
@@ -353,6 +382,29 @@ class MeshChannel(BaseChannel):
     def get_device_summary(self) -> str:
         """Return human-readable device summary for LLM context."""
         return self.registry.summary()
+
+    # -- OTA convenience methods (task 3.3) ----------------------------------
+
+    async def start_ota_update(
+        self, node_id: str, firmware_id: str, *, chunk_size: int | None = None,
+    ) -> OTASession | None:
+        """Initiate an OTA update for a device. Returns session or None."""
+        if self.ota is None:
+            logger.warning("[MeshChannel] OTA unavailable (firmware_dir not set)")
+            return None
+        return await self.ota.start_update(node_id, firmware_id, chunk_size=chunk_size)
+
+    async def abort_ota_update(self, node_id: str, reason: str = "cancelled") -> bool:
+        """Abort an active OTA update. Returns True if found."""
+        if self.ota is None:
+            return False
+        return await self.ota.abort_update(node_id, reason)
+
+    def get_ota_status(self, node_id: str) -> dict | None:
+        """Return OTA update status for a device."""
+        if self.ota is None:
+            return None
+        return self.ota.get_status(node_id)
 
 
 def _default_node_id() -> str:

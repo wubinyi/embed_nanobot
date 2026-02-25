@@ -2,7 +2,7 @@
 
 > Single source of truth for project progress. Updated after each feature completion.
 
-**Last updated**: 2026-02-25 (Task 3.2 complete)
+**Last updated**: 2026-02-25 (Task 3.3 complete)
 
 ---
 
@@ -61,12 +61,12 @@ All Phase 1 foundation tasks are done. Ready to begin Phase 2: Device Ecosystem.
 |---|------|--------|-----------|-------|
 | 3.1 | mTLS for device authentication (local CA) | Done | 2026-02-25 | `nanobot/mesh/ca.py` — MeshCA: EC P-256 local CA, per-device X.509 cert issuance (CN=node_id), mutual TLS on transport (CERT_REQUIRED), auto-issues hub cert, HMAC+AES-GCM skipped when TLS active, cert during enrollment. 49 new tests (487 total). |
 | 3.2 | Certificate revocation (CRL) | Done | 2026-02-25 | App-level CRL: `revocation_check_fn` callback in transport, `revoke_device_cert()` in CA, dual persistence (revoked.json + crl.pem). Python ssl can't load CRL files — app-level check after TLS handshake. 36 new tests (523 total). |
+| 3.3 | OTA firmware update protocol | Done | 2026-02-25 | `nanobot/mesh/ota.py` — FirmwareStore (dir-based + JSON manifest), OTAManager (state machine: offer→accept→chunks→verify→complete), chunked base64 transfer over mesh TCP, SHA-256 integrity. 8 new MsgType entries. MeshChannel integration. 49 new tests (572 total). |
 
 ### Planned Tasks
 
 | # | Task | Priority | Complexity | Dependencies |
 |---|------|----------|------------|--------------|
-| 3.3 | OTA firmware update protocol | P1 | L | Mesh + Auth |
 | 3.4 | Device grouping and scenes | P1 | M | Registry (2.1) |
 | 3.5 | Error recovery and fault tolerance | P1 | M | All mesh components |
 | 3.6 | Monitoring dashboard (web UI) | P2 | L | Registry (2.1) |
@@ -241,6 +241,18 @@ See [docs/sync/SYNC_LOG.md](../sync/SYNC_LOG.md) for full merge history.
 - **Modified 4 files** (transport.py, enrollment.py, channel.py, schema.py) + 1 new (ca.py) + docs.
 - **Conflict surface**: +1 ssl import in transport.py (our file), +3 fields in schema.py, minor wiring in channel.py. ca.py is new (zero conflict).
 - **Next task**: 3.2 (Certificate revocation / CRL), which depends on this CA infrastructure.
+
+### 2026-02-25d — Task 3.3: OTA Firmware Update Protocol Complete
+- **Hub-initiated push OTA** over existing mesh TCP transport. Firmware stored in a directory with JSON manifest.
+- **New module** `nanobot/mesh/ota.py` (~410 LOC): `FirmwareStore` (CRUD + manifest persistence + chunk reading from disk), `OTASession` (state machine: OFFERED → TRANSFERRING → VERIFYING → COMPLETE/FAILED/REJECTED), `OTAManager` (orchestrates concurrent updates, progress callbacks).
+- **8 new protocol messages**: OTA_OFFER, OTA_ACCEPT, OTA_REJECT, OTA_CHUNK, OTA_CHUNK_ACK, OTA_VERIFY, OTA_COMPLETE, OTA_ABORT.
+- **Chunked transfer**: 4KB default chunks, base64 in JSON payload. Firmware read chunk-by-chunk from disk (no full-file memory load). SHA-256 integrity check.
+- **Channel integration**: MeshChannel creates OTAManager when `firmware_dir` configured, routes OTA messages, provides convenience methods (start_ota_update, abort_ota_update, get_ota_status).
+- **49 new tests** across 11 classes (572 total, zero regressions): store CRUD, session state machine, full protocol flow, chunk data integrity, progress callbacks, edge cases, channel integration.
+- **3 config fields** appended to MeshConfig: `firmware_dir`, `ota_chunk_size`, `ota_chunk_timeout`.
+- **Zero new dependencies** — uses stdlib only (hashlib, base64, json, pathlib).
+- **Conflict surface**: +8 enum entries in protocol.py (append-only), +3 fields in schema.py, OTA routing in channel.py. ota.py is new (zero conflict).
+- **Next task**: 3.4 (Device grouping and scenes).
 
 ### 2026-02-25c — Task 3.2: Certificate Revocation (CRL) Complete
 - **Application-level revocation** — Python's `ssl` module cannot load CRL files (`load_verify_locations()` only loads CA certs). Switched from OpenSSL CRL enforcement to app-level check in `MeshTransport._handle_connection()`.

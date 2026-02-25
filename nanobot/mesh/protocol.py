@@ -41,6 +41,15 @@ class MsgType(str, Enum):
     ENROLL_RESPONSE = "enroll_response"
     # --- embed_nanobot extensions: device registry (task 2.1) ---
     STATE_REPORT = "state_report"
+    # --- embed_nanobot extensions: OTA firmware update (task 3.3) ---
+    OTA_OFFER = "ota_offer"
+    OTA_ACCEPT = "ota_accept"
+    OTA_REJECT = "ota_reject"
+    OTA_CHUNK = "ota_chunk"
+    OTA_CHUNK_ACK = "ota_chunk_ack"
+    OTA_VERIFY = "ota_verify"
+    OTA_COMPLETE = "ota_complete"
+    OTA_ABORT = "ota_abort"
 
 
 @dataclass
