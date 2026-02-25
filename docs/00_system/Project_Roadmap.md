@@ -2,7 +2,7 @@
 
 > Single source of truth for project progress. Updated after each feature completion.
 
-**Last updated**: 2026-02-18 (Task 2.1 complete)
+**Last updated**: 2026-02-25 (Task 3.1 complete)
 
 ---
 
@@ -55,9 +55,16 @@ All Phase 1 foundation tasks are done. Ready to begin Phase 2: Device Ecosystem.
 
 ## Phase 3: Production Hardening
 
+### Completed Tasks
+
+| # | Task | Status | Completed | Notes |
+|---|------|--------|-----------|-------|
+| 3.1 | mTLS for device authentication (local CA) | Done | 2026-02-25 | `nanobot/mesh/ca.py` — MeshCA: EC P-256 local CA, per-device X.509 cert issuance (CN=node_id), mutual TLS on transport (CERT_REQUIRED), auto-issues hub cert, HMAC+AES-GCM skipped when TLS active, cert during enrollment. 49 new tests (487 total). |
+
+### Planned Tasks
+
 | # | Task | Priority | Complexity | Dependencies |
 |---|------|----------|------------|--------------|
-| 3.1 | mTLS for device authentication (local CA) | P0 | L | PSK auth (1.9) |
 | 3.2 | Certificate revocation (CRL) | P1 | M | mTLS (3.1) |
 | 3.3 | OTA firmware update protocol | P1 | L | Mesh + Auth |
 | 3.4 | Device grouping and scenes | P1 | M | Registry (2.1) |
@@ -220,6 +227,20 @@ See [docs/sync/SYNC_LOG.md](../sync/SYNC_LOG.md) for full merge history.
 - **Convention updates**: loguru `{}` formatting now mandatory (no f-strings in loggers), dep versions must have upper bounds, workspace dir gone (use nanobot/templates/).
 - **Conflict surface updated**: Removed providers/registry.py (no custom mods). Added tests/test_heartbeat_service.py.
 - **Phase 2 remains complete**. Ready for Phase 3 (Production Hardening) when user chooses.
+
+### Conventions Reminder
+
+### 2026-02-25b — Task 3.1: mTLS Device Authentication Complete
+- **Local CA module** (`nanobot/mesh/ca.py`, ~290 LOC): `MeshCA` class with EC P-256 (SECP256R1) keys for ESP32/mbedTLS compatibility. Generates self-signed root CA (10-year validity), issues per-device X.509 certificates (CN=node_id, 365-day validity, configurable).
+- **Transport TLS integration**: `MeshTransport` accepts `server_ssl_context` and `client_ssl_context_factory`. When TLS active, HMAC verification and AES-GCM encryption are skipped (TLS handles both auth and encryption at transport layer). Zero behavioral change when disabled.
+- **Enrollment cert issuance**: On successful PIN-based enrollment, if CA is available, `EnrollmentService` issues a device certificate and includes `cert_pem`, `key_pem`, `ca_cert_pem` in the response. Backward-compatible: no CA → PSK-only enrollment.
+- **Hub identity**: Hub gets its own cert (CN="hub"), auto-issued on first SSL context creation.
+- **Security**: CA and device private keys stored with `0600` permissions. `ssl.CERT_REQUIRED` on server, TLS 1.2+ minimum, `check_hostname=False` (node_ids aren't DNS names).
+- **3 config fields** appended to MeshConfig: `mtls_enabled`, `ca_dir`, `device_cert_validity_days`.
+- **49 new tests** across 11 test classes (487 total, zero regressions): CA lifecycle, cert validation, TLS handshake (real sockets), wrong-CA rejection, peer CN extraction, transport integration, enrollment integration, channel wiring, config.
+- **Modified 4 files** (transport.py, enrollment.py, channel.py, schema.py) + 1 new (ca.py) + docs.
+- **Conflict surface**: +1 ssl import in transport.py (our file), +3 fields in schema.py, minor wiring in channel.py. ca.py is new (zero conflict).
+- **Next task**: 3.2 (Certificate revocation / CRL), which depends on this CA infrastructure.
 
 ### Conventions Reminder
 - Feature branches: `copilot/<feature-name>` from `main_embed`

@@ -189,6 +189,10 @@ class MeshConfig(Base):
     registry_path: str = ""                  # Path to device_registry.json (default: <workspace>/device_registry.json)
     # --- embed_nanobot extensions: automation rules engine (task 2.6) ---
     automation_rules_path: str = ""          # Path to automation_rules.json (default: <workspace>/automation_rules.json)
+    # --- embed_nanobot extensions: mTLS device authentication (task 3.1) ---
+    mtls_enabled: bool = False               # Enable mTLS (mutual TLS) for transport-level auth+encryption
+    ca_dir: str = ""                         # Path to CA directory (default: <workspace>/mesh_ca/)
+    device_cert_validity_days: int = 365     # Validity period for device certificates (days)
 
 
 class ChannelsConfig(Base):

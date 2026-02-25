@@ -395,7 +395,10 @@ The LAN Mesh enables **device-to-device communication** on the same local networ
       "enrollmentMaxAttempts": 3,        // Max failed PIN attempts before lockout
       "encryptionEnabled": true,          // Enable AES-256-GCM payload encryption (requires cryptography package)
       "registryPath": "",                    // Path to device_registry.json (default: <workspace>/device_registry.json)
-      "automationRulesPath": ""              // Path to automation_rules.json (default: <workspace>/automation_rules.json)
+      "automationRulesPath": "",             // Path to automation_rules.json (default: <workspace>/automation_rules.json)
+      "mtlsEnabled": false,                  // Enable mTLS with local CA for device authentication
+      "caDir": "",                           // Path to CA directory (default: <workspace>/mesh_ca/)
+      "deviceCertValidityDays": 365          // Validity period for device certificates in days
     }
   }
 }
@@ -419,6 +422,9 @@ The LAN Mesh enables **device-to-device communication** on the same local networ
 | `encryptionEnabled` | bool | `true` | Enable AES-256-GCM payload encryption. Requires `cryptography` package. |
 | `registryPath` | string | `""` | Path to device registry file. Empty = `<workspace>/device_registry.json` |
 | `automationRulesPath` | string | `""` | Path to automation rules file. Empty = `<workspace>/automation_rules.json` |
+| `mtlsEnabled` | bool | `false` | Enable mutual TLS with a local Certificate Authority. When enabled, the Hub generates a self-signed root CA and issues per-device X.509 certificates. TLS replaces HMAC/AES-GCM at the transport layer. Requires `cryptography`. |
+| `caDir` | string | `""` | Path to directory storing CA key, cert, and device certificates. Empty = `<workspace>/mesh_ca/` |
+| `deviceCertValidityDays` | int | `365` | Validity period for newly issued device certificates (days). CA cert is always 10 years. |
 
 ### Example: Smart Home Setup
 
@@ -480,6 +486,7 @@ Use cases:
 - **LAN-only**: The mesh uses UDP/TCP on the local network and never touches the internet.
 - **`allowUnauthenticated` (dev only)**: Set to `true` during development to accept unsigned messages with a warning. **Never enable in production.**
 - **Encryption (default: enabled)**: Message payloads are encrypted with AES-256-GCM using a key derived from the device's PSK (`HMAC-SHA256(PSK, "mesh-encrypt-v1")`). Only CHAT, COMMAND, and RESPONSE payloads are encrypted; heartbeats and enrollment messages are plaintext. Requires the `cryptography` package (`pip install cryptography`). Set `encryptionEnabled` to `false` to disable.
+- **mTLS (optional)**: When `mtlsEnabled` is `true`, the Hub runs a local Certificate Authority and wraps all TCP connections with mutual TLS (EC P-256 certs). Devices receive certificates during enrollment. TLS provides both authentication and encryption at the transport layer, so HMAC and AES-GCM layers are automatically skipped (redundant). CA and device private keys are stored with `0600` permissions.
 
 ---
 
