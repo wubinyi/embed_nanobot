@@ -1,6 +1,11 @@
-# Changelog — 2026-02-11
+# Sync Details — 2026-02-11
 
-Changes added to the `main_embed` branch **after** the `copilot/add-documentation-for-repo` branch (base commit `8af9800`) up to the latest merge (commit `ea1d2d7` — *Merge PR #307: feat: add MiniMax support*).
+Covers changes merged from upstream during the **2026-02-07** and **2026-02-10** syncs.
+
+- **2026-02-07**: ~15 commits merged (initial upstream merge). Conflicts in schema.py, manager.py, commands.py, README.md.
+- **2026-02-10**: 3 commits (MiniMax, MoChat, DingTalk). Conflict in schema.py (MiniMax config).
+
+Base commit: `8af9800` → upstream HEAD: `ea1d2d7` (Merge PR #307: feat: add MiniMax support).
 
 ---
 

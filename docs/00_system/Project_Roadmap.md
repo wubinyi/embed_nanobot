@@ -15,7 +15,7 @@
 | 1.1 | Fork nanobot, establish `main_embed` branch | Done | 2026-02-05 | Remote `upstream` → HKUDS/nanobot |
 | 1.2 | Implement Hybrid Router (local + cloud LLM routing) | Done | 2026-02-06 | `nanobot/providers/hybrid_router.py`, difficulty scoring, PII sanitization |
 | 1.3 | Implement LAN Mesh (UDP discovery + TCP transport) | Done | 2026-02-07 | `nanobot/mesh/` — channel, discovery, transport, protocol |
-| 1.4 | First upstream merge (manual) | Done | 2026-02-07 | Documented in MERGE_ANALYSIS.md, PR #4 |
+| 1.4 | First upstream merge (manual) | Done | 2026-02-07 | Documented in SYNC_LOG.md, PR #4 |
 | 1.5 | Developer documentation (arch, config, customization) | Done | 2026-02-08 | `docs/architecture.md`, `docs/configuration.md`, `docs/customization.md` |
 | 1.6 | Second upstream merge (MiniMax, MoChat, DingTalk) | Done | 2026-02-10 | PR #6, conflicts resolved |
 | 1.7 | Project SKILL file for Copilot workflow | Done | 2026-02-12 | `.github/copilot-instructions.md`, bootstrap protocol, PRD |
@@ -103,7 +103,7 @@ See [docs/sync/SYNC_LOG.md](../sync/SYNC_LOG.md) for full merge history.
 
 ### 2026-02-17 — Major Upstream Sync Complete
 - **116 upstream commits merged** (77 non-merge): MCP support, OpenAI Codex provider, redesigned memory system, CLI overhaul with prompt_toolkit, security hardening, cron improvements.
-- **Documentation fully updated**: architecture.md, configuration.md, customization.md, SYNC_LOG.md, MERGE_ANALYSIS.md all refreshed to reflect new upstream features.
+- **Documentation fully updated**: architecture.md, configuration.md, customization.md, SYNC_LOG.md all refreshed to reflect new upstream features.
 - **Key upstream changes to note for our work**:
   - Memory system is now two-layer (MEMORY.md + HISTORY.md) — our future device registry may want to leverage this pattern.
   - MCP support adds a new tool extension mechanism — consider MCP for device protocol tools.

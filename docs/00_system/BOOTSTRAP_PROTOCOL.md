@@ -28,7 +28,7 @@ Read the following files in order. Summarize key points from each.
 
 2. **Current State**:
    - `#file:docs/00_system/Project_Roadmap.md` — What tasks are done? What's next?
-   - `#file:docs/sync/SYNC_LOG.md` — When was the last upstream sync? Any unresolved conflicts?
+   - `#file:docs/sync/SYNC_LOG.md` — When was the last upstream sync? Any unresolved conflicts? (Includes conflict surface and fork overview)
 
 3. **Recent Work** (scan `docs/01_features/` for the latest feature folders):
    - Read the most recent `01_Design_Log.md` and `02_Dev_Implementation.md`.

@@ -17,7 +17,6 @@ Key references:
 - Upstream Coding Conventions: #file:agent.md
 - Configuration Reference: #file:docs/configuration.md
 - Customization Guide: #file:docs/customization.md
-- Merge Analysis: #file:docs/sync/MERGE_ANALYSIS.md
 - Sync Log: #file:docs/sync/SYNC_LOG.md
 - Upstream Sync Protocol: #file:docs/00_system/UPSTREAM_SYNC_PROTOCOL.md
 
@@ -164,8 +163,7 @@ Repository structure:
   **Before declaring ANY task (feature, sync, or fix) as complete**, verify:
 
   - [ ] All code changes committed and pushed
-  - [ ] `docs/sync/SYNC_LOG.md` updated (if sync was performed)
-  - [ ] `docs/sync/MERGE_ANALYSIS.md` updated (if conflict surface changed)
+  - [ ] `docs/sync/SYNC_LOG.md` updated (if sync was performed) — summary row + detail file if >10 commits or conflicts
   - [ ] Documentation Freshness Check passed (see below)
   - [ ] `docs/00_system/Project_Roadmap.md` updated with task status
   - [ ] Feature docs written (`01_Design_Log.md`, `02_Dev_Implementation.md`, `03_Test_Report.md`) if applicable
@@ -393,7 +391,7 @@ Repository structure:
   │   ├── Project_Roadmap.md       # Master roadmap with all tasks and status
   │   ├── BOOTSTRAP_PROTOCOL.md    # Session bootstrap procedure
   │   ├── UPSTREAM_SYNC_PROTOCOL.md # Upstream sync procedure (extracted from SKILL)
-  │   └── SYNC_LOG.md              # Upstream sync history (symlink or moved)
+  │   └── (sync history now in docs/sync/)
   ├── 01_features/
   │   ├── f01_hybrid_router/
   │   │   ├── 01_Design_Log.md
@@ -404,13 +402,12 @@ Repository structure:
   │   └── fXX_<feature>/
   │       └── ...
   ├── sync/
-  │   ├── SYNC_LOG.md              # Running log of all upstream syncs
-  │   └── YYYY-MM-DD_sync.md       # Detailed notes for conflict resolutions
+  │   ├── SYNC_LOG.md              # Merged summary: sync table + conflict surface + fork overview
+  │   └── YYYY-MM-DD_sync_details.md # Detailed sync notes per date
   ├── PRD.md                        # Product Requirements Document
   ├── architecture.md               # System architecture reference
   ├── configuration.md              # Configuration reference
-  ├── customization.md              # Extension/customization guide
-  └── MERGE_ANALYSIS.md             # Initial fork merge analysis
+  └── customization.md              # Extension/customization guide
   ```
 
   ### Rules

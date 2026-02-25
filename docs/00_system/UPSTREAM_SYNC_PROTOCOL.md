@@ -83,7 +83,8 @@ If conflicts arise:
 git push origin main_embed
 ```
 
-- Append result to `docs/sync/SYNC_LOG.md`
+- Append summary row to `docs/sync/SYNC_LOG.md`
+- For syncs with >10 commits or any conflicts, create `docs/sync/YYYY-MM-DD_sync_details.md`
 
 ### Step 7: Post-sync verification
 
@@ -104,39 +105,39 @@ Record the remaining count in the sync log entry.
 
 ## Sync Log Format
 
-The sync log (`docs/sync/SYNC_LOG.md`) uses this format:
+The sync log (`docs/sync/SYNC_LOG.md`) contains the summary. Detailed entries go in separate files.
 
-### Summary Table
+### Summary Table (in SYNC_LOG.md)
 
 ```markdown
-| Date | Upstream HEAD | Commits Merged | Conflicts | Key Features | Resolution |
-|------|---------------|----------------|-----------|--------------|------------|
-| 2026-02-12 | abc1234 | 5 | None | Bug fixes | Clean merge |
-| 2026-02-13 | def5678 | 3 | schema.py | New provider | Appended our fields after upstream |
+| Date | Upstream HEAD | Commits | Conflicts | Key Features | Details |
+|------|---------------|---------|-----------|--------------|--------|
+| 2026-02-12 | abc1234 | 5 | None | Bug fixes | — |
+| 2026-02-13 | def5678 | 3 | schema.py | New provider | [details](YYYY-MM-DD_sync_details.md) |
 ```
 
-**Key Features column**: Briefly list the major features/changes in the merged commits (e.g., "MCP support, CLI overhaul, memory redesign"). This ensures feature-level traceability without reading individual commits.
+**Key Features column**: Briefly list the major features/changes in the merged commits.
+**Details column**: Link to the detail file (or `—` for clean merges with <10 commits).
 
-### Detailed Entry
+### Detail File (in `docs/sync/YYYY-MM-DD_sync_details.md`)
 
-For syncs with >10 commits or any conflicts, add a detailed section below the table:
+For syncs with >10 commits or any conflicts, create a separate detail file:
 
 ```markdown
-### YYYY-MM-DD Sync Details
+# Sync Details — YYYY-MM-DD
 
 **Commits**: [count] ([non-merge count] non-merge)
 **Range**: `<old-hash>` → `<new-hash>`
 
-#### Key Features Merged
+## Upstream Features Merged
 - **Category 1**: Brief description
 - **Category 2**: Brief description
 
-#### Conflicts Resolved
+## Conflicts Resolved
 - `file.py`: How it was resolved
 
-#### Remaining Upstream Commits
+## Remaining Upstream Commits
 - [count] commits still pending
-- Notable pending features: [list]
 ```
 
 ---
@@ -159,11 +160,9 @@ For syncs with >10 commits or any conflicts, add a detailed section below the ta
 
 - [ ] `origin/main` is up-to-date with `upstream/main` (Step 2 done)
 - [ ] `main_embed` has been merged and pushed (Step 6 done)
-- [ ] `docs/sync/SYNC_LOG.md` updated with summary row INCLUDING "Key Features" column
-- [ ] For large syncs (>10 commits): detailed entry with feature categories added
-- [ ] Conflict resolutions documented (if any)
-- [ ] Remaining upstream commit count recorded
-- [ ] `docs/sync/MERGE_ANALYSIS.md` updated if conflict surface changed
+- [ ] `docs/sync/SYNC_LOG.md` summary table updated with new row (including Key Features + Details link)
+- [ ] For large syncs (>10 commits) or conflicts: `docs/sync/YYYY-MM-DD_sync_details.md` created
+- [ ] Conflict surface table in `docs/sync/SYNC_LOG.md` updated if changed
 - [ ] **Documentation Freshness Check** triggered (see `copilot-instructions.md`)
 - [ ] `docs/00_system/Project_Roadmap.md` updated with sync metrics
 

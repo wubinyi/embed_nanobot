@@ -167,7 +167,7 @@ Build an **AI Hub** — a central intelligence node for smart homes and smart fa
 | US-01 | `main` branch tracks HKUDS/nanobot `main` branch | ✅ Done |
 | US-02 | Daily automated fetch of upstream changes | 🔲 Planned |
 | US-03 | Automated merge attempt from `main` into `main_embed` | 🔲 Planned |
-| US-04 | Conflict detection and documentation | ✅ Done (manual, see MERGE_ANALYSIS.md) |
+| US-04 | Conflict detection and documentation | ✅ Done (manual, see SYNC_LOG.md conflict surface) |
 | US-05 | Merge results logged to `docs/sync/` for traceability | ✅ Done (SYNC_LOG.md maintained) |
 | US-06 | Custom code follows "append-only" convention to minimize conflicts | ✅ Done (agent.md) |
 
