@@ -119,12 +119,17 @@ class MeshEnvelope:
 async def read_envelope(reader: Any) -> MeshEnvelope | None:
     """Read one length-prefixed envelope from an ``asyncio.StreamReader``.
 
-    Returns *None* on EOF / connection reset.
+    Returns *None* on EOF / connection reset / malformed data.
     """
-    header = await reader.readexactly(4)
-    (length,) = struct.unpack("!I", header)
-    body = await reader.readexactly(length)
-    return MeshEnvelope.from_bytes(body)
+    try:
+        header = await reader.readexactly(4)
+        (length,) = struct.unpack("!I", header)
+        body = await reader.readexactly(length)
+        return MeshEnvelope.from_bytes(body)
+    except (json.JSONDecodeError, UnicodeDecodeError, struct.error, KeyError) as exc:
+        from loguru import logger
+        logger.warning("[Mesh/Protocol] malformed envelope: {}", exc)
+        return None
 
 
 def write_envelope(writer: Any, env: MeshEnvelope) -> None:

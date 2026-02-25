@@ -23,6 +23,8 @@ from typing import Any
 
 from loguru import logger
 
+from nanobot.mesh.resilience import Watchdog
+
 
 @dataclass
 class PeerInfo:
@@ -80,6 +82,10 @@ class UDPDiscovery:
         # --- embed_nanobot: device registry (task 2.1) ---
         self._on_peer_seen_callbacks: list = []
         self._on_peer_lost_callbacks: list = []
+        # --- embed_nanobot: resilience (task 3.5) ---
+        self._prune_watchdog = Watchdog(
+            "discovery-prune", self.prune, interval=max(peer_timeout / 2, 5.0),
+        )
 
     # -- lifecycle -----------------------------------------------------------
 
@@ -100,6 +106,8 @@ class UDPDiscovery:
         loop = asyncio.get_running_loop()
         asyncio.ensure_future(self._broadcast_loop(loop))
         asyncio.ensure_future(self._listen_loop(loop))
+        # --- embed_nanobot: resilience (task 3.5) ---
+        self._prune_watchdog.start()
         logger.info(
             f"[Mesh/Discovery] started: node={self.node_id} udp={self.udp_port} "
             f"tcp={self.tcp_port}"
@@ -107,6 +115,8 @@ class UDPDiscovery:
 
     async def stop(self) -> None:
         self._running = False
+        # --- embed_nanobot: resilience (task 3.5) ---
+        self._prune_watchdog.stop()
         if self._sock:
             self._sock.close()
             self._sock = None

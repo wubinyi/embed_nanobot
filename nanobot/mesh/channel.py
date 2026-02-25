@@ -25,6 +25,7 @@ from nanobot.mesh.groups import GroupManager
 from nanobot.mesh.ota import FirmwareStore, OTAManager, OTASession
 from nanobot.mesh.protocol import MeshEnvelope, MsgType
 from nanobot.mesh.registry import DeviceCapability, DeviceRegistry
+from nanobot.mesh.resilience import supervised_task
 from nanobot.mesh.security import KeyStore
 from nanobot.mesh.transport import MeshTransport
 
@@ -254,10 +255,24 @@ class MeshChannel(BaseChannel):
     # -- BaseChannel interface -----------------------------------------------
 
     async def start(self) -> None:
-        """Start discovery and transport."""
+        """Start discovery and transport with error isolation."""
         self._running = True
-        await self.discovery.start()
-        await self.transport.start()
+        try:
+            await self.discovery.start()
+        except Exception as exc:
+            logger.error("[MeshChannel] discovery start failed: {}", exc)
+            self._running = False
+            raise
+        try:
+            await self.transport.start()
+        except Exception as exc:
+            logger.error("[MeshChannel] transport start failed, stopping discovery: {}", exc)
+            try:
+                await self.discovery.stop()
+            except Exception:
+                pass
+            self._running = False
+            raise
         logger.info(
             f"[MeshChannel] started: node={self.node_id} "
             f"tcp={self.tcp_port} udp={self.udp_port}"
@@ -265,8 +280,16 @@ class MeshChannel(BaseChannel):
 
     async def stop(self) -> None:
         self._running = False
-        await self.transport.stop()
-        await self.discovery.stop()
+        # Stop transport first (it depends on discovery), then discovery.
+        # Errors in one should not prevent stopping the other.
+        try:
+            await self.transport.stop()
+        except Exception as exc:
+            logger.error("[MeshChannel] transport stop error: {}", exc)
+        try:
+            await self.discovery.stop()
+        except Exception as exc:
+            logger.error("[MeshChannel] discovery stop error: {}", exc)
         logger.info("[MeshChannel] stopped")
 
     async def send(self, msg: OutboundMessage) -> None:
@@ -383,17 +406,18 @@ class MeshChannel(BaseChannel):
                         caps.append(DeviceCapability.from_dict(c))
                     except (KeyError, TypeError):
                         pass
-                # Schedule async registration
+                # Schedule async registration — supervised to catch errors
                 import asyncio
                 try:
                     loop = asyncio.get_running_loop()
-                    loop.create_task(
+                    supervised_task(
                         self.registry.register_device(
                             node_id,
                             device_type,
                             capabilities=caps,
                             metadata=beacon.get("metadata", {}),
-                        )
+                        ),
+                        name=f"auto-register-{node_id}",
                     )
                 except RuntimeError:
                     pass  # No running loop — skip auto-registration
