@@ -406,7 +406,11 @@ The LAN Mesh enables **device-to-device communication** on the same local networ
       "scenesPath": "",                       // Path to scenes.json (default: <workspace>/scenes.json)
       "dashboardPort": 0,                       // HTTP port for monitoring dashboard (0 = disabled)
       "industrialConfigPath": "",                 // Path to PLC/industrial bridge config JSON (empty = disabled)
-      "federationConfigPath": ""                 // Path to hub federation config JSON (empty = disabled)
+      "federationConfigPath": "",                 // Path to hub federation config JSON (empty = disabled)
+      "pipelineEnabled": false,                     // Enable sensor time-series recording
+      "pipelinePath": "",                          // JSON persistence path (empty = <workspace>/sensor_data.json)
+      "pipelineMaxPoints": 10000,                   // Max readings per (device, capability) buffer
+      "pipelineFlushInterval": 60                   // Seconds between auto-save to disk
     }
   }
 }
@@ -441,6 +445,10 @@ The LAN Mesh enables **device-to-device communication** on the same local networ
 | `dashboardPort` | int | `0` | HTTP port for the monitoring dashboard. When > 0, an embedded web dashboard starts at `http://<host>:<port>/` with JSON API at `/api/*`. Set to `0` (default) to disable. |
 | `industrialConfigPath` | string | `""` | Path to PLC/industrial bridge configuration JSON file. When set, the Hub loads Modbus TCP (or other protocol) bridges and polls PLC registers. Devices appear in the device registry alongside mesh devices. Empty = disabled. |
 | `federationConfigPath` | string | `""` | Path to hub federation configuration JSON file. When set, the Hub connects to peer hubs for cross-subnet device sharing, command forwarding, and state propagation. Empty = disabled. |
+| `pipelineEnabled` | bool | `false` | Enable sensor time-series recording. When enabled, all numeric/boolean state updates are automatically saved to in-memory ring buffers with JSON persistence. |
+| `pipelinePath` | string | `""` | JSON file path for pipeline persistence. Empty = `<workspace>/sensor_data.json`. |
+| `pipelineMaxPoints` | int | `10000` | Maximum readings per (device, capability) ring buffer. Oldest readings are evicted when full. Minimum 100. |
+| `pipelineFlushInterval` | int | `60` | Seconds between auto-save of sensor data to disk. Set to 0 for manual-only persistence. |
 
 ### Example: Smart Home Setup
 
@@ -605,6 +613,34 @@ In this setup:
 - Commands to remote devices are automatically forwarded to the owning hub
 - State changes are propagated across hubs for cross-hub automation
 - If a hub link goes down, remote devices gracefully disappear; reconnection is automatic with exponential backoff
+
+---
+
+### Example: Sensor Data Pipeline
+
+Enable time-series recording to track sensor history, run analytics, and provide
+LLM-friendly data summaries:
+
+```jsonc
+{
+  "channels": {
+    "mesh": {
+      "enabled": true,
+      "pipelineEnabled": true,
+      "pipelinePath": "/data/sensor_data.json",
+      "pipelineMaxPoints": 20000,
+      "pipelineFlushInterval": 30
+    }
+  }
+}
+```
+
+In this setup:
+- Every numeric/boolean value in STATE_REPORT messages is automatically recorded
+- Each (device, capability) pair gets an independent ring buffer of up to 20 000 readings
+- Data is auto-saved to `/data/sensor_data.json` every 30 seconds and on shutdown
+- Pipeline supports queries by time range, 7 aggregation functions (min/max/avg/sum/count/median/stdev)
+- `summary()` generates Markdown suitable for LLM context injection
 
 ---
 

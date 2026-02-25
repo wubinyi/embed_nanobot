@@ -413,6 +413,7 @@ JSON structure:
 - **`dashboard.py`**: `MeshDashboard` — zero-dependency HTTP server (stdlib `asyncio.start_server`) with 9 REST API endpoints and embedded single-page HTML dashboard for monitoring devices, peers, groups, rules, OTA sessions
 - **`industrial.py`**: `IndustrialBridge` — PLC/industrial device integration via protocol adapters; `IndustrialProtocol` ABC, `ModbusTCPAdapter` (pymodbus, Modbus TCP), `StubAdapter` (fallback); JSON config, periodic register polling, device registry integration, automation hooks
 - **`federation.py`**: `FederationManager` — hub-to-hub federation for cross-subnet device access; `HubLink` (persistent bidirectional TCP with auto-reconnect), periodic registry sync, command forwarding (future-based with timeout), state propagation; JSON config with peer hub addresses; 7 new protocol message types (HELLO, SYNC, COMMAND, RESPONSE, STATE, PING, PONG)
+- **`pipeline.py`**: `SensorPipeline` — time-series sensor data recording with in-memory ring buffers (`collections.deque`); `SensorReading` dataclass, `RingBuffer` (fixed-capacity FIFO), 7 aggregation functions (min/max/avg/sum/count/median/stdev), LLM-friendly `summary()`, JSON persistence with auto-flush, channel integration via `record_state()` hook
 
 The mesh is registered in `nanobot/channels/manager.py` like any other channel and activated via `channels.mesh.enabled: true` in config.
 

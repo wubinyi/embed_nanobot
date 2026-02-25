@@ -206,6 +206,11 @@ class MeshConfig(Base):
     industrial_config_path: str = ""         # Path to industrial_config.json. Empty = disabled.
     # --- embed_nanobot extensions: hub-to-hub federation (task 4.2) ---
     federation_config_path: str = ""         # Path to federation.json. Empty = disabled.
+    # --- embed_nanobot extensions: sensor data pipeline (task 4.4) ---
+    pipeline_enabled: bool = False           # Enable sensor time-series recording.
+    pipeline_path: str = ""                  # JSON persistence path. Empty = <workspace>/sensor_data.json
+    pipeline_max_points: int = 10000         # Max readings per (device, capability) buffer.
+    pipeline_flush_interval: int = 60        # Seconds between auto-save to disk. 0 = manual.
 
 
 class ChannelsConfig(Base):
