@@ -18,6 +18,7 @@ from typing import Awaitable, Callable
 from loguru import logger
 
 from nanobot.mesh import encryption
+from nanobot.mesh.resilience import DEFAULT_RETRY, RetryPolicy, retry_send
 from nanobot.mesh.discovery import PeerInfo, UDPDiscovery
 from nanobot.mesh.protocol import MeshEnvelope, MsgType, read_envelope, write_envelope
 from nanobot.mesh.security import KeyStore
@@ -185,6 +186,22 @@ class MeshTransport:
             )
             return False
         return await self._send_to(peer, env)
+
+    # --- embed_nanobot: resilience (task 3.5) ---
+    async def send_with_retry(
+        self,
+        env: MeshEnvelope,
+        policy: RetryPolicy = DEFAULT_RETRY,
+    ) -> bool:
+        """Send an envelope with exponential-backoff retries.
+
+        Falls back to ``retry_send`` wrapping :meth:`send`.
+        """
+        return await retry_send(
+            self.send, env,
+            policy=policy,
+            label=f"send→{env.target}",
+        )
 
     async def send_to_address(
         self,

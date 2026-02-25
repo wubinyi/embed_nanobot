@@ -68,7 +68,7 @@ All Phase 1 foundation tasks are done. Ready to begin Phase 2: Device Ecosystem.
 | # | Task | Priority | Complexity | Dependencies |
 |---|------|----------|------------|--------------|
 | 3.4 | Device grouping and scenes | P1 | M | Registry (2.1) | **Done** (2026-02-25) |
-| 3.5 | Error recovery and fault tolerance | P1 | M | All mesh components |
+| 3.5 | Error recovery and fault tolerance | P1 | M | All mesh components | **Done** (2026-02-25) |
 | 3.6 | Monitoring dashboard (web UI) | P2 | L | Registry (2.1) |
 
 ---
@@ -263,6 +263,20 @@ See [docs/sync/SYNC_LOG.md](../sync/SYNC_LOG.md) for full merge history.
 - **Zero new dependencies** — pure stdlib.
 - **Conflict surface**: +2 fields in schema.py, GroupManager import+init+methods in channel.py. groups.py is new (zero conflict).
 - **Next task**: 3.5 (Error recovery and fault tolerance).
+
+### 2026-02-25f — Task 3.5: Error Recovery and Fault Tolerance Complete
+- **New module** `nanobot/mesh/resilience.py` (~170 LOC): `RetryPolicy` (exponential backoff config), `retry_send()` (wraps async send with retries), `Watchdog` (periodic async loop for health checks), `supervised_task()` (create_task with error logging).
+- **Critical fix**: Discovery `prune()` was defined but never called — stale peers accumulated forever and `on_peer_lost` never fired. Now a `Watchdog` auto-prunes at `peer_timeout / 2` interval.
+- **Transport retry**: New `send_with_retry()` method with configurable `RetryPolicy` (default: 3 retries, 0.5s base, 2x backoff, 10s cap). Available for critical sends.
+- **Channel error isolation**: `start()` catches transport failure and stops discovery. `stop()` catches errors in each component independently — partial failures no longer leave dangling resources.
+- **Supervised tasks**: All fire-and-forget `create_task` calls replaced with `supervised_task()` — exceptions logged instead of silently swallowed.
+- **OTA timeout enforcement**: `check_timeouts()` enforces `OFFER_TIMEOUT` (60s), `CHUNK_ACK_TIMEOUT` (30s), `VERIFY_TIMEOUT` (60s). `cleanup_completed()` removes terminal sessions after configurable max_age.
+- **Protocol safety**: `read_envelope()` now catches `json.JSONDecodeError`, `struct.error`, `UnicodeDecodeError` — returns `None` instead of crashing.
+- **36 new tests** across 9 classes (643 total, zero regressions).
+- **Zero new config fields** — resilience is auto-enabled with sensible defaults.
+- **Zero new dependencies** — uses only stdlib (asyncio, time).
+- **Conflict surface**: +import in discovery.py, +method in transport.py, channel start/stop refactored, OTA methods added. resilience.py is new (zero conflict).
+- **Next task**: 3.6 (Monitoring dashboard).
 
 ### 2026-02-25c — Task 3.2: Certificate Revocation (CRL) Complete
 - **Application-level revocation** — Python's `ssl` module cannot load CRL files (`load_verify_locations()` only loads CA certs). Switched from OpenSSL CRL enforcement to app-level check in `MeshTransport._handle_connection()`.

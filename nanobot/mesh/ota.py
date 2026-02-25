@@ -403,6 +403,53 @@ class OTAManager:
         """Return status dicts for all active sessions."""
         return [s.to_status() for s in self._sessions.values()]
 
+    # --- embed_nanobot: resilience (task 3.5) ---
+
+    def check_timeouts(self) -> list[str]:
+        """Check for stalled sessions and mark them as failed.
+
+        Returns list of node_ids whose sessions were timed out.
+        """
+        now = time.time()
+        timed_out: list[str] = []
+        for nid, session in self._sessions.items():
+            if session.state in (UpdateState.COMPLETE, UpdateState.FAILED, UpdateState.REJECTED):
+                continue
+            # Determine the appropriate timeout for the current phase
+            if session.state == UpdateState.OFFERED:
+                timeout = OFFER_TIMEOUT
+            elif session.state == UpdateState.VERIFYING:
+                timeout = VERIFY_TIMEOUT
+            else:  # TRANSFERRING
+                timeout = self.chunk_ack_timeout
+            if (now - session.last_activity) > timeout:
+                session.state = UpdateState.FAILED
+                session.error = f"timeout in {session.state.value} state"
+                logger.warning(
+                    "[OTA] session for {} timed out in {} state after {:.0f}s",
+                    nid, session.state.value, now - session.last_activity,
+                )
+                self._notify_progress(session)
+                timed_out.append(nid)
+        return timed_out
+
+    def cleanup_completed(self, max_age: float = 300.0) -> int:
+        """Remove terminal sessions older than *max_age* seconds.
+
+        Returns the number of sessions removed.
+        """
+        now = time.time()
+        terminal = {UpdateState.COMPLETE, UpdateState.FAILED, UpdateState.REJECTED}
+        to_remove = [
+            nid for nid, s in self._sessions.items()
+            if s.state in terminal and (now - s.last_activity) > max_age
+        ]
+        for nid in to_remove:
+            del self._sessions[nid]
+        if to_remove:
+            logger.debug("[OTA] cleaned up {} completed sessions", len(to_remove))
+        return len(to_remove)
+
     # -- message handling (called by channel) --------------------------------
 
     async def handle_ota_message(self, env: MeshEnvelope) -> None:
