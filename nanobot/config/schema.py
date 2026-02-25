@@ -200,6 +200,8 @@ class MeshConfig(Base):
     # --- embed_nanobot extensions: device grouping and scenes (task 3.4) ---
     groups_path: str = ""                    # Path to device groups JSON. Empty = <workspace>/device_groups.json
     scenes_path: str = ""                    # Path to scenes JSON. Empty = <workspace>/device_scenes.json
+    # --- embed_nanobot extensions: monitoring dashboard (task 3.6) ---
+    dashboard_port: int = 0                  # HTTP port for mesh dashboard. 0 = disabled.
 
 
 class ChannelsConfig(Base):

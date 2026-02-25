@@ -19,6 +19,7 @@ from nanobot.channels.base import BaseChannel
 from nanobot.mesh.automation import AutomationEngine
 from nanobot.mesh.ca import MeshCA, is_available as ca_is_available
 from nanobot.mesh.commands import command_to_envelope
+from nanobot.mesh.dashboard import MeshDashboard
 from nanobot.mesh.discovery import UDPDiscovery
 from nanobot.mesh.enrollment import EnrollmentService
 from nanobot.mesh.groups import GroupManager
@@ -210,6 +211,24 @@ class MeshChannel(BaseChannel):
         self.groups = GroupManager(groups_path, scenes_path)
         self.groups.load()
 
+        # --- embed_nanobot: monitoring dashboard (task 3.6) ---
+        _raw_port = getattr(config, "dashboard_port", 0)
+        dashboard_port = _raw_port if isinstance(_raw_port, int) else 0
+        self.dashboard: MeshDashboard | None = None
+        if dashboard_port > 0:
+            self.dashboard = MeshDashboard(
+                port=dashboard_port,
+                data_fn=lambda: {
+                    "registry": self.registry,
+                    "discovery": self.discovery,
+                    "groups": self.groups,
+                    "automation": self.automation,
+                    "ota": self.ota,
+                    "firmware_store": self.firmware_store,
+                    "node_id": self.node_id,
+                },
+            )
+
     # -- mTLS helpers --------------------------------------------------------
 
     def _make_client_ssl(self, target_node_id: str) -> ssl.SSLContext | None:
@@ -273,6 +292,12 @@ class MeshChannel(BaseChannel):
                 pass
             self._running = False
             raise
+        # --- embed_nanobot: monitoring dashboard (task 3.6) ---
+        if self.dashboard is not None:
+            try:
+                await self.dashboard.start()
+            except Exception as exc:
+                logger.error("[MeshChannel] dashboard start failed: {}", exc)
         logger.info(
             f"[MeshChannel] started: node={self.node_id} "
             f"tcp={self.tcp_port} udp={self.udp_port}"
@@ -290,6 +315,12 @@ class MeshChannel(BaseChannel):
             await self.discovery.stop()
         except Exception as exc:
             logger.error("[MeshChannel] discovery stop error: {}", exc)
+        # --- embed_nanobot: monitoring dashboard (task 3.6) ---
+        if self.dashboard is not None:
+            try:
+                await self.dashboard.stop()
+            except Exception as exc:
+                logger.error("[MeshChannel] dashboard stop error: {}", exc)
         logger.info("[MeshChannel] stopped")
 
     async def send(self, msg: OutboundMessage) -> None:
