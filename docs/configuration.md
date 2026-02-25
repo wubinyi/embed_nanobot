@@ -398,7 +398,10 @@ The LAN Mesh enables **device-to-device communication** on the same local networ
       "automationRulesPath": "",             // Path to automation_rules.json (default: <workspace>/automation_rules.json)
       "mtlsEnabled": false,                  // Enable mTLS with local CA for device authentication
       "caDir": "",                           // Path to CA directory (default: <workspace>/mesh_ca/)
-      "deviceCertValidityDays": 365          // Validity period for device certificates in days
+      "deviceCertValidityDays": 365,          // Validity period for device certificates in days
+      "firmwareDir": "",                      // Directory for firmware images (empty = OTA disabled)
+      "otaChunkSize": 4096,                   // Bytes per OTA transfer chunk (default 4KB)
+      "otaChunkTimeout": 30                   // Seconds to wait for chunk ACK
     }
   }
 }
@@ -425,6 +428,9 @@ The LAN Mesh enables **device-to-device communication** on the same local networ
 | `mtlsEnabled` | bool | `false` | Enable mutual TLS with a local Certificate Authority. When enabled, the Hub generates a self-signed root CA and issues per-device X.509 certificates. TLS replaces HMAC/AES-GCM at the transport layer. Requires `cryptography`. |
 | `caDir` | string | `""` | Path to directory storing CA key, cert, and device certificates. Empty = `<workspace>/mesh_ca/` |
 | `deviceCertValidityDays` | int | `365` | Validity period for newly issued device certificates (days). CA cert is always 10 years. |
+| `firmwareDir` | string | `""` | Directory for OTA firmware images and manifest. Empty = OTA disabled. When set, the Hub can push firmware updates to mesh devices. |
+| `otaChunkSize` | int | `4096` | Bytes per OTA transfer chunk. Default 4KB is suitable for ESP32 SRAM. |
+| `otaChunkTimeout` | int | `30` | Seconds to wait for a device to acknowledge a firmware chunk before considering it lost. |
 
 ### Example: Smart Home Setup
 

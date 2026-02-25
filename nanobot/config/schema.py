@@ -193,6 +193,10 @@ class MeshConfig(Base):
     mtls_enabled: bool = False               # Enable mTLS (mutual TLS) for transport-level auth+encryption
     ca_dir: str = ""                         # Path to CA directory (default: <workspace>/mesh_ca/)
     device_cert_validity_days: int = 365     # Validity period for device certificates (days)
+    # --- embed_nanobot extensions: OTA firmware update (task 3.3) ---
+    firmware_dir: str = ""                   # Directory for firmware images. Empty = OTA disabled.
+    ota_chunk_size: int = 4096               # Bytes per OTA chunk (default 4KB, suitable for ESP32)
+    ota_chunk_timeout: int = 30              # Seconds to wait for chunk ACK before retry
 
 
 class ChannelsConfig(Base):
