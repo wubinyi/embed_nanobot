@@ -88,7 +88,7 @@ All Phase 1 foundation tasks are done. Ready to begin Phase 2: Device Ecosystem.
 |---|------|----------|------------|--------------|
 | 4.3 | Device reprogramming (AI-generated code push) | P2 | XL | OTA (3.3), Commands (2.2) |
 | ~~4.4~~ | ~~Sensor data pipeline and analytics~~ | ~~P2~~ | ~~L~~ | ~~Registry (2.1)~~ | **Done** 2026-02-26 |
-| 4.5 | BLE mesh support for battery-powered sensors | P2 | L | Mesh transport abstraction |
+| ~~4.5~~ | ~~BLE mesh support for battery-powered sensors~~ | ~~P2~~ | ~~L~~ | ~~Mesh transport abstraction~~ | **Done** 2026-02-26 |
 
 ---
 
@@ -351,3 +351,14 @@ See [docs/sync/SYNC_LOG.md](../sync/SYNC_LOG.md) for full merge history.
 - **72 new tests** across 14 test classes (844 total, zero regressions).
 - **Zero conflict surface increase**: pipeline.py is a new file, schema.py/channel.py have append-only changes.
 - **Next**: This completes all L-complexity tasks. Remaining: 4.3 (XL) and 4.5 (L).
+
+### Strategic Note — Task 4.5 (BLE Sensor Support) — 2026-02-26
+
+- **Architecture**: Passive BLE advertisement scanning with configurable device profiles. `BLEScanner` ABC → `BleakBLEScanner` (real) / `StubScanner` (test). JSON config with regex device name matching and byte-level decode rules.
+- **Data model**: `BLECapabilityDef` (7 data types: uint8/int8/uint16/int16/uint32/int32/float32, scale factor, byte offset/length). `BLEDeviceProfile` groups capabilities per device type.
+- **Scan loop**: Configurable interval (30s) + duration (10s). Stale device pruning at configurable timeout (120s).
+- **Integration**: Auto-registers BLE devices in registry, feeds state to pipeline via callback, triggers automation rules. RSSI included in state.
+- **Config**: 1 field appended to MeshConfig: `ble_config_path`. Optional `bleak` dependency.
+- **50 new tests** across 16 test classes (894 total, zero regressions): advertisement parsing, byte decoding, profile matching, scan processing, device pruning, lifecycle, channel integration.
+- **Zero conflict surface increase**: ble.py is a new file, schema.py/channel.py have append-only changes.
+- **Phase 4 status**: Only 4.3 (Device reprogramming, XL) remains. All other Phase 4 tasks complete.
