@@ -17,6 +17,7 @@ from nanobot.bus.events import OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.channels.base import BaseChannel
 from nanobot.mesh.automation import AutomationEngine
+from nanobot.mesh.ble import BLEBridge
 from nanobot.mesh.ca import MeshCA, is_available as ca_is_available
 from nanobot.mesh.commands import command_to_envelope
 from nanobot.mesh.dashboard import MeshDashboard
@@ -281,6 +282,17 @@ class MeshChannel(BaseChannel):
             )
             self.pipeline.load()
 
+        # --- embed_nanobot: BLE sensor support (task 4.5) ---
+        ble_config_path = getattr(config, "ble_config_path", "") or ""
+        self.ble: BLEBridge | None = None
+        if ble_config_path:
+            self.ble = BLEBridge(
+                config_path=ble_config_path,
+                registry=self.registry,
+                on_state_update=self._on_ble_state_update,
+            )
+            self.ble.load()
+
     # -- mTLS helpers --------------------------------------------------------
 
     def _make_client_ssl(self, target_node_id: str) -> ssl.SSLContext | None:
@@ -368,6 +380,12 @@ class MeshChannel(BaseChannel):
                 await self.pipeline.start()
             except Exception as exc:
                 logger.error("[MeshChannel] pipeline start failed: {}", exc)
+        # --- embed_nanobot: BLE sensor support (task 4.5) ---
+        if self.ble is not None:
+            try:
+                await self.ble.start()
+            except Exception as exc:
+                logger.error("[MeshChannel] BLE bridge start failed: {}", exc)
         logger.info(
             f"[MeshChannel] started: node={self.node_id} "
             f"tcp={self.tcp_port} udp={self.udp_port}"
@@ -409,6 +427,12 @@ class MeshChannel(BaseChannel):
                 await self.pipeline.stop()
             except Exception as exc:
                 logger.error("[MeshChannel] pipeline stop error: {}", exc)
+        # --- embed_nanobot: BLE sensor support (task 4.5) ---
+        if self.ble is not None:
+            try:
+                await self.ble.stop()
+            except Exception as exc:
+                logger.error("[MeshChannel] BLE bridge stop error: {}", exc)
         logger.info("[MeshChannel] stopped")
 
     async def send(self, msg: OutboundMessage) -> None:
@@ -701,6 +725,24 @@ class MeshChannel(BaseChannel):
             logger.warning("[MeshChannel] federation not configured")
             return False
         return await self.federation.forward_command(node_id, capability, value)
+
+    # -- BLE convenience methods (task 4.5) ---------------------------------
+
+    def _on_ble_state_update(self, node_id: str, state: dict) -> None:
+        """Callback from BLEBridge after scan. Records to pipeline and runs automation."""
+        # Record to sensor pipeline
+        if self.pipeline is not None:
+            self.pipeline.record_state(node_id, state)
+
+        # Evaluate automation rules
+        if self.automation:
+            commands = self.automation.evaluate(node_id)
+            for cmd in commands:
+                env = command_to_envelope(cmd, source=self.node_id)
+                supervised_task(
+                    self.transport.send(env),
+                    name=f"ble-automation-cmd-{cmd.device}",
+                )
 
 
 def _default_node_id() -> str:

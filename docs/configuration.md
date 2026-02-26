@@ -410,7 +410,8 @@ The LAN Mesh enables **device-to-device communication** on the same local networ
       "pipelineEnabled": false,                     // Enable sensor time-series recording
       "pipelinePath": "",                          // JSON persistence path (empty = <workspace>/sensor_data.json)
       "pipelineMaxPoints": 10000,                   // Max readings per (device, capability) buffer
-      "pipelineFlushInterval": 60                   // Seconds between auto-save to disk
+      "pipelineFlushInterval": 60,                   // Seconds between auto-save to disk
+      "bleConfigPath": ""                            // Path to BLE config JSON (empty = disabled)
     }
   }
 }
@@ -449,6 +450,7 @@ The LAN Mesh enables **device-to-device communication** on the same local networ
 | `pipelinePath` | string | `""` | JSON file path for pipeline persistence. Empty = `<workspace>/sensor_data.json`. |
 | `pipelineMaxPoints` | int | `10000` | Maximum readings per (device, capability) ring buffer. Oldest readings are evicted when full. Minimum 100. |
 | `pipelineFlushInterval` | int | `60` | Seconds between auto-save of sensor data to disk. Set to 0 for manual-only persistence. |
+| `bleConfigPath` | string | `""` | Path to BLE sensor bridge configuration JSON file. When set, the Hub scans for BLE advertisements, auto-registers matching devices, and feeds readings into the pipeline. Requires `bleak` library. Empty = disabled. |
 
 ### Example: Smart Home Setup
 
@@ -641,6 +643,61 @@ In this setup:
 - Data is auto-saved to `/data/sensor_data.json` every 30 seconds and on shutdown
 - Pipeline supports queries by time range, 7 aggregation functions (min/max/avg/sum/count/median/stdev)
 - `summary()` generates Markdown suitable for LLM context injection
+
+---
+
+### Example: BLE Sensor Integration
+
+Scan for BLE battery-powered sensors and auto-register them:
+
+```jsonc
+{
+  "channels": {
+    "mesh": {
+      "enabled": true,
+      "bleConfigPath": "/path/to/ble_config.json",
+      "pipelineEnabled": true
+    }
+  }
+}
+```
+
+**ble_config.json**:
+```jsonc
+{
+  "scan_interval": 30,         // seconds between BLE scans
+  "scan_duration": 10,         // seconds per scan window
+  "device_timeout": 120,       // seconds before device marked offline
+  "profiles": [
+    {
+      "name": "Xiaomi Thermometer",
+      "name_pattern": "^LYWSD",
+      "device_type": "temperature_humidity_sensor",
+      "capabilities": [
+        {
+          "name": "temperature",
+          "data_source": "service",
+          "service_uuid": "0000181a-0000-1000-8000-00805f9b34fb",
+          "byte_offset": 0,
+          "byte_length": 2,
+          "data_type": "int16",
+          "scale": 0.01,
+          "unit": "°C",
+          "cap_type": "sensor"
+        }
+      ]
+    }
+  ]
+}
+```
+
+In this setup:
+- Hub periodically scans for BLE advertisements (30s interval, 10s window)
+- Devices matching the name pattern are auto-registered in the device registry
+- Advertisement data is decoded using byte-level rules and fed into the sensor pipeline
+- RSSI signal strength is included in every state update
+- Devices not seen for 120s are marked offline
+- Requires `bleak` library (`pip install bleak`); falls back to stub when unavailable
 
 ---
 

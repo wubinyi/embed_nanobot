@@ -211,6 +211,8 @@ class MeshConfig(Base):
     pipeline_path: str = ""                  # JSON persistence path. Empty = <workspace>/sensor_data.json
     pipeline_max_points: int = 10000         # Max readings per (device, capability) buffer.
     pipeline_flush_interval: int = 60        # Seconds between auto-save to disk. 0 = manual.
+    # --- embed_nanobot extensions: BLE sensor support (task 4.5) ---
+    ble_config_path: str = ""                # Path to BLE config JSON. Empty = disabled.
 
 
 class ChannelsConfig(Base):
