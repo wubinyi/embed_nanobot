@@ -2,7 +2,7 @@
 
 Tracks all merges from `HKUDS/nanobot` (upstream) `main` into our `main_embed` branch.
 
-**Last updated**: 2026-02-25
+**Last updated**: 2026-02-27
 
 ---
 
@@ -18,8 +18,9 @@ Tracks all merges from `HKUDS/nanobot` (upstream) `main` into our `main_embed` b
 | 2026-02-18 | 7f8a3df | 20 | schema.py, commands.py | Pydantic Base class, Mochat channel, CustomProvider, Slack enhancements, Docker Compose | [2026-02-18 details](2026-02-18_sync_details.md) |
 | 2026-02-18b | ce4f005 | 9 (4 non-merge) | None | SiliconFlow provider, workspace-scoped sessions, tool metadata in history | [2026-02-18b details](2026-02-18b_sync_details.md) |
 | 2026-02-25 | 9e806d7 | 276 (148 non-merge) | manager.py (×2), commands.py, pyproject.toml | v0.1.4 era: workspace→templates migration, memory consolidation types, VolcEngine provider, Mochat channel, HeartbeatService refactor, prompt caching, progress streaming, agent defaults (temp 0.1, max_iter 40), pinned dep versions | [2026-02-25 details](2026-02-25_sync_details.md) |
+| 2026-02-27 | e86cfcd | 107 (78 non-merge) | manager.py, schema.py, test_heartbeat_service.py | Matrix (Element) channel, agent context refactor, /stop command + task cancellation, explicit provider selection, exec path_append, Telegram media-group fix, workspace template auto-sync, heartbeat test rewrite | [2026-02-27 details](2026-02-27_sync_details.md) |
 
-**Current status**: Fully synced with upstream/main (`9e806d7`). 0 commits pending.
+**Current status**: Fully synced with upstream/main (`e86cfcd`). 0 commits pending.
 
 ---
 
@@ -56,7 +57,7 @@ Files we modify that also exist upstream — the merge conflict risk area:
 | `nanobot/providers/__init__.py` | Added hybrid_router export | Low — append-only |
 | `README.md` | Added embed_nanobot section at bottom | Medium — upstream updates frequently |
 | `pyproject.toml` | Appended `cryptography` dep | Low |
-| `tests/test_heartbeat_service.py` | Fixed stale upstream test (HEARTBEAT_OK_TOKEN removed, constructor changed) | Low — upstream-only file |
+| `tests/test_heartbeat_service.py` | Accepted upstream rewrite (DummyProvider + LLMResponse pattern) | Low — upstream-only file |
 
 ---
 
@@ -78,4 +79,7 @@ Files we modify that also exist upstream — the merge conflict risk area:
 - **Pinned deps with upper bounds**: Upstream now uses version ranges like `>=X.Y.Z,<X+1.0.0`. Our custom deps should follow same pattern.
 - **Agent defaults changed**: temperature=0.1, max_tool_iterations=40, memory_window=100 (upstream 2026-02-25).
 - **workspace/ → nanobot/templates/**: Template files now bundled as package data, not separate workspace/ dir (upstream 2026-02-25).
+- **Literal import**: `from typing import Literal` now used in schema.py (MatrixConfig.group_policy).
+- **Explicit provider selection**: `provider: str = "auto"` in AgentDefaults; `match_provider()` checks before model detection.
+- **Heartbeat test pattern**: DummyProvider + LLMResponse/ToolCallRequest replaces MagicMock stubs.
 - **Next sync**: On-demand, before starting next feature task.

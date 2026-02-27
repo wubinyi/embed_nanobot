@@ -66,12 +66,12 @@ Build an **AI Hub** — a central intelligence node for smart homes and smart fa
 | **nanobot core** | Agentic loop, tools, skills, memory, sessions | Inherited from upstream |
 | **Hybrid Router** | Routes tasks between local LLM and cloud API | ✅ Implemented |
 | **LAN Mesh** | UDP discovery + TCP transport for device communication | ✅ Implemented |
-| **Device Security** | mTLS / PSK authentication, device enrollment | 🔲 Not started |
-| **Device Registry** | Capability discovery, device state management | 🔲 Not started |
-| **Device Command Schema** | Standardized command format for all device types | 🔲 Not started |
-| **OTA Update** | Over-the-air firmware push to embedded devices | 🔲 Not started |
+| **Device Security** | mTLS / PSK authentication, device enrollment | ✅ Implemented |
+| **Device Registry** | Capability discovery, device state management | ✅ Implemented |
+| **Device Command Schema** | Standardized command format for all device types | ✅ Implemented |
+| **OTA Update** | Over-the-air firmware push to embedded devices | ✅ Implemented |
 | **Local LLM Serving** | vLLM/Ollama integration for on-device inference | ✅ Supported via config |
-| **Upstream Sync** | Daily merge from HKUDS/nanobot main into main_embed | 🔲 Not started |
+| **Upstream Sync** | Daily merge from HKUDS/nanobot main into main_embed | ✅ Active (9 syncs) |
 
 ---
 

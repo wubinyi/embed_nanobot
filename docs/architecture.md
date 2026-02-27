@@ -14,7 +14,7 @@ nanobot is built around an **agentic loop** pattern: a user message flows in thr
                              ▼
 ┌──────────────────────────────────────────────────────────────┐
 │  Channels (Telegram, Discord, WhatsApp, Feishu, DingTalk,   │
-│  Email, Slack, QQ, MoChat, LAN Mesh)                        │
+│  Email, Slack, QQ, MoChat, Matrix, LAN Mesh)                │
 │  nanobot/channels/                                           │
 └────────────────────────────┬─────────────────────────────────┘
                              │ publish_inbound()
@@ -279,6 +279,7 @@ class BaseChannel(ABC):
 | Slack | `slack.py` | Socket Mode (slack-sdk) |
 | QQ | `qq.py` | WebSocket via botpy SDK |
 | MoChat | `mochat.py` | HTTP webhook |
+| Matrix | `matrix.py` | Matrix protocol via matrix-nio; E2EE, media, typing indicators, mention gating |
 | LAN Mesh | `mesh/channel.py` | UDP discovery + TCP transport |
 
 ---

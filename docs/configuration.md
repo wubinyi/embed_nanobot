@@ -30,10 +30,11 @@ export NANOBOT_AGENTS__DEFAULTS__MODEL="anthropic/claude-opus-4-5"
     "defaults": {
       "workspace": "~/.nanobot/workspace",  // Agent workspace directory
       "model": "anthropic/claude-opus-4-5",         // Default LLM model
-      "maxTokens": 16384,                   // Max tokens in LLM response
-      "temperature": 0.7,                   // LLM temperature (0.0–2.0)
-      "maxToolIterations": 30,              // Max tool call rounds per message
-      "memoryWindow": 50                    // Messages to keep before consolidation
+      "provider": "auto",                     // Provider name (e.g. "anthropic", "openrouter") or "auto" for auto-detection
+      "maxTokens": 8192,                      // Max tokens in LLM response
+      "temperature": 0.1,                     // LLM temperature (0.0–2.0)
+      "maxToolIterations": 40,               // Max tool call rounds per message
+      "memoryWindow": 100                     // Messages to keep before consolidation
     }
   },
   "providers": { ... },     // See Providers section
@@ -131,7 +132,7 @@ Each provider has an `apiKey` and optional `apiBase`. Only configure the provide
 
 ### Model Selection
 
-Set the default model in `agents.defaults.model`. The provider is auto-detected by keyword matching:
+Set the default model in `agents.defaults.model`. The provider is auto-detected by keyword matching, unless `agents.defaults.provider` is set to a specific provider name (e.g. `"anthropic"`, `"openrouter"`):
 
 | Model Name Contains | Provider Used |
 |---------------------|--------------|
@@ -225,7 +226,7 @@ Requires Node.js ≥18 and `nanobot channels login` to scan QR code.
       "appSecret": "xxx",
       "encryptKey": "",               // Optional for Long Connection mode
       "verificationToken": "",        // Optional for Long Connection mode
-      "allowFrom": []                 // Feishu user IDs (ou_xxx)
+      \"allowFrom\": [],                // Feishu user IDs (ou_xxx)\n      \"reactEmoji\": \"THUMBSUP\"          // Emoji type for message reactions (THUMBSUP, OK, DONE, SMILE)
     }
   }
 }
@@ -325,10 +326,36 @@ Requires Node.js ≥18 and `nanobot channels login` to scan QR code.
 }
 ```
 
+### Matrix (Element)
+
+Matrix (Element) is a decentralized, open communication protocol. nanobot connects via matrix-nio with support for E2EE (end-to-end encryption), inbound/outbound media, typing indicators, mention gating, and markdown rendering.
+
+```jsonc
+{
+  "channels": {
+    "matrix": {
+      "enabled": true,
+      "homeserver": "https://matrix.org",        // Matrix homeserver URL
+      "accessToken": "YOUR_ACCESS_TOKEN",        // Bot access token
+      "userId": "@bot:matrix.org",               // Bot user ID
+      "deviceId": "YOUR_DEVICE_ID",              // Device ID for E2EE
+      "e2eeEnabled": true,                       // Enable E2EE support
+      "syncStopGraceSeconds": 2,                 // Graceful sync shutdown timeout
+      "maxMediaBytes": 20971520,                 // Max attachment size (20MB)
+      "allowFrom": [],                           // Allowed user IDs
+      "groupPolicy": "open",                     // "open", "mention", or "allowlist"
+      "groupAllowFrom": [],                      // Allowed group users (when policy = "allowlist")
+      "allowRoomMentions": false                 // Allow @room mentions to trigger bot
+    }
+  }
+}
+```
+
+**Dependencies**: `pip install matrix-nio[e2e] nh3` (optional — Matrix channel only loads when installed).
+
 ### Mochat
 
 Mochat is an open-source IM platform. nanobot connects via Socket.IO with support for session/panel watching, per-group mention rules, and reconnect with backoff.
-
 ```jsonc
 {
   "channels": {
@@ -816,6 +843,7 @@ Controls the internal WebSocket gateway used by channels like WhatsApp.
 |--------|--------|
 | `restrictToWorkspace: true` | All file and shell operations are confined to the workspace directory. Path traversal is blocked. |
 | `exec.timeout` | Commands exceeding this timeout are killed. |
+| `exec.pathAppend` | Additional PATH entries for subprocess execution (e.g. `/usr/local/cuda/bin`). Uses OS path separator. |
 | Dangerous command blocking | Commands matching destructive patterns (`rm -rf /`, fork bombs, `mkfs`, etc.) are automatically blocked. |
 
 ### MCP Server Configuration
