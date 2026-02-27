@@ -10,7 +10,7 @@
 | **Upstream Branch** | `main` (tracks HKUDS/nanobot main) |
 | **Author** | wubinyi |
 | **Created** | 2026-02-12 |
-| **Status** | Draft |
+| **Status** | Active |
 
 ---
 
@@ -64,14 +64,23 @@ Build an **AI Hub** — a central intelligence node for smart homes and smart fa
 | Component | Description | Status |
 |-----------|-------------|--------|
 | **nanobot core** | Agentic loop, tools, skills, memory, sessions | Inherited from upstream |
-| **Hybrid Router** | Routes tasks between local LLM and cloud API | ✅ Implemented |
+| **Hybrid Router** | Routes tasks between local LLM and cloud API, with circuit breaker fallback | ✅ Implemented |
 | **LAN Mesh** | UDP discovery + TCP transport for device communication | ✅ Implemented |
-| **Device Security** | mTLS / PSK authentication, device enrollment | ✅ Implemented |
+| **Device Security** | PSK+HMAC auth, AES-256-GCM encryption, mTLS, device enrollment, CRL | ✅ Implemented |
 | **Device Registry** | Capability discovery, device state management | ✅ Implemented |
-| **Device Command Schema** | Standardized command format for all device types | ✅ Implemented |
-| **OTA Update** | Over-the-air firmware push to embedded devices | ✅ Implemented |
+| **Device Command Schema** | Standardized command format, NL→command translation | ✅ Implemented |
+| **Automation Engine** | Rule-based device control (condition → action, cooldown, validation) | ✅ Implemented |
+| **OTA Update** | Hub-initiated chunked firmware push via mesh TCP | ✅ Implemented |
+| **Code Generation** | AST-validated MicroPython code generation + OTA deploy | ✅ Implemented |
+| **Device Grouping** | Named groups and scenes with batch command execution | ✅ Implemented |
+| **Error Recovery** | Retry policies, watchdog, supervised tasks, OTA timeout enforcement | ✅ Implemented |
+| **Monitoring Dashboard** | Web UI for mesh status, device state, pipeline data | ✅ Implemented |
+| **Industrial/PLC** | Protocol adapter framework (Modbus TCP), auto-polling | ✅ Implemented |
+| **Hub Federation** | Hub-to-hub TCP mesh, registry sync, command forwarding | ✅ Implemented |
+| **Sensor Pipeline** | Time-series ring buffers, aggregation, auto-recording | ✅ Implemented |
+| **BLE Sensors** | Passive BLE advertisement scanning, auto-registration | ✅ Implemented |
 | **Local LLM Serving** | vLLM/Ollama integration for on-device inference | ✅ Supported via config |
-| **Upstream Sync** | Daily merge from HKUDS/nanobot main into main_embed | ✅ Active (9 syncs) |
+| **Upstream Sync** | Merge from HKUDS/nanobot main into main_embed | ✅ Active (10 syncs) |
 
 ---
 
@@ -79,31 +88,31 @@ Build an **AI Hub** — a central intelligence node for smart homes and smart fa
 
 ### 3.1 Device Communication (LAN Mesh)
 
-**Status: Partially implemented** — see `nanobot/mesh/`
+**Status: ✅ Implemented** — see `nanobot/mesh/`
 
 | ID | Requirement | Priority |
 |----|-------------|----------|
 | DC-01 | Devices discover each other via UDP broadcast on configurable port | ✅ Done |
 | DC-02 | Reliable message delivery via TCP with length-prefixed JSON envelopes | ✅ Done |
-| DC-03 | Support message types: CHAT, COMMAND, RESPONSE, PING, PONG | ✅ Done |
+| DC-03 | Support message types: CHAT, COMMAND, RESPONSE, PING, PONG + 10 more (STATE_REPORT, ENROLL_*, OTA_*, FEDERATION_*) | ✅ Done |
 | DC-04 | Mesh integrates with nanobot message bus as a channel | ✅ Done |
-| DC-05 | Support device capability advertisement in discovery beacons | 🔲 Planned |
-| DC-06 | Support message acknowledgement and delivery guarantees | 🔲 Planned |
+| DC-05 | Support device capability advertisement in discovery beacons | ✅ Done (task 2.1: PeerInfo carries capabilities/device_type) |
+| DC-06 | Support message acknowledgement and delivery guarantees | ✅ Done (task 3.5: retry_send with exponential backoff) |
 | DC-07 | Support broadcast and unicast messaging | ✅ Done (target="*") |
 
 ### 3.2 Device Security & Authentication
 
-**Status: Not started**
+**Status: ✅ Fully implemented** — PSK+HMAC (1.9), Enrollment (1.10), AES-GCM (1.11), mTLS (3.1), CRL (3.2)
 
 | ID | Requirement | Priority |
 |----|-------------|----------|
-| DS-01 | All mesh communication encrypted (TLS or AES-GCM) | P0 |
-| DS-02 | Device enrollment flow: Hub generates pairing token → device presents it → Hub issues certificate/PSK | P0 |
-| DS-03 | Mutual authentication: Hub verifies device, device verifies Hub | P0 |
-| DS-04 | Reject unenrolled/uncertified devices at transport layer | P0 |
-| DS-05 | Certificate/key revocation for compromised devices | P1 |
-| DS-06 | Secure key storage on Hub (encrypted keystore) | P1 |
-| DS-07 | Rate limiting to prevent brute-force enrollment attempts | P2 |
+| DS-01 | All mesh communication encrypted (TLS or AES-GCM) | ✅ Done (AES-256-GCM in task 1.11, mTLS in task 3.1) |
+| DS-02 | Device enrollment flow: Hub generates pairing token → device presents it → Hub issues certificate/PSK | ✅ Done (PIN-based enrollment in task 1.10, cert issuance in 3.1) |
+| DS-03 | Mutual authentication: Hub verifies device, device verifies Hub | ✅ Done (mTLS with CERT_REQUIRED in task 3.1) |
+| DS-04 | Reject unenrolled/uncertified devices at transport layer | ✅ Done (HMAC verification in 1.9, TLS handshake rejection in 3.1, CRL in 3.2) |
+| DS-05 | Certificate/key revocation for compromised devices | ✅ Done (app-level CRL + revoked.json + crl.pem in task 3.2) |
+| DS-06 | Secure key storage on Hub (encrypted keystore) | ✅ Done (KeyStore with 0600 perms in task 1.9) |
+| DS-07 | Rate limiting to prevent brute-force enrollment attempts | ✅ Done (max 3 attempts + lockout in task 1.10) |
 
 **Recommended solution — PSK + HMAC (Phase 1) → mTLS (Phase 2):**
 
@@ -139,34 +148,34 @@ Build an **AI Hub** — a central intelligence node for smart homes and smart fa
 | HI-02 | Easy tasks processed entirely by local LLM | ✅ Done |
 | HI-03 | Hard tasks forwarded to cloud API after PII sanitization | ✅ Done |
 | HI-04 | Configurable difficulty threshold | ✅ Done |
-| HI-05 | All device commands forced to local-only processing | 🔲 Planned |
-| HI-06 | Command-type routing: device commands always local, knowledge queries can be remote | 🔲 Planned |
-| HI-07 | Fallback: if cloud API is unreachable, degrade to local model | 🔲 Planned |
+| HI-05 | All device commands forced to local-only processing | ✅ Done (task 2.4: force_local_fn on HybridRouter) |
+| HI-06 | Command-type routing: device commands always local, knowledge queries can be remote | ✅ Done (task 2.4: registry-aware routing) |
+| HI-07 | Fallback: if cloud API is unreachable, degrade to local model | ✅ Done (task 2.7: circuit breaker + fallback) |
 
 ### 3.4 Device Control & Management
 
-**Status: Not started**
+**Status: ✅ Fully implemented**
 
 | ID | Requirement | Priority |
 |----|-------------|----------|
-| DM-01 | Device registry: track all enrolled devices, their capabilities, and state | P0 |
-| DM-02 | Standardized command schema: `{"device": "light-1", "action": "set", "params": {"brightness": 80}}` | P0 |
-| DM-03 | LLM generates device commands from natural language | P0 |
-| DM-04 | Device state query: "Is the front door locked?" → query device → respond | P1 |
-| DM-05 | Device grouping and scenes: "Good night" → lock doors + dim lights + arm alarm | P1 |
-| DM-06 | OTA firmware update: push new firmware to devices via mesh | P2 |
-| DM-07 | Device reprogramming: AI generates and pushes new code to ESP32/Arduino devices | P3 |
-| DM-08 | Automation rules: "If temperature > 28°C, turn on AC" | P1 |
+| DM-01 | Device registry: track all enrolled devices, their capabilities, and state | ✅ Done (task 2.1: DeviceRegistry with CRUD, state, persistence) |
+| DM-02 | Standardized command schema: `{"device": "light-1", "action": "set", "params": {"brightness": 80}}` | ✅ Done (task 2.2: DeviceCommand, 6-level validation) |
+| DM-03 | LLM generates device commands from natural language | ✅ Done (task 2.3: DeviceControlTool + SKILL.md) |
+| DM-04 | Device state query: "Is the front door locked?" → query device → respond | ✅ Done (task 2.3: DeviceControlTool 'state' action) |
+| DM-05 | Device grouping and scenes: "Good night" → lock doors + dim lights + arm alarm | ✅ Done (task 3.4: GroupManager, scenes, fan-out) |
+| DM-06 | OTA firmware update: push new firmware to devices via mesh | ✅ Done (task 3.3: OTAManager, chunked transfer, SHA-256) |
+| DM-07 | Device reprogramming: AI generates and pushes new code to ESP32/Arduino devices | ✅ Done (task 4.3: CodeGenerator, AST validator, ReprogramTool) |
+| DM-08 | Automation rules: "If temperature > 28°C, turn on AC" | ✅ Done (task 2.6: AutomationEngine, condition/action, cooldown) |
 
 ### 3.5 Upstream Synchronization
 
-**Status: Active** — four manual syncs completed (116+ upstream commits merged), needs automation.
+**Status: Active** — 10 manual syncs completed (500+ upstream commits merged). Automation deferred.
 
 | ID | Requirement | Priority |
 |----|-------------|----------|
 | US-01 | `main` branch tracks HKUDS/nanobot `main` branch | ✅ Done |
-| US-02 | Daily automated fetch of upstream changes | 🔲 Planned |
-| US-03 | Automated merge attempt from `main` into `main_embed` | 🔲 Planned |
+| US-02 | Daily automated fetch of upstream changes | 🔲 Deferred (manual sync sufficient at current cadence) |
+| US-03 | Automated merge attempt from `main` into `main_embed` | 🔲 Deferred (conflict resolution requires human judgment) |
 | US-04 | Conflict detection and documentation | ✅ Done (manual, see SYNC_LOG.md conflict surface) |
 | US-05 | Merge results logged to `docs/sync/` for traceability | ✅ Done (SYNC_LOG.md maintained) |
 | US-06 | Custom code follows "append-only" convention to minimize conflicts | ✅ Done (agent.md) |
@@ -196,7 +205,7 @@ Build an **AI Hub** — a central intelligence node for smart homes and smart fa
 - Simpler stack: standard TCP/IP, no dedicated coordinator hardware
 - Trade-off: higher power consumption (not suitable for battery-powered sensors in Phase 1)
 
-**Future consideration:** Add BLE mesh support as an optional transport layer for battery-powered sensors (Phase 3+).
+**BLE support**: BLE advertisement scanning implemented in Phase 4 (task 4.5) for battery-powered sensors. Uses `bleak` library with passive scanning and configurable device profiles.
 
 ### 5.2 Local LLM: vLLM / Ollama
 
@@ -226,38 +235,40 @@ The SDK should implement:
 
 ## 6. Phased Roadmap
 
-### Phase 1: Foundation (Current)
+### Phase 1: Foundation ✅
 - [x] Fork nanobot, establish main_embed branch
 - [x] Implement LAN Mesh communication (UDP discovery + TCP transport)
 - [x] Implement Hybrid Router (local + cloud LLM routing)
 - [x] Developer documentation (architecture, configuration, customization)
-- [x] Upstream merge workflow (manual) — five syncs completed (138+ upstream commits merged)
-- [ ] Project SKILL file for Copilot-assisted development
-- [ ] Automated upstream sync (daily)
-- [ ] PSK-based device authentication (HMAC signing)
+- [x] Upstream merge workflow (manual) — 10 syncs completed (500+ upstream commits merged)
+- [x] Project SKILL file for Copilot-assisted development
+- [x] PSK-based device authentication (HMAC signing)
+- [x] Device enrollment flow (PIN-based pairing)
+- [x] Mesh message encryption (AES-256-GCM)
 
-### Phase 2: Device Ecosystem
-- [ ] Device capability registry and state management
-- [ ] Standardized command schema
-- [ ] Natural language → device command translation (LLM skill)
-- [ ] Device enrollment flow (PIN-based pairing)
-- [ ] ESP32 SDK (MicroPython mesh client)
-- [ ] Basic automation rules engine
+### Phase 2: Device Ecosystem ✅
+- [x] Device capability registry and state management
+- [x] Standardized command schema
+- [x] Natural language → device command translation (LLM skill)
+- [x] Command-type routing (device commands always local)
+- [x] Basic automation rules engine
+- [x] Cloud API fallback (circuit breaker + degrade to local)
+- [ ] ESP32 SDK (MicroPython mesh client) — deferred, hardware-dependent
 
-### Phase 3: Production Hardening
-- [ ] mTLS for device authentication
-- [ ] Certificate revocation
-- [ ] OTA firmware update protocol
-- [ ] Device grouping and scenes
-- [ ] Error recovery and fault tolerance
-- [ ] Monitoring dashboard (web UI)
+### Phase 3: Production Hardening ✅
+- [x] mTLS for device authentication
+- [x] Certificate revocation (CRL)
+- [x] OTA firmware update protocol
+- [x] Device grouping and scenes
+- [x] Error recovery and fault tolerance
+- [x] Monitoring dashboard (web UI)
 
-### Phase 4: Smart Factory Extension
-- [ ] PLC/industrial device integration
-- [ ] Multi-Hub federation (hub-to-hub mesh)
-- [ ] Device reprogramming (AI-generated code push)
-- [ ] Sensor data pipeline and analytics
-- [ ] BLE mesh support for battery-powered sensors
+### Phase 4: Smart Factory Extension ✅
+- [x] PLC/industrial device integration
+- [x] Multi-Hub federation (hub-to-hub mesh)
+- [x] Device reprogramming (AI-generated code push)
+- [x] Sensor data pipeline and analytics
+- [x] BLE mesh support for battery-powered sensors
 
 ---
 
@@ -296,7 +307,7 @@ The SDK should implement:
 | `nanobot/config/` | Pydantic configuration schema | Extended (MeshConfig, HybridRouterConfig) |
 | `nanobot/cron/` | Scheduled tasks | No (upstream) |
 | `nanobot/heartbeat/` | Periodic task execution | No (upstream) |
-| `nanobot/mesh/` | LAN device mesh (discovery, transport, protocol) | **Yes** |
+| `nanobot/mesh/` | LAN device mesh (discovery, transport, protocol, security, registry, commands, automation, OTA, groups, resilience, codegen, industrial, federation, pipeline, BLE) | **Yes** |
 | `nanobot/providers/` | LLM providers (LiteLLM wrapper) | Extended (hybrid_router, openai_codex_provider) |
 | `nanobot/session/` | Conversation session management | No (upstream) |
 | `nanobot/skills/` | Modular skill packages | Extended (embed-specific skills) |
