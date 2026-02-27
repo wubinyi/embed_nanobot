@@ -442,6 +442,28 @@ def gateway(
         except Exception as e:
             logger.warning(f"Device control tool not available: {e}")
 
+    # --- embed_nanobot extensions: device reprogram tool (task 4.3) ---
+    if "mesh" in channels.channels:
+        try:
+            mesh_ch = channels.channels["mesh"]
+            if mesh_ch.ota_manager and mesh_ch.firmware_store:
+                from nanobot.agent.tools.reprogram import ReprogramTool
+                from nanobot.mesh.codegen import CodeGenerator
+                codegen = CodeGenerator(
+                    templates_path=getattr(config.channels.mesh, "codegen_templates_path", ""),
+                )
+                agent.tools.register(ReprogramTool(
+                    generator=codegen,
+                    firmware_store=mesh_ch.firmware_store,
+                    ota_manager=mesh_ch.ota_manager,
+                    registry=mesh_ch.registry,
+                    transport=mesh_ch.transport,
+                    node_id=mesh_ch.node_id,
+                ))
+                console.print("[green]✓[/green] Device reprogram tool registered")
+        except Exception as e:
+            logger.warning("Device reprogram tool not available: {}", e)
+
     cron_status = cron.status()
     if cron_status["jobs"] > 0:
         console.print(f"[green]✓[/green] Cron: {cron_status['jobs']} scheduled jobs")
