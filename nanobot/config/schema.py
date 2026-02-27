@@ -232,6 +232,8 @@ class MeshConfig(Base):
     pipeline_flush_interval: int = 60        # Seconds between auto-save to disk. 0 = manual.
     # --- embed_nanobot extensions: BLE sensor support (task 4.5) ---
     ble_config_path: str = ""                # Path to BLE config JSON. Empty = disabled.
+    # --- embed_nanobot extensions: device codegen (task 4.3) ---
+    codegen_templates_path: str = ""         # Path to custom code templates JSON. Empty = builtins only.
 
 
 class ChannelsConfig(Base):

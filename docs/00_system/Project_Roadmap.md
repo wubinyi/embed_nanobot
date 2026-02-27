@@ -84,9 +84,11 @@ All Phase 1 foundation tasks are done. Ready to begin Phase 2: Device Ecosystem.
 
 ### Planned Tasks
 
-| # | Task | Priority | Complexity | Dependencies |
-|---|------|----------|------------|--------------|
-| 4.3 | Device reprogramming (AI-generated code push) | P2 | XL | OTA (3.3), Commands (2.2) |
+All Phase 4 tasks are complete.
+
+| # | Task | Priority | Complexity | Dependencies | Status |
+|---|------|----------|------------|--------------|--------|
+| ~~4.3~~ | ~~Device reprogramming (AI-generated code push)~~ | ~~P2~~ | ~~XL~~ | ~~OTA (3.3), Commands (2.2)~~ | **Done** 2026-02-27 |
 | ~~4.4~~ | ~~Sensor data pipeline and analytics~~ | ~~P2~~ | ~~L~~ | ~~Registry (2.1)~~ | **Done** 2026-02-26 |
 | ~~4.5~~ | ~~BLE mesh support for battery-powered sensors~~ | ~~P2~~ | ~~L~~ | ~~Mesh transport abstraction~~ | **Done** 2026-02-26 |
 
@@ -362,3 +364,14 @@ See [docs/sync/SYNC_LOG.md](../sync/SYNC_LOG.md) for full merge history.
 - **50 new tests** across 16 test classes (894 total, zero regressions): advertisement parsing, byte decoding, profile matching, scan processing, device pruning, lifecycle, channel integration.
 - **Zero conflict surface increase**: ble.py is a new file, schema.py/channel.py have append-only changes.
 - **Phase 4 status**: Only 4.3 (Device reprogramming, XL) remains. All other Phase 4 tasks complete.
+
+### Strategic Note — Task 4.3 (Device Code Generation) — 2026-02-27
+
+- **Architecture**: AST-based code generation and safety validation pipeline. `CodeValidator` performs 7-point safety analysis (syntax, import whitelist, blocked calls/attrs, network server detection, structure check, size limit). `CodeGenerator` manages templates and produces `CodePackage` bundles.
+- **Templates**: 4 built-in MicroPython templates (sensor_reader, actuator_switch, pwm_controller, i2c_sensor). Custom templates loadable from JSON file.
+- **Agent tool**: `ReprogramTool` with 5 actions (templates, generate, validate, deploy, status). Bridges LLM to codegen + OTA infrastructure.
+- **Safety model**: Whitelist-first import control (30+ MicroPython-safe modules). Blocked sandbox escapes (__class__, __subclasses__, __globals__). No eval/exec/compile. Network server patterns rejected.
+- **Config**: 1 field appended to MeshConfig: `codegen_templates_path`.
+- **78 new tests** across 9 test classes (78 codegen + validator + tool tests): safety validation (23 tests), generator (16 tests), tool actions (22 tests), data models, constants.
+- **Zero conflict surface increase**: codegen.py and reprogram.py are new files, schema.py/commands.py have append-only changes.
+- **Phase 4 status**: All Phase 4 tasks now complete. All planned roadmap tasks finished.

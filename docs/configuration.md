@@ -728,6 +728,48 @@ In this setup:
 
 ---
 
+### Example: Device Code Generation (Reprogram)
+
+Generate MicroPython firmware from templates and deploy via OTA:
+
+```jsonc
+{
+  "channels": {
+    "mesh": {
+      "enabled": true,
+      "firmwareDir": "/path/to/firmware/",
+      "codegenTemplatesPath": "/path/to/custom_templates.json"
+    }
+  }
+}
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `codegenTemplatesPath` | `""` | Path to a JSON file containing custom code templates. Empty = use built-in templates only. |
+
+Built-in templates: `sensor_reader`, `actuator_switch`, `pwm_controller`, `i2c_sensor`.
+
+Custom templates JSON format:
+```json
+[
+  {
+    "platform": "micropython",
+    "name": "my_sensor",
+    "description": "Custom sensor with averaging",
+    "template": "import machine\n...\ndef setup():\n    pass\ndef loop():\n    pass\n",
+    "required_params": ["pin", "sample_count"],
+    "device_type": "sensor"
+  }
+]
+```
+
+The `device_reprogram` agent tool is automatically registered when mesh + OTA are both enabled
+(`firmwareDir` is set). The tool provides five actions: `templates`, `generate`, `validate`,
+`deploy`, and `status`.
+
+---
+
 ## Hybrid Router
 
 The hybrid router enables dual-model routing: a local model judges task difficulty, handles easy tasks, and sanitises PII before forwarding hard tasks to an API model.
