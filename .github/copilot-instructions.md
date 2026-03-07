@@ -59,6 +59,41 @@ Repository structure:
   </Agent>
 </Agents>
 
+<Subagent_Integration>
+
+  ## Subagent Usage Guidelines
+
+  The Copilot environment provides **subagent delegation** via `runSubagent`. Use subagents to parallelize research, delegate exploration tasks, and maintain clean context separation.
+
+  ### Available Subagents
+
+  | Subagent | Use Case | When to Invoke |
+  |----------|----------|----------------|
+  | `Explore` | Read-only codebase exploration, Q&A, file scanning | When exploring unfamiliar code areas, gathering context for design decisions, or understanding upstream changes. Specify thoroughness: quick/medium/thorough. |
+
+  ### When to Use Subagents
+
+  - **Bootstrap Step A** (Context Sync): Use `Explore` (thorough) to scan recent feature docs, changelog, and codebase state in parallel.
+  - **Phase 0** (Roadmap Review): Use `Explore` to check current module state, verify "Done" items actually exist.
+  - **Phase 1** (Design): Use `Explore` to research upstream patterns before proposing designs (e.g., "How does upstream register providers? Show me the pattern in registry.py").
+  - **Phase 2** (Implementation): Use `Explore` to find integration points, check for similar implementations, verify imports.
+  - **Upstream Sync**: Use `Explore` to analyze upstream changes before merging (e.g., "What changed in base.py? What new patterns were introduced?").
+  - **Self-Reflection**: Use `Explore` to spot-check documentation accuracy against actual code.
+
+  ### Subagent Best Practices
+
+  1. **Prefer subagents over sequential search**: When you need to understand an unfamiliar area of the codebase, delegate to `Explore` rather than chaining many individual searches.
+  2. **Be specific in prompts**: Tell the subagent exactly what to look for and what to return.
+  3. **Use for research, not action**: Subagents explore and report. The main agent makes decisions and edits.
+  4. **Safe for parallel use**: The `Explore` subagent is read-only and safe to call in parallel.
+  5. **Context handoff**: Include relevant context in the subagent prompt — it doesn't see your conversation history.
+
+  ### Custom Subagent Definitions
+
+  Additional specialized subagents can be defined in the workspace's `AGENTS.md` file or via VS Code settings. When new subagents are available, the main agent should leverage them for their designated tasks. Currently our workflow's conceptual agent roles (Architect, Reviewer, Developer, Tester) operate as mental models within the main agent, not as separate subagents — this keeps latency low and context unified while still enforcing role-based thinking.
+
+</Subagent_Integration>
+
 <Workflow>
 
   <AutoMode>
