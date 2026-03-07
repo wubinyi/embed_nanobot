@@ -271,7 +271,7 @@ class TestMeshChannel:
         config.tcp_port = 0
         config.udp_port = 0
         config.roles = ["nanobot"]
-        config.allow_from = []
+        config.allow_from = ["*"]
         config.psk_auth_enabled = False
         config.key_store_path = ""
         config.allow_unauthenticated = False
@@ -304,7 +304,7 @@ class TestMeshChannel:
         config.tcp_port = 0
         config.udp_port = 0
         config.roles = ["nanobot"]
-        config.allow_from = []
+        config.allow_from = ["*"]
         config.psk_auth_enabled = False
         config.key_store_path = ""
         config.allow_unauthenticated = False
@@ -328,7 +328,7 @@ class TestMeshChannel:
         config.tcp_port = 0
         config.udp_port = 0
         config.roles = ["nanobot"]
-        config.allow_from = []
+        config.allow_from = ["*"]
         config.psk_auth_enabled = False
         config.key_store_path = ""
         config.allow_unauthenticated = False
