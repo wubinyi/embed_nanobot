@@ -2,7 +2,7 @@
 
 > Single source of truth for project progress. Updated after each feature completion.
 
-**Last updated**: 2026-02-27 (Upstream sync complete)
+**Last updated**: 2026-03-07 (Upstream sync complete, Conflict strategy updated)
 
 ---
 
@@ -98,9 +98,9 @@ All Phase 4 tasks are complete.
 
 | Metric | Value |
 |--------|-------|
-| Last sync date | 2026-02-27 |
-| `origin/main` HEAD | e86cfcd |
-| `upstream/main` HEAD | e86cfcd |
+| Last sync date | 2026-03-07 |
+| `origin/main` HEAD | ab89775 |
+| `upstream/main` HEAD | ab89775 |
 | Commits behind | 0 (fully synced) |
 | Next sync target | On-demand, before next feature task |
 

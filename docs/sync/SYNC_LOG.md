@@ -2,7 +2,7 @@
 
 Tracks all merges from `HKUDS/nanobot` (upstream) `main` into our `main_embed` branch.
 
-**Last updated**: 2026-02-27
+**Last updated**: 2026-03-07
 
 ---
 
@@ -10,6 +10,7 @@ Tracks all merges from `HKUDS/nanobot` (upstream) `main` into our `main_embed` b
 
 | Date | Upstream HEAD | Commits | Conflicts | Key Features | Details |
 |------|---------------|---------|-----------|--------------|---------|
+| 2026-03-07 | ab89775 | 211 (~120 non-merge) | shell.py, manager.py, commands.py (×2), schema.py, providers/__init__.py, registry.py, pyproject.toml | Azure OpenAI provider, Discord attachments, WhatsApp media+dedup, Feishu rewrite, DingTalk media, tool auto-cast, reasoning_effort, allow_from validation, Telegram streaming UX | [2026-03-07 details](2026-03-07_sync_details.md) |
 | 2026-02-07 | ea1d2d7 | ~15 | schema.py, manager.py, commands.py, README.md | Initial upstream merge — Email, Slack, QQ, MoChat channels; CLI UX | [2026-02-11 details](2026-02-11_sync_details.md) |
 | 2026-02-10 | ea1d2d7 | 3 | schema.py | MiniMax provider, MoChat/DingTalk fixes | [2026-02-11 details](2026-02-11_sync_details.md) |
 | 2026-02-12 | ea1d2d7 | 0 | None | Clean merge (main already up to date) | — |
@@ -20,7 +21,7 @@ Tracks all merges from `HKUDS/nanobot` (upstream) `main` into our `main_embed` b
 | 2026-02-25 | 9e806d7 | 276 (148 non-merge) | manager.py (×2), commands.py, pyproject.toml | v0.1.4 era: workspace→templates migration, memory consolidation types, VolcEngine provider, Mochat channel, HeartbeatService refactor, prompt caching, progress streaming, agent defaults (temp 0.1, max_iter 40), pinned dep versions | [2026-02-25 details](2026-02-25_sync_details.md) |
 | 2026-02-27 | e86cfcd | 107 (78 non-merge) | manager.py, schema.py, test_heartbeat_service.py | Matrix (Element) channel, agent context refactor, /stop command + task cancellation, explicit provider selection, exec path_append, Telegram media-group fix, workspace template auto-sync, heartbeat test rewrite | [2026-02-27 details](2026-02-27_sync_details.md) |
 
-**Current status**: Fully synced with upstream/main (`e86cfcd`). 0 commits pending.
+**Current status**: Fully synced with upstream/main (`ab89775`). 0 commits pending.
 
 ---
 
@@ -83,3 +84,7 @@ Files we modify that also exist upstream — the merge conflict risk area:
 - **Explicit provider selection**: `provider: str = "auto"` in AgentDefaults; `match_provider()` checks before model detection.
 - **Heartbeat test pattern**: DummyProvider + LLMResponse/ToolCallRequest replaces MagicMock stubs.
 - **Next sync**: On-demand, before starting next feature task.
+- **allow_from semantics change**: Empty list `[]` now means "deny all" (was "allow all"). Use `["*"]` for allow-all. Tests updated.
+- **Azure OpenAI provider**: New provider class, needs `api_key` + `api_base` + deployment name as model.
+- **Tool auto-cast**: `base.py` now auto-casts tool params to match schema (str→int/float/bool).
+- **reasoning_effort**: New `AgentDefaults` field for LLM thinking mode.

@@ -308,15 +308,14 @@ Repository structure:
   #### Rule 5: Track Conflict Surface Area
   - Maintain a list of files we modify that also exist upstream (the **conflict surface**).
   - Current conflict surface:
-    | Our File | Upstream File | Our Changes |
-    |----------|--------------|-------------|
-    | `nanobot/config/schema.py` | Same | Appended MeshConfig, HybridRouterConfig fields |
-    | `nanobot/channels/manager.py` | Same | Appended mesh channel registration |
-    | `nanobot/cli/commands.py` | Same | Added hybrid router creation in `_make_provider()` |
-    | `nanobot/providers/__init__.py` | Same | Added hybrid_router export |
-    | `nanobot/providers/registry.py` | Same | Appended hybrid_router, vllm entries |
-    | `README.md` | Same | Added embed_nanobot section at bottom |
-    | `pyproject.toml` | Same | Added deps at end |
+    | Our File | Upstream File | Our Changes | Risk |
+    |----------|--------------|-------------|------|
+    | `nanobot/config/schema.py` | Same | Appended MeshConfig, HybridRouterConfig fields | Medium — upstream adds fields/models frequently |
+    | `nanobot/channels/manager.py` | Same | Appended mesh channel registration before `_validate_allow_from()` | Low — append-only, upstream adds new methods after our block |
+    | `nanobot/cli/commands.py` | Same | HybridRouter in `_make_provider()`, device tools + reprogram in `gateway()` | **High** — upstream actively refactors; two separate embed blocks |
+    | `nanobot/providers/__init__.py` | Same | Added HybridRouterProvider export | Low — single line |
+    | `nanobot/providers/registry.py` | Same | Appended Ollama ProviderSpec | Low — append before auxiliary section |
+    | `pyproject.toml` | Same | Added `cryptography` dep at end | Low |
   - **Goal**: Keep this list as short as possible. Before touching a shared file, ask: "Can I achieve this in a separate file instead?"
 
   #### Rule 6: Pre-Merge Conflict Prediction
@@ -328,6 +327,21 @@ Repository structure:
     git merge --abort
     ```
   - If new conflict-prone files appear, update the conflict surface table above.
+
+  #### Rule 7: Watch for Semantic Changes in Base Classes
+  - Upstream may change the **behavior** of base classes (e.g., `BaseChannel.is_allowed()` semantics) without renaming or deleting anything.
+  - These won't show as merge conflicts but WILL break our tests and runtime behavior.
+  - **After every sync**: run the full test suite. If tests fail, check base class method signatures and default behaviors.
+  - **Key watchlist**: `BaseChannel.is_allowed()`, `BaseChannel._handle_message()`, `Tool._cast_params()`, `LLMProvider.chat_completion()`.
+  - **Lesson learned (2026-03-07)**: `allow_from=[]` changed from "allow all" to "deny all". Tests using empty allow_from broke silently.
+
+  #### Rule 8: Minimize Inline Code in `commands.py`
+  - `nanobot/cli/commands.py` is our **highest-risk conflict surface** — upstream refactors it frequently and heavily.
+  - **Strategy**: Move as much registration logic as possible into dedicated modules:
+    - Device tool registration → could be a setup function in `nanobot/mesh/setup.py`
+    - HybridRouter creation → already in separate module, just import+call in commands.py
+  - Keep our embed blocks in `commands.py` as **minimal dispatchers** (1-3 lines calling into our modules).
+  - Mark each embed block with a unique comment tag for easy identification during conflict resolution.
 
   ### Upstream Refactoring Response Protocol
 
