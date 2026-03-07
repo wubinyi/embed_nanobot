@@ -1,6 +1,6 @@
 ---
-name: EmbedNanobot_Agentic_Workflow_v1.3
-version: 1.3.0
+name: EmbedNanobot_Agentic_Workflow_v1.4
+version: 1.4.0
 description: Multi-agent collaboration protocol for embed_nanobot — AI Hub for Smart Home & Smart Factory
 ---
 
@@ -470,3 +470,104 @@ Repository structure:
 - **Conflict surface**: Before modifying any upstream file, check if the change can be isolated in a separate file instead. Update the conflict surface table when adding new shared-file modifications.
 - **Convention drift**: When upstream refactors are detected, update `agent.md` and Developer conventions BEFORE writing new code.
 </Constraints>
+
+<Self_Reflection_Protocol>
+
+  ## Self-Reflection Protocol
+
+  This protocol is **mandatory** after completing each task (feature, sync, fix, or user-requested work).
+  The agent must autonomously reflect on the process and outcomes, then act on any insights.
+
+  ### When to Trigger
+
+  - **After every task completion** (before declaring "done" in Phase 3)
+  - **After receiving significant user feedback** (corrections, preferences, complaints)
+  - **After a difficult debugging session** (>3 attempts to fix an issue)
+  - **After an upstream sync** that reveals convention drift or new patterns
+  - **Periodically during long sessions** (every 3-5 tasks)
+
+  ### Reflection Dimensions
+
+  The agent evaluates each dimension and takes action if improvement is needed:
+
+  #### 1. Skill & Workflow Effectiveness
+  - **Question**: Did the current workflow (Phases 0→3) serve this task well, or were steps skipped/unnecessary?
+  - **Question**: Are there recurring patterns in this task that should be captured as a new skill or convention?
+  - **Question**: Did any workflow phase cause friction or slow the task down?
+  - **Action**: If workflow gaps found → propose updates to this copilot-instructions.md or create new skill files.
+  - **Action**: If a new reusable pattern emerged → document it in `agent.md` or a dedicated skill file.
+
+  #### 2. Team Setup & Agent Roles
+  - **Question**: Were all four agent roles (Architect/Reviewer/Developer/Tester) necessary for this task?
+  - **Question**: Is there a role missing? (e.g., DevOps, Security Specialist, UX Designer)
+  - **Question**: Did the role boundaries cause redundancy or gaps?
+  - **Action**: If roles need adjustment → propose changes to the `<Agents>` section.
+
+  #### 3. Conflict Surface & Upstream Strategy
+  - **Question**: Did this task increase our conflict surface with upstream?
+  - **Question**: Could any shared-file modifications be refactored into isolated modules?
+  - **Action**: Update the conflict surface table if it changed.
+  - **Action**: If a new conflict pattern emerged → add a Rule to `Conflict_Minimization_Strategy`.
+
+  #### 4. Technical Debt & Code Quality
+  - **Question**: Did we introduce any shortcuts or TODOs that need follow-up?
+  - **Question**: Are there untested edge cases we knowingly skipped?
+  - **Question**: Is there dead code or unused imports from refactoring?
+  - **Action**: If debt identified → add a follow-up task to the roadmap with priority.
+
+  #### 5. Documentation Accuracy
+  - **Question**: Do all docs (arch, config, customization, PRD) still reflect reality?
+  - **Question**: Are there new concepts or modules that need documentation?
+  - **Action**: Run the Documentation Freshness Check (already mandatory, but verify it was thorough).
+
+  #### 6. User Interaction & Preferences
+  - **Question**: Did the user express preferences about workflow, communication style, or priorities?
+  - **Question**: Were there misunderstandings that suggest unclear documentation or conventions?
+  - **Action**: If preferences detected → store in memory (user-level) for future sessions.
+  - **Action**: If conventions need clarification → update relevant docs.
+
+  #### 7. Innovation & Feature Opportunities
+  - **Question**: Did this task reveal new feature possibilities aligned with our AI Hub vision?
+  - **Question**: Are there upstream features we should leverage that we're not using?
+  - **Question**: Can existing features be improved based on what we learned?
+  - **Action**: If opportunities found → add them to the roadmap as "Proposed" items.
+
+  #### 8. Security & Reliability
+  - **Question**: Did we handle all authentication, encryption, and access control correctly?
+  - **Question**: Are there failure modes we didn't consider (network loss, resource exhaustion, malformed input)?
+  - **Action**: If gaps found → create immediate follow-up tasks.
+
+  ### Output Format
+
+  After reflection, the agent produces a brief **Reflection Note** (not a separate file — appended to the task's implementation doc or roadmap):
+
+  ```markdown
+  ### Post-Task Reflection
+  - **Workflow**: [OK / Suggestion: ...]
+  - **Team roles**: [OK / Suggestion: ...]
+  - **Conflict surface**: [Unchanged / Changed: ...]
+  - **Tech debt**: [None / Added TODO: ...]
+  - **Docs**: [Fresh / Updated: ...]
+  - **User preferences**: [None / Noted: ...]
+  - **Opportunities**: [None / Proposed: ...]
+  - **Security**: [OK / Gap found: ...]
+  - **Skill updates applied**: [None / Updated: ...]
+  ```
+
+  ### Self-Update Authority
+
+  The agent is authorized to make the following updates automatically:
+  - **Add new rules** to `Conflict_Minimization_Strategy` based on merge experience.
+  - **Update the conflict surface table** when shared files are added/removed.
+  - **Add convention notes** to `SYNC_LOG.md` or `agent.md`.
+  - **Propose new tasks** in the roadmap (as "Proposed" status — user approves to "Planned").
+  - **Update documentation** to fix staleness found during reflection.
+  - **Record user preferences** in memory for future sessions.
+
+  The agent MUST NOT automatically:
+  - Remove existing workflow rules without user approval.
+  - Change the branching strategy.
+  - Modify security requirements or constraints.
+  - Remove agent roles (only add/adjust).
+
+</Self_Reflection_Protocol>
