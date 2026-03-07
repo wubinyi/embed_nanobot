@@ -94,6 +94,97 @@ All Phase 4 tasks are complete.
 
 ---
 
+## Phase 5: Autonomous Intelligence & Secure Device Management
+
+> AI Hub evolves from a reactive assistant to a proactive, autonomous system that monitors,
+> learns, and updates the device ecosystem independently.
+
+### 5.1 — Autonomous Heartbeat & Proactive Exploration
+
+**Goal**: AI Hub periodically explores its environment — monitoring device states, detecting anomalies, optimizing automations, and taking proactive actions without user prompting.
+
+**Building on existing infrastructure**:
+- Upstream `HeartbeatService` already provides periodic LLM wake-ups with HEARTBEAT.md
+- Upstream `CronService` provides scheduled task execution
+- Our `DeviceRegistry`, `AutomationEngine`, `Pipeline` provide device + data context
+
+| # | Task | Priority | Complexity | Dependencies | Status |
+|---|------|----------|------------|--------------|--------|
+| 5.1.1 | **Configurable autonomous mode** | P1 | M | Heartbeat, Cron | Planned |
+| | User-configurable enable/disable autonomous behavior via config.json | | | | |
+| | Custom interval settings (default 30min, range 1min–24hr) | | | | |
+| | Autonomy levels: `off`, `monitor-only`, `suggest`, `act` | | | | |
+| | Config field: `AutonomousConfig(enabled, interval_s, autonomy_level, exploration_topics)` | | | | |
+| 5.1.2 | **Environmental awareness loop** | P1 | L | Registry, Pipeline, 5.1.1 | Planned |
+| | Periodic state snapshot: online devices, sensor readings, anomaly detection | | | | |
+| | Trend analysis: compare current readings against historical baselines (pipeline data) | | | | |
+| | Auto-generate actionable summaries for the LLM | | | | |
+| 5.1.3 | **Proactive automation refinement** | P2 | L | Automation (2.6), 5.1.2 | Planned |
+| | AI analyzes automation rule effectiveness (hit rate, timing, conditions) | | | | |
+| | Suggests new rules based on observed patterns | | | | |
+| | Self-tuning: adjusts thresholds, timings based on feedback | | | | |
+| 5.1.4 | **Exploration task framework** | P2 | M | 5.1.1, 5.1.2 | Planned |
+| | User-defined exploration topics (e.g., "monitor energy usage", "check security cameras") | | | | |
+| | LLM-driven exploratory actions with sandboxing (read-only unless `act` level) | | | | |
+| | Event log for transparency: all autonomous actions recorded with reasoning | | | | |
+
+### 5.2 — Secure Remote Device Software Management (Dual-Partition OTA)
+
+**Goal**: AI Hub can customize and deploy software to controlled devices (ESP32) via Wi-Fi,
+using a secure dual-partition architecture where one partition is immutable (device core/bootloader)
+and the other is remotely updatable by the Hub.
+
+**Building on existing infrastructure**:
+- `OTAManager` provides chunked firmware transfer over mesh TCP
+- `CodeGenerator` provides MicroPython template-based generation with AST safety
+- `MeshCA` provides X.509 certificate infrastructure for device identity
+
+| # | Task | Priority | Complexity | Dependencies | Status |
+|---|------|----------|------------|--------------|--------|
+| 5.2.1 | **Dual-partition protocol specification** | P1 | L | OTA (3.3), Codegen (4.3) | Planned |
+| | Define partition layout: `core_partition` (read-only, bootloader + mesh client + safety monitor) | | | | |
+| | `app_partition` (read-write, AI Hub-deployed application code) | | | | |
+| | Boot sequence: core verifies app signature → loads app → monitors for crashes | | | | |
+| | Rollback protocol: if app crashes N times → core reverts to last-known-good version | | | | |
+| | Hub-side manifest: tracks per-device partition states (core version, app version, app hash) | | | | |
+| 5.2.2 | **Signed firmware protocol** | P1 | M | MeshCA (3.1), 5.2.1 | Planned |
+| | Hub signs firmware packages with its CA private key (EC P-256) | | | | |
+| | Device core partition verifies signature before writing to app partition | | | | |
+| | Anti-rollback counter: monotonic version number prevents downgrade attacks | | | | |
+| | Secure boot chain: core → verify sig → hash check → write app → verify written hash | | | | |
+| 5.2.3 | **Intelligent firmware generation** | P1 | L | Codegen (4.3), 5.2.1 | Planned |
+| | AI Hub generates device-specific firmware based on user requirements AND environment context | | | | |
+| | Environment-aware: "room is too hot" → generate thermostat control code for ESP32 | | | | |
+| | Capability-aware: check device hardware before generating code (ADC pins, I2C bus, etc.) | | | | |
+| | Version management: track what code runs on each device, diff against new generation | | | | |
+| 5.2.4 | **Safe deployment pipeline** | P2 | M | 5.2.1, 5.2.2, 5.2.3 | Planned |
+| | Staged rollout: test on one device → verify for N minutes → deploy to group | | | | |
+| | Health monitoring: after deployment, confirm device reports healthy state | | | | |
+| | Emergency recall: broadcast "revert to last-known-good" to all devices | | | | |
+| | Deployment history: full audit trail of what code was deployed when, by whom | | | | |
+| 5.2.5 | **ESP32 core partition SDK** | P2 | XL | 5.2.1, 5.2.2 | Planned |
+| | MicroPython/C dual-partition bootloader for ESP32 | | | | |
+| | Mesh client (Wi-Fi + TCP) in core partition: discovery, enrollment, PSK auth | | | | |
+| | Signature verification lib: EC P-256 verify in constrained environment | | | | |
+| | Crash counter + watchdog + rollback mechanism in ROM-safe storage | | | | |
+| | This is hardware-dependent and requires physical ESP32 for validation | | | | |
+
+### 5.3 — Improvements to Existing Features
+
+| # | Task | Priority | Complexity | Dependencies | Status |
+|---|------|----------|------------|--------------|--------|
+| 5.3.1 | **MCP-based device protocol tools** | P2 | M | MCP (upstream) | Proposed |
+| | Expose device control as MCP tools for external AI agents | | | | |
+| | Enables integration with other AI systems (e.g., Claude Desktop, ChatGPT plugins) | | | | |
+| 5.3.2 | **ESP32 SDK (MicroPython mesh client)** | P1 | XL | All mesh | Deferred |
+| | Client-side mesh implementation for actual ESP32 hardware testing | | | | |
+| | Depends on 5.2.5 now for dual-partition architecture | | | | |
+| 5.3.3 | **Cloud dashboard (web-based)** | P3 | L | Dashboard (3.6) | Proposed |
+| | Remote access to device dashboard over HTTPS | | | | |
+| | Authentication + RBAC for multi-user environments | | | | |
+
+---
+
 ## Upstream Sync Status
 
 | Metric | Value |
@@ -374,4 +465,18 @@ See [docs/sync/SYNC_LOG.md](../sync/SYNC_LOG.md) for full merge history.
 - **Config**: 1 field appended to MeshConfig: `codegen_templates_path`.
 - **78 new tests** across 9 test classes (78 codegen + validator + tool tests): safety validation (23 tests), generator (16 tests), tool actions (22 tests), data models, constants.
 - **Zero conflict surface increase**: codegen.py and reprogram.py are new files, schema.py/commands.py have append-only changes.
+
+### 2026-03-07 — Phase 5 Planning: Autonomous Intelligence & Secure Device Management
+
+- **Upstream sync completed**: 211 commits merged (ab89775). 7 conflicts resolved. Key new upstream features: Azure OpenAI, tool auto-cast, allow_from validation, reasoning_effort.
+- **SKILL v1.4 shipped**: Added Self-Reflection Protocol (8 dimensions, self-update authority), Subagent Integration (Explore subagent), updated Conflict_Minimization_Strategy (Rules 7-8).
+- **Phase 5 planned** based on user vision for AI Hub evolution:
+  - **5.1 Autonomous Heartbeat**: Builds on upstream HeartbeatService + CronService. Adds configurable autonomy levels (off/monitor/suggest/act), environmental awareness loop, proactive automation refinement, exploration task framework.
+  - **5.2 Secure Remote Device Management**: Builds on existing OTA + CodeGenerator + MeshCA. Adds dual-partition flash protocol (immutable core + updatable app), signed firmware with anti-rollback, intelligent environment-aware code generation, safe deployment pipeline with staged rollout.
+  - **5.3 Improvements**: MCP-based device tools, ESP32 SDK (now depends on 5.2.5 for dual-partition), cloud dashboard.
+- **Key architectural decisions**:
+  - Dual-partition approach chosen for security and reliability: core partition cannot be modified remotely, preventing bricked devices.
+  - Autonomy levels provide user control: `off` = traditional assistant, `monitor-only` = observe and report, `suggest` = propose actions for approval, `act` = execute autonomously.
+  - Anti-rollback counter prevents firmware downgrade attacks in 5.2.2.
+- **Next tasks**: 5.1.1 (configurable autonomous mode) and 5.2.1 (dual-partition protocol spec), both P1 with no blockers.
 - **Phase 4 status**: All Phase 4 tasks now complete. All planned roadmap tasks finished.

@@ -79,8 +79,10 @@ Build an **AI Hub** — a central intelligence node for smart homes and smart fa
 | **Hub Federation** | Hub-to-hub TCP mesh, registry sync, command forwarding | ✅ Implemented |
 | **Sensor Pipeline** | Time-series ring buffers, aggregation, auto-recording | ✅ Implemented |
 | **BLE Sensors** | Passive BLE advertisement scanning, auto-registration | ✅ Implemented |
+| **Autonomous Mode** | Configurable proactive monitoring, exploration, and self-tuning | 🔲 Planned (5.1) |
+| **Dual-Partition OTA** | Secure dual-partition firmware management with signed updates | 🔲 Planned (5.2) |
 | **Local LLM Serving** | vLLM/Ollama integration for on-device inference | ✅ Supported via config |
-| **Upstream Sync** | Merge from HKUDS/nanobot main into main_embed | ✅ Active (10 syncs) |
+| **Upstream Sync** | Merge from HKUDS/nanobot main into main_embed | ✅ Active (11 syncs) |
 
 ---
 
@@ -269,6 +271,17 @@ The SDK should implement:
 - [x] Device reprogramming (AI-generated code push)
 - [x] Sensor data pipeline and analytics
 - [x] BLE mesh support for battery-powered sensors
+
+### Phase 5: Autonomous Intelligence & Secure Device Management
+- [ ] Configurable autonomous mode (autonomy levels: off/monitor/suggest/act)
+- [ ] Environmental awareness loop (state snapshots, trend analysis, anomaly detection)
+- [ ] Proactive automation refinement (rule effectiveness analysis, self-tuning)
+- [ ] Exploration task framework (user-defined topics, sandboxed actions, event log)
+- [ ] Dual-partition OTA protocol (immutable core + updatable app partition)
+- [ ] Signed firmware with anti-rollback protection
+- [ ] Intelligent environment-aware firmware generation
+- [ ] Safe deployment pipeline (staged rollout, health monitoring, emergency recall)
+- [ ] ESP32 core partition SDK (dual-partition bootloader, mesh client, signature verification)
 
 ---
 
