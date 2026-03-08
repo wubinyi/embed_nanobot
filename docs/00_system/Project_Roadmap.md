@@ -2,7 +2,7 @@
 
 > Single source of truth for project progress. Updated after each feature completion.
 
-**Last updated**: 2026-03-07 (Upstream sync complete, Conflict strategy updated)
+**Last updated**: 2026-03-08 (ESP32 MicroPython client scaffold created, hardware testing started)
 
 ---
 
@@ -176,9 +176,11 @@ and the other is remotely updatable by the Hub.
 | 5.3.1 | **MCP-based device protocol tools** | P2 | M | MCP (upstream) | Proposed |
 | | Expose device control as MCP tools for external AI agents | | | | |
 | | Enables integration with other AI systems (e.g., Claude Desktop, ChatGPT plugins) | | | | |
-| 5.3.2 | **ESP32 SDK (MicroPython mesh client)** | P1 | XL | All mesh | Deferred |
+| 5.3.2 | **ESP32 SDK (MicroPython mesh client)** | P1 | XL | All mesh | **In Progress** (2026-03-08) |
 | | Client-side mesh implementation for actual ESP32 hardware testing | | | | |
-| | Depends on 5.2.5 now for dual-partition architecture | | | | |
+| | Scaffold created: `esp32/mesh_client/` — WiFi, enrollment, PSK auth, command dispatch, OTA stub | | | | |
+| | Hardware testing with physical ESP32 Dev Board now underway | | | | |
+| | See [docs/GETTING_STARTED.md](../GETTING_STARTED.md) for setup + deployment guide | | | | |
 | 5.3.3 | **Cloud dashboard (web-based)** | P3 | L | Dashboard (3.6) | Proposed |
 | | Remote access to device dashboard over HTTPS | | | | |
 | | Authentication + RBAC for multi-user environments | | | | |
@@ -207,6 +209,14 @@ See [docs/sync/SYNC_LOG.md](../sync/SYNC_LOG.md) for full merge history.
 - **Key architectural decision**: PSK+HMAC first (simple, fits ESP32), mTLS later (production-grade).
 - **Main risk**: Upstream divergence — mitigated by daily sync protocol and append-only convention.
 - **Next priority**: Perform upstream sync (9 commits behind), then start PSK authentication (task 1.9).
+
+### 2026-03-08 — ESP32 Hardware Integration Started
+- **Physical ESP32 Dev Board available**: Hardware testing phase begins.
+- **MicroPython client scaffold created**: `esp32/mesh_client/` — 6 modules covering WiFi connection, enrollment protocol, PSK security (HMAC-SHA256 + flash persistence), TCP transport with auto-reconnect, device GPIO abstraction, and main dispatch loop.
+- **Deploy tooling added**: `esp32/tools/flash.sh` (erase + flash MicroPython) and `esp32/tools/deploy.sh` (upload via mpremote).
+- **Getting started guide written**: `docs/GETTING_STARTED.md` covers installation, Google Gemini config, test execution, and ESP32 connection walkthrough.
+- **Task 5.3.2 unblocked**: Changed from Deferred to In Progress. OTA receive stub in place, ready for Phase 5.2 dual-partition work once basic connectivity is validated on hardware.
+- **Immediate next steps**: Flash MicroPython → deploy client → test enrollment → test LED command via NL ("turn on the LED on esp32-01").
 
 ### 2026-02-17 — Major Upstream Sync Complete
 - **116 upstream commits merged** (77 non-merge): MCP support, OpenAI Codex provider, redesigned memory system, CLI overhaul with prompt_toolkit, security hardening, cron improvements.
