@@ -345,12 +345,14 @@ Repository structure:
   - Current conflict surface:
     | Our File | Upstream File | Our Changes | Risk |
     |----------|--------------|-------------|------|
-    | `nanobot/config/schema.py` | Same | Appended MeshConfig, HybridRouterConfig fields | Medium — upstream adds fields/models frequently |
-    | `nanobot/channels/manager.py` | Same | Appended mesh channel registration before `_validate_allow_from()` | Low — append-only, upstream adds new methods after our block |
-    | `nanobot/cli/commands.py` | Same | HybridRouter in `_make_provider()`, device tools + reprogram in `gateway()` | **High** — upstream actively refactors; two separate embed blocks |
-    | `nanobot/providers/__init__.py` | Same | Added HybridRouterProvider export | Low — single line |
-    | `nanobot/providers/registry.py` | Same | Appended Ollama ProviderSpec | Low — append before auxiliary section |
+    | `nanobot/config/schema.py` | Same | MeshConfig class + `mesh` field in ChannelsConfig | **Medium** — upstream may add new models; keep MeshConfig isolated with clear marker |
+    | `nanobot/config/loader.py` | Same | Changed default config path to `.embed_nanobot` | Low — single line, but must preserve upstream's `_current_config_path` logic |
+    | `nanobot/channels/manager.py` | Same | Appended mesh channel registration before `_validate_allow_from()` | Low — append-only, upstream now uses `discover_all()` loop |
+    | `nanobot/cli/commands.py` | Same | HybridRouter in `_make_provider()`, device tools + reprogram in `gateway()` | **High** — upstream actively refactors; three separate embed blocks |
+    | `nanobot/providers/__init__.py` | Same | Added HybridRouterProvider to lazy import dict and `__all__` | Low — append-only additions to dict and list |
+    | `nanobot/providers/registry.py` | Same | ~~Appended Ollama ProviderSpec~~ REMOVED — upstream now has Ollama natively | **Reduced** — no more embed additions |
     | `pyproject.toml` | Same | Added `cryptography` dep at end | Low |
+    | `tests/providers/test_providers_init.py` | Same | Extended `__all__` assertion to include HybridRouterProvider | Low — but breaks on every upstream `__all__` change |
   - **Goal**: Keep this list as short as possible. Before touching a shared file, ask: "Can I achieve this in a separate file instead?"
 
   #### Rule 6: Pre-Merge Conflict Prediction
@@ -377,6 +379,36 @@ Repository structure:
     - HybridRouter creation → already in separate module, just import+call in commands.py
   - Keep our embed blocks in `commands.py` as **minimal dispatchers** (1-3 lines calling into our modules).
   - Mark each embed block with a unique comment tag for easy identification during conflict resolution.
+
+  #### Rule 9: Never Duplicate Upstream Config Classes in `schema.py`
+  - **Lesson learned (2026-03-25)**: Upstream moved channel config classes (WhatsAppConfig, TelegramConfig, etc.) OUT of `schema.py` and INTO each channel's own module file (e.g., `nanobot/channels/telegram.py`). `ChannelsConfig` now uses `extra="allow"` and accepts any dict.
+  - Our old approach of duplicating all upstream channel configs in `schema.py` caused a **240-line conflict** during the 2026-03-25 merge.
+  - **Rule**: Only keep **our own** config classes (e.g., `MeshConfig`) in `schema.py`. Never copy upstream's channel/provider config classes there.
+  - **Corollary**: When upstream adds a new channel, we don't need to touch `schema.py` at all.
+
+  #### Rule 10: Follow Upstream's Lazy Import Pattern for `__init__.py`
+  - **Lesson learned (2026-03-25)**: Upstream replaced eager imports in `nanobot/providers/__init__.py` with a `_LAZY_IMPORTS` dict + `__getattr__` pattern.
+  - Our old eager import of `LiteLLMProvider` and `HybridRouterProvider` conflicted entirely.
+  - **Rule**: When adding new providers to `__init__.py`, add them to `_LAZY_IMPORTS` dict + `__all__` list + `TYPE_CHECKING` block — never use top-level eager imports.
+  - **Pattern to follow**:
+    ```python
+    _LAZY_IMPORTS = {
+        ...upstream entries...,
+        # --- embed_nanobot extensions ---
+        "HybridRouterProvider": ".hybrid_router",
+    }
+    ```
+
+  #### Rule 11: Don't Shadow Upstream's New Native Features
+  - **Lesson learned (2026-03-25)**: We had added an Ollama `ProviderSpec` entry in `registry.py`, but upstream later added Ollama natively with different fields. This created a duplicate + field mismatch (`litellm_prefix` was removed from `ProviderSpec`).
+  - **Rule**: Before adding a provider/feature that upstream might add later, check upstream's nightly branch. If they're likely to add it, wait or make our version trivially removable.
+  - **Detection**: When upstream adds a feature we already have, **remove our version** and adopt theirs during the sync.
+
+  #### Rule 12: Adapt to Upstream's Channel Discovery Mechanism
+  - **Lesson learned (2026-03-25)**: Upstream introduced `nanobot/channels/registry.py` with `discover_all()` — channels in `nanobot/channels/` are auto-discovered via `pkgutil`.
+  - Our mesh channel lives in `nanobot/mesh/channel.py` (isolated module), so it's NOT auto-discovered. We use manual registration in `manager.py` — this is correct and intentional.
+  - **If we create future channels**: Either place them in `nanobot/channels/<name>.py` for auto-discovery (preferred if no conflict risk), or keep them in isolated modules with manual registration in `manager.py`.
+  - **Ensure `display_name` class attribute**: All channels must have `display_name` set since upstream's `BaseChannel` now uses it.
 
   ### Upstream Refactoring Response Protocol
 

@@ -39,6 +39,7 @@ class MeshChannel(BaseChannel):
     """Chat channel that communicates over the LAN mesh."""
 
     name = "mesh"
+    display_name = "LAN Mesh"
 
     def __init__(
         self,

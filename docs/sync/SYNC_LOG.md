@@ -2,7 +2,7 @@
 
 Tracks all merges from `HKUDS/nanobot` (upstream) `main` into our `main_embed` branch.
 
-**Last updated**: 2026-03-07
+**Last updated**: 2026-03-25
 
 ---
 
@@ -10,6 +10,7 @@ Tracks all merges from `HKUDS/nanobot` (upstream) `main` into our `main_embed` b
 
 | Date | Upstream HEAD | Commits | Conflicts | Key Features | Details |
 |------|---------------|---------|-----------|--------------|---------|
+| 2026-03-25 | 0ccfcf6 | 428 | shell.py, commands.py, loader.py, schema.py, providers/__init__.py, pyproject.toml | **Major refactor**: LiteLLM→native SDKs (Anthropic+OpenAI), lazy provider imports, channel auto-discovery via `registry.py`, channel configs moved into channel modules, WeiXin/WeCom channels, CI/CD, security hardening, tiktoken, OVMS provider | [2026-03-25 details](2026-03-25_sync_details.md) |
 | 2026-03-07 | ab89775 | 211 (~120 non-merge) | shell.py, manager.py, commands.py (×2), schema.py, providers/__init__.py, registry.py, pyproject.toml | Azure OpenAI provider, Discord attachments, WhatsApp media+dedup, Feishu rewrite, DingTalk media, tool auto-cast, reasoning_effort, allow_from validation, Telegram streaming UX | [2026-03-07 details](2026-03-07_sync_details.md) |
 | 2026-02-07 | ea1d2d7 | ~15 | schema.py, manager.py, commands.py, README.md | Initial upstream merge — Email, Slack, QQ, MoChat channels; CLI UX | [2026-02-11 details](2026-02-11_sync_details.md) |
 | 2026-02-10 | ea1d2d7 | 3 | schema.py | MiniMax provider, MoChat/DingTalk fixes | [2026-02-11 details](2026-02-11_sync_details.md) |
@@ -21,7 +22,7 @@ Tracks all merges from `HKUDS/nanobot` (upstream) `main` into our `main_embed` b
 | 2026-02-25 | 9e806d7 | 276 (148 non-merge) | manager.py (×2), commands.py, pyproject.toml | v0.1.4 era: workspace→templates migration, memory consolidation types, VolcEngine provider, Mochat channel, HeartbeatService refactor, prompt caching, progress streaming, agent defaults (temp 0.1, max_iter 40), pinned dep versions | [2026-02-25 details](2026-02-25_sync_details.md) |
 | 2026-02-27 | e86cfcd | 107 (78 non-merge) | manager.py, schema.py, test_heartbeat_service.py | Matrix (Element) channel, agent context refactor, /stop command + task cancellation, explicit provider selection, exec path_append, Telegram media-group fix, workspace template auto-sync, heartbeat test rewrite | [2026-02-27 details](2026-02-27_sync_details.md) |
 
-**Current status**: Fully synced with upstream/main (`ab89775`). 0 commits pending.
+**Current status**: Fully synced with upstream/main (`0ccfcf6`). 0 commits pending.
 
 ---
 
@@ -52,12 +53,14 @@ Files we modify that also exist upstream — the merge conflict risk area:
 
 | Our File | Our Changes | Risk |
 |----------|-------------|------|
-| `nanobot/config/schema.py` | Appended `MeshConfig(Base)`, `HybridRouterConfig(Base)` fields | Medium — upstream adds fields/models frequently |
-| `nanobot/channels/manager.py` | Appended mesh channel registration (loguru format) | Low — append-only |
-| `nanobot/cli/commands.py` | Added HybridRouterProvider in `_make_provider()`, DeviceControlTool + routing in `gateway()` | Medium — upstream active |
-| `nanobot/providers/__init__.py` | Added hybrid_router export | Low — append-only |
-| `README.md` | Added embed_nanobot section at bottom | Medium — upstream updates frequently |
-| `pyproject.toml` | Appended `cryptography` dep | Low |
+| `nanobot/config/schema.py` | MeshConfig class + `mesh` field in ChannelsConfig | Medium — upstream may add new models; keep MeshConfig isolated with clear marker |
+| `nanobot/config/loader.py` | Changed default config path to `.embed_nanobot` | Low — single line, preserves upstream's `_current_config_path` logic |
+| `nanobot/channels/manager.py` | Appended mesh channel registration after `discover_all()` loop | Low — append-only |
+| `nanobot/cli/commands.py` | HybridRouter in `_make_provider()`, device tools + reprogram in `gateway()` | **High** — upstream actively refactors; three separate embed blocks |
+| `nanobot/providers/__init__.py` | Added HybridRouterProvider to `_LAZY_IMPORTS` dict, `__all__`, and `TYPE_CHECKING` | Low — follows upstream's lazy import pattern |
+| `nanobot/providers/registry.py` | ~~Ollama ProviderSpec~~ REMOVED — upstream has Ollama natively | **Reduced** — no more embed additions |
+| `pyproject.toml` | Added `cryptography` dep at end | Low |
+| `tests/providers/test_providers_init.py` | Extended `__all__` assertion to include HybridRouterProvider | Low — but breaks on every upstream `__all__` change |
 | `tests/test_heartbeat_service.py` | Accepted upstream rewrite (DummyProvider + LLMResponse pattern) | Low — upstream-only file |
 
 ---
