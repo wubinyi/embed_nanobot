@@ -2,7 +2,7 @@
 
 > Single source of truth for project progress. Updated after each feature completion.
 
-**Last updated**: 2026-03-08 (ESP32 MicroPython client scaffold created, hardware testing started)
+**Last updated**: 2026-03-26 (Gateway bugs fixed, enrollment flow ready for testing)
 
 ---
 
@@ -181,6 +181,7 @@ and the other is remotely updatable by the Hub.
 | | Scaffold created: `esp32/mesh_client/` — WiFi, enrollment, PSK auth, command dispatch, OTA stub | | | | |
 | | Hardware testing with physical ESP32 Dev Board now underway | | | | |
 | | See [docs/GETTING_STARTED.md](../GETTING_STARTED.md) for setup + deployment guide | | | | |
+| | **2026-03-26**: ESP32 flashed and deployed via WSL (`deploy.sh`). Gateway bugs fixed (BUG-001/002/003). `--enroll` flag implemented. Next: test enrollment + LED command. See `docs/02_bugfix/BUGFIX_LOG.md`. | | | | |
 | 5.3.3 | **Cloud dashboard (web-based)** | P3 | L | Dashboard (3.6) | Proposed |
 | | Remote access to device dashboard over HTTPS | | | | |
 | | Authentication + RBAC for multi-user environments | | | | |
@@ -217,6 +218,17 @@ See [docs/sync/SYNC_LOG.md](../sync/SYNC_LOG.md) for full merge history.
 - **Getting started guide written**: `docs/GETTING_STARTED.md` covers installation, Google Gemini config, test execution, and ESP32 connection walkthrough.
 - **Task 5.3.2 unblocked**: Changed from Deferred to In Progress. OTA receive stub in place, ready for Phase 5.2 dual-partition work once basic connectivity is validated on hardware.
 - **Immediate next steps**: Flash MicroPython → deploy client → test enrollment → test LED command via NL ("turn on the LED on esp32-01").
+
+### 2026-03-26 — Gateway Bugs Fixed, Enrollment Ready
+- **Environment**: ESP32 NodeMCU-32S (CP2102), Windows 10 + WSL dev setup, usbipd-win for USB pass-through.
+- **ESP32 deployed**: MicroPython flashed, mesh client uploaded via `deploy.sh /dev/ttyUSB0` from WSL.
+- **Gateway bugs found and fixed** (3 bugs):
+  - BUG-001: `ota_manager` attribute → `ota` + missing logger import in `commands.py`.
+  - BUG-002: `--enroll` CLI flag referenced but never implemented → implemented with `EnrollmentService.create_pin()`.
+  - BUG-003: `allowFrom: []` denies all connections → documented fix (set `["*"]`).
+- **Workflow established**: Created `docs/02_bugfix/BUGFIX_LOG.md` for tracking, updated `copilot-instructions.md` v1.5 with Bugfix Workflow and Hardware Testing & Feedback Loop.
+- **Provider**: Using OpenRouter/stepfun (`stepfun/step-3.5-flash:free`), no local LLM.
+- **Next steps**: Run `nanobot gateway --enroll`, test ESP32 enrollment over Wi-Fi, then test NL device commands.
 
 ### 2026-02-17 — Major Upstream Sync Complete
 - **116 upstream commits merged** (77 non-merge): MCP support, OpenAI Codex provider, redesigned memory system, CLI overhaul with prompt_toolkit, security hardening, cron improvements.

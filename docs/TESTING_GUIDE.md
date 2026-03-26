@@ -417,32 +417,34 @@ Edit `~/.embed_nanobot/config.json`:
     "nodeId": "hub-01",
     "tcpPort": 18800,
     "udpPort": 18799,
+    "allowFrom": ["*"],
     "pskAuthEnabled": true,
     "encryptionEnabled": true,
     ...
 }
 ```
 
-### Step 2: Start the gateway with verbose logging
+> **Important**: `allowFrom` must be set to `["*"]` (or specific device IDs).
+> The default `[]` denies all connections.
+
+### Step 2: Start the gateway with enrollment
 
 ```bash
 cd ~/workspace/embed_nanobot
-nanobot gateway -v 2>&1 | tee ~/gateway.log
+nanobot gateway --enroll -v 2>&1 | tee ~/gateway.log
 ```
 
 All `[MeshChannel]`, `[Transport]`, `[Discovery]`, `[Enrollment]` log lines
-will be captured in `~/gateway.log`.
+will be captured in `~/gateway.log`.  The `--enroll` flag generates an
+enrollment PIN and displays it at startup:
 
-### Step 3: Generate enrollment PIN
-
-In a **second terminal**:
-
-```bash
-nanobot gateway --enroll
-# Output: PIN: 482193  (expires in 5 minutes)
+```
+📌 Enrollment PIN: 482193
+   Expires at 23:05:31 (in 300s)
+   Enter on ESP32 REPL: import main; main.run(enrollment_pin='482193')
 ```
 
-### Step 4: Enroll the ESP32
+### Step 3: Enroll the ESP32
 
 On the ESP32 REPL (from Windows: `mpremote connect COM3 repl`,
 or from WSL with usbipd: `mpremote connect /dev/ttyUSB0 repl`):
@@ -461,9 +463,9 @@ connects to the hub.  You should see in `~/gateway.log`:
 [Transport] New connection from esp32-01
 ```
 
-### Step 5: Test device interaction via chat
+### Step 4: Test device interaction via chat
 
-In a **third terminal**, interact with the AI:
+In a **second terminal**, interact with the AI:
 
 ```bash
 nanobot agent -m "What devices are connected?" 2>&1 | tee ~/agent_device.log
@@ -476,7 +478,7 @@ nanobot agent -m "What is the state of esp32-01?" 2>&1 | tee -a ~/agent_device.l
 > Without a local LLM, the device tool won't be registered.  You can still
 > verify mesh connectivity, enrollment, and transport through the gateway logs.
 
-### Step 6: Set auto-start on ESP32
+### Step 5: Set auto-start on ESP32
 
 Once enrollment works, configure automatic boot:
 

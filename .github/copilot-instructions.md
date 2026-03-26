@@ -1,6 +1,6 @@
 ---
-name: EmbedNanobot_Agentic_Workflow_v1.4
-version: 1.4.0
+name: EmbedNanobot_Agentic_Workflow_v1.5
+version: 1.5.0
 description: Multi-agent collaboration protocol for embed_nanobot — AI Hub for Smart Home & Smart Factory
 ---
 
@@ -19,6 +19,10 @@ Key references:
 - Customization Guide: #file:docs/customization.md
 - Sync Log: #file:docs/sync/SYNC_LOG.md
 - Upstream Sync Protocol: #file:docs/00_system/UPSTREAM_SYNC_PROTOCOL.md
+
+- Testing Guide: #file:docs/TESTING_GUIDE.md
+- Testing FAQ: #file:docs/TESTING_FAQ.md
+- Bug Fix Log: #file:docs/02_bugfix/BUGFIX_LOG.md
 
 Repository structure:
 - **Upstream branch**: `main` (tracks HKUDS/nanobot)
@@ -204,6 +208,67 @@ Repository structure:
   - [ ] Feature docs written (`01_Design_Log.md`, `02_Dev_Implementation.md`, `03_Test_Report.md`) if applicable
 
   For upstream syncs specifically, the full completion gate is in: #file:docs/00_system/UPSTREAM_SYNC_PROTOCOL.md
+
+  ## Bugfix Workflow
+
+  When a bug is reported during testing (user feedback, gateway crash, device failure):
+
+  1. **Diagnose**: Read logs, reproduce the issue, identify root cause.
+  2. **Fix**: Apply the minimal fix. Follow Conflict Minimization Strategy.
+  3. **Record**: Append an entry to `docs/02_bugfix/BUGFIX_LOG.md` with:
+     - Date, severity, symptom, root cause, fix description, files changed.
+  4. **Update docs**: If the bug revealed a documentation gap (missing config step,
+     wrong command), update the affected docs (`TESTING_GUIDE.md`, `TESTING_FAQ.md`,
+     `configuration.md`, etc.).
+  5. **Commit**: Use format `fix(<scope>): <description>` — e.g., `fix(cli): correct ota attribute name`.
+     Batch related fixes into a single commit when they share the same root cause.
+  6. **Roadmap**: Only update the roadmap if the bug blocks a roadmap task or reveals
+     a new task to add.
+
+  **Important**: Bug fixes do NOT go through the full Phase 0→3 feature workflow.
+  They follow this lightweight path: diagnose → fix → record → commit.
+  FAQ items (conceptual questions, setup guidance) stay in `TESTING_FAQ.md`.
+  Actual code bugs go in `BUGFIX_LOG.md`.
+
+  ## Hardware Testing & Feedback Loop
+
+  The project is now in a **user-driven testing phase** (Phase 5.3.2+).
+  The primary workflow is:
+
+  ```
+  User tests on hardware → reports bug/issue → Agent diagnoses & fixes →
+  User re-tests → cycle repeats until feature works end-to-end
+  ```
+
+  ### Agent behavior during this phase
+
+  - **Prioritize fix speed over design ceremony**: When the user reports a bug
+    during active testing, skip Phase 0/1 design and go straight to diagnosis
+    and fix. Use the Bugfix Workflow above.
+  - **Always verify before declaring fixed**: After editing code, check for
+    import errors, run relevant tests if feasible, and confirm the fix makes
+    sense logically.
+  - **Log everything**: Every fix, config change, or workaround must be
+    recorded in `BUGFIX_LOG.md`. This is the team's memory for cross-session
+    continuity.
+  - **Update user-facing docs immediately**: If a fix changes CLI behavior,
+    config requirements, or setup steps, update `TESTING_GUIDE.md` and/or
+    `TESTING_FAQ.md` in the same commit.
+  - **Commit after each fix batch**: Don't accumulate uncommitted fixes.
+    Commit after each logical fix so the user can pull/test incrementally.
+  - **Session recovery**: When starting a new session, read
+    `docs/02_bugfix/BUGFIX_LOG.md` to understand what was fixed recently
+    and `docs/00_system/Project_Roadmap.md` to understand current phase.
+
+  ### What belongs where
+
+  | Content | Location |
+  |---------|----------|
+  | Code bug found during testing | `docs/02_bugfix/BUGFIX_LOG.md` |
+  | "How do I..." / conceptual Q&A | `docs/TESTING_FAQ.md` |
+  | Setup steps, flash/deploy/enroll | `docs/TESTING_GUIDE.md` |
+  | Feature design & implementation | `docs/01_features/fXX_*/` |
+  | Strategic progress & status | `docs/00_system/Project_Roadmap.md` |
 
 </Workflow>
 
@@ -482,9 +547,13 @@ Repository structure:
   │   │   └── ...
   │   └── fXX_<feature>/
   │       └── ...
+  ├── 02_bugfix/
+  │   └── BUGFIX_LOG.md            # All bug fixes with symptom, root cause, fix
   ├── sync/
   │   ├── SYNC_LOG.md              # Merged summary: sync table + conflict surface + fork overview
   │   └── YYYY-MM-DD_sync_details.md # Detailed sync notes per date
+  ├── TESTING_GUIDE.md              # Step-by-step testing instructions (ESP32 flash, deploy, mesh)
+  ├── TESTING_FAQ.md                # Frequently asked questions from testing sessions
   ├── PRD.md                        # Product Requirements Document
   ├── architecture.md               # System architecture reference
   ├── configuration.md              # Configuration reference
@@ -498,6 +567,8 @@ Repository structure:
   4. **Test Report** (`03_Test_Report.md`) lists tests written, edge cases covered, and any known gaps.
   5. **Roadmap** is the single source of truth for project progress.
   6. **Sync logs** provide full traceability of upstream merges.
+  7. **Bug fixes** are logged in `docs/02_bugfix/BUGFIX_LOG.md` — one entry per bug with date, severity, root cause, fix, and affected files.
+  8. **Testing docs** (`TESTING_GUIDE.md`, `TESTING_FAQ.md`) are living documents updated whenever a fix changes setup steps or CLI behavior.
 
 </Documentation_Protocol>
 
