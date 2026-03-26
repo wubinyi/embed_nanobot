@@ -1,6 +1,6 @@
 ---
-name: EmbedNanobot_Agentic_Workflow_v1.5
-version: 1.5.0
+name: EmbedNanobot_Agentic_Workflow_v1.6
+version: 1.6.0
 description: Multi-agent collaboration protocol for embed_nanobot — AI Hub for Smart Home & Smart Factory
 ---
 
@@ -54,6 +54,16 @@ Repository structure:
       - Config additions appended to the END of existing Pydantic models.
       - New channels registered LAST in `manager.py`.
       - All imports at top of file, grouped: stdlib → third-party → local.
+    - **ESP32 / MicroPython coding rules** (for `esp32/mesh_client/*.py`):
+      - **No `|` union types** — use `x=None` not `x: str | None = None`.
+      - **No `**dict` unpacking in dict literals** — use `d = {}; d.update(other)` instead of `{**other}`.
+      - **No `_` in numeric literals** — use `100000` not `100_000`.
+      - **No `hmac` module** — use `security.hmac_sha256()` (manual HMAC implementation).
+      - **No `hashlib.pbkdf2_hmac`** — use `enrollment._pbkdf2_sha256()` (manual PBKDF2).
+      - **No `typing`**, `dataclasses`, `pathlib`, `enum`, `abc` modules.
+      - **Variable annotations** like `x: dict = {}` may fail — use `x = {}` instead.
+      - **Return type annotations** like `-> None:` are OK in recent MicroPython but `-> dict | None:` is not.
+      - **Always test on device**: After editing ESP32 code, deploy via `deploy.sh` and verify with `mpremote exec`.
   </Agent>
 
   <Agent id="Tester">
@@ -269,6 +279,75 @@ Repository structure:
   | Setup steps, flash/deploy/enroll | `docs/TESTING_GUIDE.md` |
   | Feature design & implementation | `docs/01_features/fXX_*/` |
   | Strategic progress & status | `docs/00_system/Project_Roadmap.md` |
+
+  ## ESP32 & Gateway Testing Protocol
+
+  The agent has **direct control** over both the nanobot gateway (Python CLI) and ESP32 hardware (via `mpremote` over USB/serial). Use this to perform full end-to-end testing.
+
+  ### Environment
+
+  - **ESP32**: NodeMCU-32S (CP2102), connected via USB at `/dev/ttyUSB0` (WSL via usbipd-win)
+  - **Gateway**: `nanobot gateway` CLI, listens on mesh TCP port (default 18800)
+  - **ESP32 firmware**: MicroPython with mesh client at `esp32/mesh_client/`
+  - **Deploy tool**: `bash esp32/tools/deploy.sh /dev/ttyUSB0`
+  - **ESP32 config**: On-device `/config.py` — WiFi creds, hub IP, node ID, capabilities
+
+  ### Available Commands
+
+  ```bash
+  # --- ESP32 Control (via mpremote) ---
+
+  # Deploy all mesh_client files to ESP32
+  bash esp32/tools/deploy.sh /dev/ttyUSB0
+
+  # Force-update config.py too
+  FORCE_CONFIG=1 bash esp32/tools/deploy.sh /dev/ttyUSB0
+
+  # Execute a Python snippet on ESP32 (non-interactive)
+  mpremote connect /dev/ttyUSB0 exec "import main; print('OK')"
+
+  # Read a file from ESP32
+  mpremote connect /dev/ttyUSB0 cat :config.py
+
+  # Copy a single file to ESP32
+  mpremote connect /dev/ttyUSB0 cp esp32/mesh_client/main.py :main.py
+
+  # List files on ESP32
+  mpremote connect /dev/ttyUSB0 ls :/
+
+  # Open interactive REPL (use Ctrl-X to exit)
+  mpremote connect /dev/ttyUSB0 repl
+
+  # Soft-reset ESP32 (clears imported modules)
+  mpremote connect /dev/ttyUSB0 reset
+
+  # --- Gateway Control (nanobot CLI) ---
+
+  # Start gateway with enrollment enabled
+  nanobot gateway --enroll -v 2>&1 | tee ~/gateway.log
+
+  # Start gateway without enrollment
+  nanobot gateway -v 2>&1 | tee ~/gateway.log
+  ```
+
+  ### End-to-End Testing Workflow
+
+  1. **Pre-check**: Verify ESP32 is accessible: `mpremote connect /dev/ttyUSB0 exec "print('alive')"`
+  2. **Deploy**: `bash esp32/tools/deploy.sh /dev/ttyUSB0`
+  3. **Verify import**: `mpremote connect /dev/ttyUSB0 exec "import main; print('OK')"`
+  4. **Start gateway** (background): `nanobot gateway --enroll -v 2>&1 | tee ~/gateway.log`
+  5. **Read enrollment PIN** from gateway output
+  6. **Run enrollment on ESP32**: `mpremote connect /dev/ttyUSB0 exec "import main; main.run(enrollment_pin='PIN')"`
+  7. **Check gateway log** for enrollment success and device registration
+  8. **Test device commands** via gateway CLI or nanobot agent
+
+  ### Troubleshooting ESP32
+
+  - **`/dev/ttyUSB0` not found**: USB cable may be charge-only, or usbipd-win not attached. Run `usbipd list` and `usbipd attach --wsl --busid X-Y` on Windows.
+  - **Import errors**: MicroPython incompatibility. Check the MicroPython coding rules in the Developer agent section.
+  - **WiFi connection fails**: Check `config.py` on device — `mpremote connect /dev/ttyUSB0 cat :config.py`.
+  - **Module still cached after fix**: Run `mpremote connect /dev/ttyUSB0 reset` before re-importing.
+  - **Stale `.mpy` bytecode**: Delete compiled files: `mpremote connect /dev/ttyUSB0 rm :module.mpy` if they exist.
 
 </Workflow>
 
