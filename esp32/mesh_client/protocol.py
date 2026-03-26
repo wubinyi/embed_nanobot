@@ -55,7 +55,7 @@ def make_nonce() -> str:
 
 
 def build_envelope(msg_type: str, source: str, target: str,
-                   payload: dict, psk: bytes | None = None) -> dict:
+                   payload: dict, psk=None):
     """Create a signed envelope ready to send.
 
     If *psk* is provided the HMAC field is filled; otherwise it is empty

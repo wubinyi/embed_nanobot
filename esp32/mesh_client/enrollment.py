@@ -16,19 +16,32 @@ Enrollment protocol (mirrors nanobot/mesh/enrollment.py on the hub):
 """
 
 import hashlib
-import hmac
 import ubinascii
 
 from protocol import build_envelope, encode, decode
 import security
+from security import hmac_sha256
 
 
-_PBKDF2_ITERS = 100_000
+_PBKDF2_ITERS = 100000
+
+
+def _pbkdf2_sha256(password, salt, iterations, dklen=32):
+    """PBKDF2-HMAC-SHA256 (manual — MicroPython has no hashlib.pbkdf2_hmac).
+
+    Only supports dklen <= 32 (single block).
+    """
+    u = hmac_sha256(password, salt + b'\x00\x00\x00\x01')
+    result = u
+    for _ in range(iterations - 1):
+        u = hmac_sha256(password, u)
+        result = bytes(a ^ b for a, b in zip(result, u))
+    return result[:dklen]
 
 
 def _pin_proof(pin: str, node_id: str) -> str:
     """Compute HMAC-SHA256(pin_bytes, node_id_bytes) as hex string."""
-    digest = hmac.new(pin.encode(), node_id.encode(), hashlib.sha256).digest()
+    digest = hmac_sha256(pin.encode(), node_id.encode())
     return ubinascii.hexlify(digest).decode()
 
 
@@ -36,7 +49,7 @@ def _decrypt_psk(encrypted_psk_hex: str, salt_hex: str, pin: str) -> bytes:
     """XOR-decrypt the hub-provided PSK using a PBKDF2-derived key."""
     enc_psk = ubinascii.unhexlify(encrypted_psk_hex)
     salt    = ubinascii.unhexlify(salt_hex)
-    dk      = hashlib.pbkdf2_hmac("sha256", pin.encode(), salt, _PBKDF2_ITERS, 32)
+    dk      = _pbkdf2_sha256(pin.encode(), salt, _PBKDF2_ITERS, 32)
     psk     = bytes(a ^ b for a, b in zip(enc_psk, dk))
     return psk
 

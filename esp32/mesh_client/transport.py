@@ -56,7 +56,7 @@ class MeshTransport:
 
     def __init__(self):
         self._sock = None
-        self._psk: bytes | None = None
+        self._psk = None
         self._dispatch = None    # set by main to route incoming messages
 
     def set_dispatch(self, fn):

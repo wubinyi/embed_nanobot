@@ -51,11 +51,9 @@ def _dispatch(envelope: dict, transport: MeshTransport) -> None:
         value  = payload.get("value", None)
         print("[device] Command from hub: {} → {} = {}".format(cap, action, value))
         result = execute_command(cap, action, value)
-        transport.send("response", source, {
-            "capability": cap,
-            "action":     action,
-            **result,
-        })
+        resp = {"capability": cap, "action": action}
+        resp.update(result)
+        transport.send("response", source, resp)
 
     elif msg_type == "ota_offer":
         _handle_ota_offer(payload, transport, source)
@@ -95,7 +93,7 @@ def _handle_ota_offer(payload: dict, transport: MeshTransport, source: str) -> N
 # Public entry point
 # ------------------------------------------------------------------
 
-def run(enrollment_pin: str | None = None) -> None:
+def run(enrollment_pin=None):
     """Start the mesh client.
 
     Parameters

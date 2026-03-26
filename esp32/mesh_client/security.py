@@ -6,15 +6,25 @@ from the hub and then calls save_psk().
 """
 
 import hashlib
-import hmac
 import ubinascii
 
 _PSK_PATH = "/psk.bin"
+_SHA256_BLOCK = 64  # SHA-256 block size in bytes
 
 
 # ----------------------------------------------------------------------
-# HMAC signing
+# HMAC-SHA256 (manual — MicroPython has no hmac module)
 # ----------------------------------------------------------------------
+
+def hmac_sha256(key, msg):
+    """Compute HMAC-SHA256(key, msg) and return raw digest bytes."""
+    if len(key) > _SHA256_BLOCK:
+        key = hashlib.sha256(key).digest()
+    key = key + b'\x00' * (_SHA256_BLOCK - len(key))
+    o_pad = bytes(b ^ 0x5C for b in key)
+    i_pad = bytes(b ^ 0x36 for b in key)
+    inner = hashlib.sha256(i_pad + msg).digest()
+    return hashlib.sha256(o_pad + inner).digest()
 
 def sign_envelope(envelope: dict, psk: bytes) -> str:
     """Return HMAC-SHA256 hex digest for the given envelope.
@@ -29,7 +39,7 @@ def sign_envelope(envelope: dict, psk: bytes) -> str:
         envelope["ts"],
         envelope["nonce"],
     ).encode("utf-8")
-    digest = hmac.new(psk, msg, hashlib.sha256).digest()
+    digest = hmac_sha256(psk, msg)
     return ubinascii.hexlify(digest).decode()
 
 
@@ -56,7 +66,7 @@ def save_psk(psk: bytes) -> None:
         f.write(psk)
 
 
-def load_psk() -> bytes | None:
+def load_psk():
     """Load PSK from flash. Returns None if not yet enrolled."""
     try:
         with open(_PSK_PATH, "rb") as f:

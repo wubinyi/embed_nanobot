@@ -13,10 +13,10 @@ import machine
 import config as cfg
 
 # Map capability name → MicroPython Pin object (for switch/dimmer types)
-_pins: dict = {}
+_pins = {}
 
 # Map capability name → current value
-_state: dict = {}
+_state = {}
 
 
 def _init_hardware() -> None:
