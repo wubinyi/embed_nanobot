@@ -43,7 +43,7 @@ from nanobot.mesh.protocol import MeshEnvelope, MsgType
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-_PBKDF2_ITERATIONS = 100_000
+_PBKDF2_ITERATIONS = 1_000  # Reduced for ESP32 compatibility (manual HMAC-SHA256)
 _SALT_BYTES = 16
 _PSK_BYTES = 32  # 256-bit PSK
 
@@ -180,7 +180,7 @@ class EnrollmentService:
             logger.warning(
                 f"[Mesh/Enrollment] REJECTED enrollment from {device_id!r}: {reason}"
             )
-            await self._send_error(device_id, reason)
+            await self._send_error(device_id, reason, env.payload.get("_reply_writer"))
             return
 
         assert self._pending is not None  # guaranteed by is_enrollment_active
@@ -196,9 +196,9 @@ class EnrollmentService:
                 f"{remaining} remaining)"
             )
             if self._pending.is_locked:
-                await self._send_error(device_id, "locked")
+                await self._send_error(device_id, "locked", env.payload.get("_reply_writer"))
             else:
-                await self._send_error(device_id, "invalid_pin")
+                await self._send_error(device_id, "invalid_pin", env.payload.get("_reply_writer"))
             return
 
         # --- Success: generate PSK and encrypt it ---
@@ -236,18 +236,35 @@ class EnrollmentService:
                     device_id, exc,
                 )
 
-        # Send response
+        # Send response — prefer the inbound writer (same TCP connection)
+        # because the enrolling device is not yet in the discovery table.
         response = MeshEnvelope(
             type=MsgType.ENROLL_RESPONSE,
             source=self.node_id,
             target=device_id,
             payload=resp_payload,
         )
-        ok = await self.transport.send_to_address(
-            ip=env.payload.get("_reply_ip", ""),
-            port=env.payload.get("_reply_port", 0),
-            env=response,
-        ) if env.payload.get("_reply_ip") else await self.transport.send(response)
+        reply_writer = env.payload.get("_reply_writer")
+        if reply_writer is not None:
+            try:
+                from nanobot.mesh.protocol import write_envelope
+                write_envelope(reply_writer, response)
+                await reply_writer.drain()
+                ok = True
+            except Exception as exc:
+                logger.warning(
+                    "[Mesh/Enrollment] failed to write response on "
+                    "inbound connection: {}", exc,
+                )
+                ok = False
+        elif env.payload.get("_reply_ip"):
+            ok = await self.transport.send_to_address(
+                ip=env.payload["_reply_ip"],
+                port=env.payload.get("_reply_port", 0),
+                env=response,
+            )
+        else:
+            ok = await self.transport.send(response)
 
         if ok:
             logger.info(
@@ -260,7 +277,7 @@ class EnrollmentService:
                 "deliver ENROLL_RESPONSE — device may need to retry"
             )
 
-    async def _send_error(self, target: str, reason: str) -> None:
+    async def _send_error(self, target: str, reason: str, reply_writer=None) -> None:
         """Send an error ENROLL_RESPONSE."""
         response = MeshEnvelope(
             type=MsgType.ENROLL_RESPONSE,
@@ -268,6 +285,14 @@ class EnrollmentService:
             target=target,
             payload={"status": "error", "reason": reason},
         )
+        if reply_writer is not None:
+            try:
+                from nanobot.mesh.protocol import write_envelope
+                write_envelope(reply_writer, response)
+                await reply_writer.drain()
+                return
+            except Exception:
+                pass
         await self.transport.send(response)
 
     # -- cryptographic helpers -----------------------------------------------

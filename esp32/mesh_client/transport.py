@@ -16,23 +16,30 @@ import security
 
 
 def connect_wifi() -> str:
-    """Connect to WiFi. Returns the assigned IP address."""
+    """Connect to WiFi and sync RTC via NTP. Returns the assigned IP address."""
     wlan = network.WLAN(network.STA_IF)
-    if wlan.isconnected():
-        return wlan.ifconfig()[0]
+    if not wlan.isconnected():
+        print("[wifi] Connecting to", cfg.WIFI_SSID, "...")
+        wlan.active(True)
+        wlan.connect(cfg.WIFI_SSID, cfg.WIFI_PASSWORD)
 
-    print("[wifi] Connecting to", cfg.WIFI_SSID, "...")
-    wlan.active(True)
-    wlan.connect(cfg.WIFI_SSID, cfg.WIFI_PASSWORD)
-
-    deadline = time.time() + cfg.WIFI_TIMEOUT
-    while not wlan.isconnected():
-        if time.time() > deadline:
-            raise OSError("WiFi connection timed out")
-        time.sleep(0.5)
+        deadline = time.time() + cfg.WIFI_TIMEOUT
+        while not wlan.isconnected():
+            if time.time() > deadline:
+                raise OSError("WiFi connection timed out")
+            time.sleep(0.5)
 
     ip = wlan.ifconfig()[0]
     print("[wifi] Connected. IP:", ip)
+
+    # Sync RTC via NTP so timestamps match the hub's Unix epoch
+    try:
+        import ntptime
+        ntptime.settime()
+        print("[wifi] NTP synced")
+    except Exception as e:
+        print("[wifi] NTP sync failed:", e)
+
     return ip
 
 

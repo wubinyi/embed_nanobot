@@ -6,7 +6,9 @@ from the hub and then calls save_psk().
 """
 
 import hashlib
+import json
 import ubinascii
+from collections import OrderedDict
 
 _PSK_PATH = "/psk.bin"
 _SHA256_BLOCK = 64  # SHA-256 block size in bytes
@@ -26,24 +28,46 @@ def hmac_sha256(key, msg):
     inner = hashlib.sha256(i_pad + msg).digest()
     return hashlib.sha256(o_pad + inner).digest()
 
-def sign_envelope(envelope: dict, psk: bytes) -> str:
+
+def _deep_sort(obj):
+    """Recursively sort dict keys to match CPython's json sort_keys=True."""
+    if isinstance(obj, dict):
+        od = OrderedDict()
+        for k in sorted(obj):
+            od[k] = _deep_sort(obj[k])
+        return od
+    if isinstance(obj, list):
+        return [_deep_sort(item) for item in obj]
+    return obj
+
+
+def _canonical_bytes(envelope):
+    """Return canonical JSON bytes for HMAC computation.
+
+    Matches hub's MeshEnvelope.canonical_bytes(): excludes hmac and nonce,
+    serialises remaining fields with recursively sorted keys.
+    """
+    filtered = {}
+    for k, v in envelope.items():
+        if k not in ("hmac", "nonce"):
+            filtered[k] = v
+    return json.dumps(_deep_sort(filtered)).encode("utf-8")
+
+
+def sign_envelope(envelope, psk):
     """Return HMAC-SHA256 hex digest for the given envelope.
 
-    Signing input mirrors nanobot/mesh/security.py:
-        "<type>:<source>:<target>:<ts>:<nonce>"
+    Signing format matches hub's nanobot/mesh/security.py:
+    HMAC(psk, canonical_json_bytes + nonce_ascii_bytes)
     """
-    msg = "{}:{}:{}:{}:{}".format(
-        envelope["type"],
-        envelope["source"],
-        envelope["target"],
-        envelope["ts"],
-        envelope["nonce"],
-    ).encode("utf-8")
+    canonical = _canonical_bytes(envelope)
+    nonce = envelope.get("nonce", "")
+    msg = canonical + nonce.encode("ascii")
     digest = hmac_sha256(psk, msg)
     return ubinascii.hexlify(digest).decode()
 
 
-def verify_envelope(envelope: dict, psk: bytes) -> bool:
+def verify_envelope(envelope, psk):
     """Return True if the envelope's HMAC is valid."""
     expected = sign_envelope(envelope, psk)
     provided = envelope.get("hmac", "")

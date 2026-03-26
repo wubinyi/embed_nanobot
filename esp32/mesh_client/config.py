@@ -13,7 +13,7 @@ WIFI_TIMEOUT  = 20   # seconds to wait for connection
 # Hub connection
 # ------------------------------------------------------------------
 HUB_IP   = "192.168.1.100"  # LAN IP of the machine running nanobot gateway
-HUB_PORT = 9000              # Must match channels.mesh.port in hub config.json
+HUB_PORT = 18800             # Must match channels.mesh.tcpPort in hub config.json
 
 # ------------------------------------------------------------------
 # Device identity

@@ -373,35 +373,67 @@ Edit `esp32/mesh_client/config.py` in WSL:
 ```python
 WIFI_SSID     = "YourActualSSID"
 WIFI_PASSWORD = "YourActualPassword"
-HUB_IP        = "192.168.x.x"     # WSL host's LAN IP (see note below)
+HUB_IP        = "192.168.x.x"     # Windows WiFi IP (NOT WSL IP — see below)
 HUB_PORT      = 18800             # must match mesh.tcpPort in config.json
 NODE_ID        = "esp32-01"
 ```
 
-**Finding HUB_IP**: The ESP32 connects over WiFi to your PC's LAN IP.
-This is your **Windows IP on the local network**, not the WSL internal IP:
+> **ESP32 only supports 2.4 GHz WiFi**. If your router broadcasts both 2.4G
+> and 5G SSIDs (e.g., `MyNet` and `MyNet-5G`), use the 2.4G one.
 
-```powershell
-# In PowerShell:
-ipconfig
-# Look for "Wireless LAN" or "Ethernet" adapter → IPv4 Address (e.g., 192.168.1.100)
+Then deploy with force-config:
+
+```bash
+FORCE_CONFIG=1 bash esp32/tools/deploy.sh /dev/ttyUSB0
 ```
 
-**WSL network note**: By default, WSL2 uses NAT networking. The ESP32 will
-connect to your Windows LAN IP. If the nanobot gateway is running inside WSL,
-you need to ensure the gateway port (18800) is reachable from the LAN:
+#### Network topology: ESP32 → Windows → WSL
 
-```powershell
-# In PowerShell (Run as Administrator) — forward port 18800 to WSL:
-netsh interface portproxy add v4tov4 listenport=18800 listenaddress=0.0.0.0 connectport=18800 connectaddress=$(wsl hostname -I | ForEach-Object { $_.Trim() })
+WSL2 uses NAT networking by default. The ESP32 connects over WiFi to your
+**Windows LAN IP**, not the WSL internal IP. The gateway runs inside WSL,
+so Windows must port-forward traffic from the WiFi interface into WSL:
 
-# Allow it through Windows Firewall:
-netsh advfirewall firewall add rule name="Nanobot Mesh" dir=in action=allow protocol=tcp localport=18800
+```
+ESP32 (WiFi 192.168.5.x)
+    │
+    │ TCP connect to 192.168.5.57:18800  (Windows WiFi IP)
+    ▼
+Windows (port-forward 18800 → WSL)
+    │
+    │ netsh portproxy forwards to 172.27.x.x:18800
+    ▼
+WSL (nanobot gateway listening on 0.0.0.0:18800)
 ```
 
-Alternatively, if your WSL uses **mirrored networking** (`networkingMode=mirrored`
-in `.wslconfig`), the WSL IP equals the Windows IP and no port forwarding is
-needed.
+**Finding your Windows WiFi IP**: In PowerShell, run `ipconfig` and look for
+"Wireless LAN adapter WLAN" → IPv4 Address (e.g., `192.168.5.57`).
+
+#### Setting up port forwarding (one-time, as Administrator)
+
+```powershell
+# 1. Find WSL IP (or run `wsl hostname -I` from PowerShell)
+#    Example: 172.27.167.162
+
+# 2. Forward port 18800 from all Windows interfaces → WSL
+netsh interface portproxy add v4tov4 listenport=18800 listenaddress=0.0.0.0 connectport=18800 connectaddress=172.27.167.162
+
+# 3. Open Windows Firewall
+netsh advfirewall firewall add rule name="Nanobot Mesh (18800)" dir=in action=allow protocol=TCP localport=18800
+
+# 4. Verify
+netsh interface portproxy show v4tov4
+# Should show:
+# Listen on ipv4:             Connect to ipv4:
+# Address         Port        Address         Port
+# 0.0.0.0         18800       172.27.167.162  18800
+```
+
+> **WSL IP changes on reboot**: Re-run step 2 with the new IP after each
+> Windows restart. Check with `wsl hostname -I` from PowerShell.
+>
+> **Alternative**: If your WSL uses **mirrored networking**
+> (`networkingMode=mirrored` in `.wslconfig`), the WSL IP equals the Windows
+> IP and no port forwarding is needed.
 
 ---
 

@@ -23,7 +23,7 @@ import security
 from security import hmac_sha256
 
 
-_PBKDF2_ITERS = 100000
+_PBKDF2_ITERS = 1000
 
 
 def _pbkdf2_sha256(password, salt, iterations, dklen=32):
@@ -76,8 +76,8 @@ def enroll(sock, node_id: str, pin: str) -> bytes:
         raise RuntimeError("Unexpected response type: " + str(resp.get("type")))
 
     payload = resp.get("payload", {})
-    if not payload.get("success"):
-        raise RuntimeError("Enrollment rejected: " + str(payload.get("error", "unknown")))
+    if payload.get("status") != "ok":
+        raise RuntimeError("Enrollment rejected: " + str(payload.get("reason", "unknown")))
 
     psk = _decrypt_psk(payload["encrypted_psk"], payload["salt"], pin)
     print("[enroll] PSK received, length:", len(psk))

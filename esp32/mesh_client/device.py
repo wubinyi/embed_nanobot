@@ -48,8 +48,10 @@ def get_state_report_payload() -> dict:
         c.pop("gpio_pin", None)   # don't send internal implementation details
         caps.append(c)
     return {
-        "capabilities":     caps,
-        "firmware_version": cfg.FIRMWARE_VERSION,
+        "state": {
+            "capabilities":     caps,
+            "firmware_version": cfg.FIRMWARE_VERSION,
+        },
     }
 
 

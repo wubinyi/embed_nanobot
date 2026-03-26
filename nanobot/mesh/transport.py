@@ -157,6 +157,11 @@ class MeshTransport:
                 )
                 write_envelope(writer, pong)
                 await writer.drain()
+            # --- embed_nanobot: attach writer for enrollment replies ---
+            # Enrollment devices are not yet in the discovery table, so the
+            # handler needs the raw writer to reply on the same connection.
+            if env.type == MsgType.ENROLL_REQUEST:
+                env.payload["_reply_writer"] = writer
             # Dispatch to handlers
             for handler in self._handlers:
                 try:

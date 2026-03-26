@@ -20,6 +20,9 @@ import time
 import os
 import ubinascii
 
+# MicroPython epoch is 2000-01-01; Unix epoch is 1970-01-01
+_EPOCH_OFFSET = 946684800
+
 
 def encode(envelope: dict) -> bytes:
     """Serialize an envelope to a length-prefixed byte frame."""
@@ -68,9 +71,11 @@ def build_envelope(msg_type: str, source: str, target: str,
         "source":  source,
         "target":  target,
         "payload": payload,
-        "ts":      time.time(),
+        "ts":      time.time() + _EPOCH_OFFSET,
         "nonce":   nonce,
         "hmac":    "",
+        "encrypted_payload": "",
+        "iv":      "",
     }
     if psk is not None:
         env["hmac"] = sign_envelope(env, psk)
