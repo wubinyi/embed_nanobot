@@ -552,6 +552,8 @@ def gateway(
     workspace: str | None = typer.Option(None, "--workspace", "-w", help="Workspace directory"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
     config: str | None = typer.Option(None, "--config", "-c", help="Path to config file"),
+    # --- embed_nanobot extensions: device enrollment (task 1.10) ---
+    enroll: bool = typer.Option(False, "--enroll", help="Generate a device enrollment PIN at startup"),
 ):
     """Start the nanobot gateway."""
     from nanobot.agent.loop import AgentLoop
@@ -716,6 +718,9 @@ def gateway(
     else:
         console.print("[yellow]Warning: No channels enabled[/yellow]")
     
+    # --- embed_nanobot extensions ---
+    from loguru import logger as _embed_logger
+
     # --- embed_nanobot extensions: device control tool (task 2.3) ---
     if "mesh" in channels.channels:
         try:
@@ -735,13 +740,13 @@ def gateway(
                 provider.force_local_fn = build_force_local_fn(mesh_ch.registry)
                 console.print("[green]✓[/green] Device-command routing → local LLM")
         except Exception as e:
-            logger.warning("Device control tool not available: {}", e)
+            _embed_logger.warning("Device control tool not available: {}", e)
 
     # --- embed_nanobot extensions: device reprogram tool (task 4.3) ---
     if "mesh" in channels.channels:
         try:
             mesh_ch = channels.channels["mesh"]
-            if mesh_ch.ota_manager and mesh_ch.firmware_store:
+            if mesh_ch.ota and mesh_ch.firmware_store:
                 from nanobot.agent.tools.reprogram import ReprogramTool
                 from nanobot.mesh.codegen import CodeGenerator
                 codegen = CodeGenerator(
@@ -750,20 +755,39 @@ def gateway(
                 agent.tools.register(ReprogramTool(
                     generator=codegen,
                     firmware_store=mesh_ch.firmware_store,
-                    ota_manager=mesh_ch.ota_manager,
+                    ota_manager=mesh_ch.ota,
                     registry=mesh_ch.registry,
                     transport=mesh_ch.transport,
                     node_id=mesh_ch.node_id,
                 ))
                 console.print("[green]✓[/green] Device reprogram tool registered")
         except Exception as e:
-            logger.warning("Device reprogram tool not available: {}", e)
+            _embed_logger.warning("Device reprogram tool not available: {}", e)
 
     cron_status = cron.status()
     if cron_status["jobs"] > 0:
         console.print(f"[green]✓[/green] Cron: {cron_status['jobs']} scheduled jobs")
 
     console.print(f"[green]✓[/green] Heartbeat: every {hb_cfg.interval_s}s")
+
+    # --- embed_nanobot extensions: device enrollment PIN (task 1.10) ---
+    if enroll:
+        if "mesh" in channels.channels:
+            mesh_ch = channels.channels["mesh"]
+            if mesh_ch.enrollment:
+                pin, expires_at = mesh_ch.enrollment.create_pin()
+                import datetime
+                exp_str = datetime.datetime.fromtimestamp(expires_at).strftime("%H:%M:%S")
+                console.print(f"\n[bold yellow]📌 Enrollment PIN: {pin}[/bold yellow]")
+                console.print(f"   Expires at {exp_str} (in {mesh_ch.enrollment.pin_timeout}s)")
+                console.print("   Enter on ESP32 REPL: import main; main.run(enrollment_pin=\'" + pin + "\')")
+                console.print()
+            else:
+                console.print("[red]Error: enrollment service not initialized (PSK auth disabled?)[/red]")
+                raise typer.Exit(1)
+        else:
+            console.print("[red]Error: mesh channel not enabled. Set mesh.enabled=true in config.json[/red]")
+            raise typer.Exit(1)
 
     async def run():
         try:
