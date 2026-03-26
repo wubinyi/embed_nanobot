@@ -72,89 +72,95 @@ This covers:
 
 ## B. Flash & Deploy to ESP32
 
-### Prerequisites
+### Platform Note
 
-The ESP32 board uses a **CP2102 or CH9102** USB-serial chip (identified as
-"CP2101/CH9102 Arduino/NodeMCU" in system info).
+This project is developed in **WSL (Windows Subsystem for Linux)** while the
+ESP32 board is physically connected to the **Windows 10 host** via USB.
+WSL does not have native access to USB serial devices.
 
-Your ESP32 board has a CP2102 or CH9102 USB-serial chip. I didn't detect /dev/ttyUSB0 — this is likely because you're connected via SSH/VS Code Remote. The device will show up on the physical host machine, not inside a remote SSH session.
+There are **two approaches** to flash and communicate with the ESP32:
 
-### Step 1: Install tools
+| Approach | Pros | Cons |
+|----------|------|------|
+| **Option 1: Use Windows tools directly** | Simple, no WSL USB config | Must install Python + esptool on Windows side |
+| **Option 2: Attach USB to WSL via usbipd** | All commands stay in WSL | Requires usbipd-win install + admin rights |
 
-```bash
+---
+
+### Option 1: Flash & Deploy from Windows (Recommended)
+
+This is the simplest approach — run `esptool` and `mpremote` from
+Windows PowerShell/CMD, since the USB port is natively visible there.
+
+#### Step 1a: Install Python + tools on Windows
+
+1. Install Python 3.11+ for Windows from <https://www.python.org/downloads/>
+   (check "Add to PATH" during install)
+2. Open **PowerShell** and install the tools:
+
+```powershell
 pip install esptool mpremote pyserial
 ```
 
-### Step 2: Identify the serial port
+#### Step 2a: Identify the COM port
 
-Plug in the ESP32 via USB, then:
+1. Open **Device Manager** (Win+X → Device Manager)
+2. Expand **Ports (COM & LPT)**
+3. Look for "Silicon Labs CP210x" or "CH9102" — note the port (e.g., `COM3`)
 
-```bash
-ls /dev/ttyUSB* /dev/ttyACM*
-# Usually /dev/ttyUSB0 for CP2102/CH9102
+Or from PowerShell:
+
+```powershell
+# List serial ports
+[System.IO.Ports.SerialPort]::GetPortNames()
 ```
 
-**If using VS Code Remote SSH**: the USB device is on the physical host,
-not inside the remote session.  You need to run flash/deploy commands on
-the machine where the USB cable is physically connected.
-
-On Windows, check Device Manager → Ports (COM & LPT) → it'll show as COMx. On native Linux, it's /dev/ttyUSB0.
-
-**If you get permission errors**:
-
-```bash
-sudo usermod -a -G dialout $USER
-# Log out and back in, or temporarily:
-sudo chmod 666 /dev/ttyUSB0
-```
-
-### Step 3: Download MicroPython firmware
+#### Step 3a: Download MicroPython firmware
 
 1. Go to <https://micropython.org/download/ESP32_GENERIC/>
 2. Download the latest stable `.bin` file
-3. Place it in the firmware directory:
+3. Save it somewhere accessible, e.g., `C:\Users\<you>\Downloads\`
 
-```bash
-mkdir -p esp32/tools/firmware/
-# Copy the downloaded file there, e.g.:
-cp ~/Downloads/ESP32_GENERIC-*.bin esp32/tools/firmware/
+#### Step 4a: Flash MicroPython from Windows
+
+In **PowerShell**:
+
+```powershell
+# Replace COM3 with your actual port, and adjust the .bin path
+esptool.py --chip esp32 --port COM3 erase_flash
+esptool.py --chip esp32 --port COM3 --baud 460800 write_flash -z 0x1000 C:\Users\<you>\Downloads\ESP32_GENERIC-20260101-v1.24.1.bin
 ```
 
-### Step 4: Flash MicroPython
+If `esptool.py` is not found as a command, try:
 
-```bash
-# Replace /dev/ttyUSB0 with your actual port
-bash esp32/tools/flash.sh /dev/ttyUSB0
+```powershell
+python -m esptool --chip esp32 --port COM3 erase_flash
+python -m esptool --chip esp32 --port COM3 --baud 460800 write_flash -z 0x1000 <path-to-firmware>.bin
 ```
 
-This does two things:
-1. Erases the entire flash
-2. Writes the MicroPython firmware at address 0x1000
+#### Step 5a: Deploy mesh_client code from Windows
 
-### Step 5: Edit WiFi config
+The mesh_client source lives in your WSL filesystem.  Access it from Windows
+via the `\\wsl$\` network path:
 
-Edit `esp32/mesh_client/config.py`:
+```powershell
+# Navigate to the project in WSL filesystem
+cd \\wsl$\Ubuntu\home\wubinyi\workspace\embed_nanobot
 
-```python
-WIFI_SSID     = "YourActualSSID"
-WIFI_PASSWORD = "YourActualPassword"
-HUB_IP        = "192.168.x.x"     # PC's LAN IP (run: ip addr show | grep inet)
-HUB_PORT      = 18800             # must match mesh.tcpPort in config.json
-NODE_ID        = "esp32-01"
+# Copy files one by one (mpremote on Windows)
+mpremote connect COM3 cp esp32/mesh_client/main.py :main.py
+mpremote connect COM3 cp esp32/mesh_client/protocol.py :protocol.py
+mpremote connect COM3 cp esp32/mesh_client/security.py :security.py
+mpremote connect COM3 cp esp32/mesh_client/enrollment.py :enrollment.py
+mpremote connect COM3 cp esp32/mesh_client/transport.py :transport.py
+mpremote connect COM3 cp esp32/mesh_client/device.py :device.py
+mpremote connect COM3 cp esp32/mesh_client/config.py :config.py
 ```
 
-### Step 6: Deploy code to ESP32
+#### Step 6a: Open REPL from Windows
 
-```bash
-bash esp32/tools/deploy.sh /dev/ttyUSB0
-```
-
-This copies all `mesh_client/*.py` files to the ESP32 filesystem via `mpremote`.
-
-### Step 7: Verify via REPL
-
-```bash
-mpremote connect /dev/ttyUSB0 repl
+```powershell
+mpremote connect COM3 repl
 ```
 
 At the MicroPython `>>>` prompt:
@@ -165,7 +171,237 @@ os.listdir('/')
 # Should show: ['main.py', 'config.py', 'protocol.py', 'security.py', ...]
 ```
 
-Press `Ctrl-X` to exit the REPL.
+Press `Ctrl-X` to exit.
+
+---
+
+### Option 2: Attach USB to WSL via usbipd-win
+
+This makes `/dev/ttyUSB0` appear inside WSL so you can use the project's
+`flash.sh` and `deploy.sh` scripts directly.
+
+#### Step 1b: Install usbipd-win on Windows
+
+1. Install from <https://github.com/dorssel/usbipd-win/releases> (latest `.msi`)
+2. Reboot if prompted
+
+#### Step 2b: Install USB support in WSL
+
+In your **WSL terminal**:
+
+```bash
+sudo apt update
+sudo apt install linux-tools-generic hwdata
+sudo update-alternatives --install /usr/local/bin/usbip usbip \
+  /usr/lib/linux-tools/*/usbip 20
+```
+#### Step 2.5b: Install Driver and Find ESP32 Device
+If the device doesn't appear in Device Manager at all (not even as an unknown device with a yellow icon), the most common causes are:
+
+1. Check if Windows sees ANY USB device
+   - Open Device Manager, click View → Show hidden devices
+   - Plug/unplug the ESP32 and watch if anything flashes or appears under:
+      - Ports (COM & LPT)
+      - Other devices (yellow warning icon)
+      - Universal Serial Bus controllers
+2. Most likely cause: charge-only USB cable \
+This is the #1 issue. Many micro-USB / USB-C cables are charge-only — they have no data wires. The CP2102 chip won't be detected at all. \
+Test: Try a different USB cable. A cable that came with an Android phone or data-transfer device is more likely to have data lines.\
+Quick check: If you have another device (phone, Arduino) that shows up in Device Manager with the same cable, the cable is fine.
+
+3. Verify in PowerShell \
+Run this in PowerShell to check if the USB device is detected at the bus level:
+   ```bash
+   # List all USB 
+   devicesGet-PnpDevice -PresentOnly | Where-Object { $_.Class -eq 'Ports' -or $_.Class -eq 'USB' } | Format-Table Name, Status, DeviceID -AutoSize
+   ```
+   Or even more directly — check if the CP2102 VID/PID appears:
+   ```bash
+   # CP2102 vendor/product ID = 10C4:EA60
+   Get-PnpDevice | Where-Object { $_.DeviceID -like '*10C4*' } | Format-Table Name, Status
+   ```
+4. Try a different USB port \
+   - Use a port directly on the PC (not a hub)
+   - Try both USB 2.0 (usually black inside) and USB 3.0 (blue inside) ports
+5. If device shows as "Unknown" under Other devices \
+Right-click → Update driver → Browse my computer → Let me pick → Select "Silicon Labs CP210x USB to UART Bridge" from the list.
+----
+Bottom line: If nothing at all appears in Device Manager when you plug/unplug — swap the USB cable first. That solves this problem ~80% of the time with NodeMCU boards.
+
+#### Step 3b: Attach the ESP32 to WSL
+
+In **PowerShell (Run as Administrator)**:
+
+```powershell
+# List USB devices
+usbipd list
+# Find the CP2102/CH9102 device — note the BUSID (e.g., 1-3)
+
+# Bind it (one-time)
+usbipd bind --busid 1-3
+
+# Attach to WSL
+usbipd attach --wsl --busid 1-3
+```
+
+Back in **WSL terminal**, verify:
+
+```bash
+ls /dev/ttyUSB*
+# Should show: /dev/ttyUSB0
+```
+
+#### Step 4b: Install tools in WSL
+
+```bash
+pip install esptool mpremote pyserial
+```
+
+#### Step 5b: Download firmware & flash
+
+```bash
+mkdir -p esp32/tools/firmware/
+# Download from https://micropython.org/download/ESP32_GENERIC/
+# Copy the .bin into esp32/tools/firmware/
+
+bash esp32/tools/flash.sh /dev/ttyUSB0
+```
+Below is the output:
+```bash
+(embed_nanobot) wubinyi@DESKTOP-HJFROP3:~/workspace/embed_nanobot$ bash esp32/tools/flash.sh /dev/ttyUSB0
+==> Port:     /dev/ttyUSB0
+==> Firmware: esp32/tools/firmware/ESP32_GENERIC-20251209-v1.27.0.bin
+
+==> Step 1: Erasing flash...
+Warning: DEPRECATED: 'esptool.py' is deprecated. Please use 'esptool' instead. The '.py' suffix will be removed in a future major release.
+Warning: Deprecated: Command 'erase_flash' is deprecated. Use 'erase-flash' instead.
+esptool v5.2.0
+Connected to ESP32 on /dev/ttyUSB0:
+Chip type:          ESP32-D0WD-V3 (revision v3.1)
+Features:           Wi-Fi, BT, Dual Core + LP Core, 240MHz, Vref calibration in eFuse, Coding Scheme None
+Crystal frequency:  40MHz
+MAC:                f4:65:0b:d7:82:b4
+
+Stub flasher running.
+
+Flash memory erased successfully in 8.6 seconds.
+
+Hard resetting via RTS pin...
+==> Step 2: Flashing MicroPython...
+Warning: DEPRECATED: 'esptool.py' is deprecated. Please use 'esptool' instead. The '.py' suffix will be removed in a future major release.
+Warning: Deprecated: Command 'write_flash' is deprecated. Use 'write-flash' instead.
+esptool v5.2.0
+Connected to ESP32 on /dev/ttyUSB0:
+Chip type:          ESP32-D0WD-V3 (revision v3.1)
+Features:           Wi-Fi, BT, Dual Core + LP Core, 240MHz, Vref calibration in eFuse, Coding Scheme None
+Crystal frequency:  40MHz
+MAC:                f4:65:0b:d7:82:b4
+
+Stub flasher running.
+Changing baud rate to 460800...
+Changed.
+
+Configuring flash size...
+Flash will be erased from 0x00001000 to 0x001aefff...
+Wrote 1759456 bytes (1152383 compressed) at 0x00001000 in 28.2 seconds (498.9 kbit/s).
+Hash of data verified.
+
+Hard resetting via RTS pin...
+
+✓ Done. MicroPython flashed to /dev/ttyUSB0
+  Connect with: python3 -m serial.tools.miniterm /dev/ttyUSB0 115200
+  Or:           mpremote connect /dev/ttyUSB0
+```
+
+#### Step 6b: Deploy & verify
+
+```bash
+bash esp32/tools/deploy.sh /dev/ttyUSB0
+mpremote connect /dev/ttyUSB0 repl
+```
+
+The output of `bash esp32/tools/deploy.sh /dev/ttyUSB0` is shown below:
+```bash
+(embed_nanobot) wubinyi@DESKTOP-HJFROP3:~/workspace/embed_nanobot$ bash esp32/tools/deploy.sh /dev/ttyUSB0
+==> Deploying mesh_client to ESP32 on /dev/ttyUSB0
+
+  -> protocol.py
+cp esp32/mesh_client/protocol.py :protocol.py
+  -> security.py                        
+cp esp32/mesh_client/security.py :security.py
+  -> enrollment.py                      
+cp esp32/mesh_client/enrollment.py :enrollment.py
+  -> transport.py                       
+cp esp32/mesh_client/transport.py :transport.py
+  -> device.py                          
+cp esp32/mesh_client/device.py :device.py
+  -> main.py                            
+cp esp32/mesh_client/main.py :main.py
+  -> config.py (first deploy)           
+cp esp32/mesh_client/config.py :config.py
+                                        
+✓ Deploy complete.
+
+Next steps:
+  1. Open REPL:  mpremote connect /dev/ttyUSB0 repl
+  2. First boot: >>> import main; main.run(enrollment_pin='YOUR_PIN')
+  3. After enrollment the device will run automatically on future boots.
+
+To set auto-start on boot, run in REPL:
+  >>> f = open('/boot.py','w'); f.write('import main\nmain.run()\n'); f.close()
+```
+
+```python
+import os
+os.listdir('/')
+# Should show: ['main.py', 'config.py', 'protocol.py', 'security.py', ...]
+```
+
+Press `Ctrl-X` to exit.
+
+> **Note**: After each Windows reboot or USB re-plug, you need to re-run
+> `usbipd attach --wsl --busid <BUSID>` from an admin PowerShell.
+
+---
+
+### Common Steps (both options)
+
+#### Edit WiFi config before deploying
+
+Edit `esp32/mesh_client/config.py` in WSL:
+
+```python
+WIFI_SSID     = "YourActualSSID"
+WIFI_PASSWORD = "YourActualPassword"
+HUB_IP        = "192.168.x.x"     # WSL host's LAN IP (see note below)
+HUB_PORT      = 18800             # must match mesh.tcpPort in config.json
+NODE_ID        = "esp32-01"
+```
+
+**Finding HUB_IP**: The ESP32 connects over WiFi to your PC's LAN IP.
+This is your **Windows IP on the local network**, not the WSL internal IP:
+
+```powershell
+# In PowerShell:
+ipconfig
+# Look for "Wireless LAN" or "Ethernet" adapter → IPv4 Address (e.g., 192.168.1.100)
+```
+
+**WSL network note**: By default, WSL2 uses NAT networking. The ESP32 will
+connect to your Windows LAN IP. If the nanobot gateway is running inside WSL,
+you need to ensure the gateway port (18800) is reachable from the LAN:
+
+```powershell
+# In PowerShell (Run as Administrator) — forward port 18800 to WSL:
+netsh interface portproxy add v4tov4 listenport=18800 listenaddress=0.0.0.0 connectport=18800 connectaddress=$(wsl hostname -I | ForEach-Object { $_.Trim() })
+
+# Allow it through Windows Firewall:
+netsh advfirewall firewall add rule name="Nanobot Mesh" dir=in action=allow protocol=tcp localport=18800
+```
+
+Alternatively, if your WSL uses **mirrored networking** (`networkingMode=mirrored`
+in `.wslconfig`), the WSL IP equals the Windows IP and no port forwarding is
+needed.
 
 ---
 
@@ -208,7 +444,8 @@ nanobot gateway --enroll
 
 ### Step 4: Enroll the ESP32
 
-On the ESP32 REPL (`mpremote connect /dev/ttyUSB0 repl`):
+On the ESP32 REPL (from Windows: `mpremote connect COM3 repl`,
+or from WSL with usbipd: `mpremote connect /dev/ttyUSB0 repl`):
 
 ```python
 import main
@@ -238,8 +475,6 @@ nanobot agent -m "What is the state of esp32-01?" 2>&1 | tee -a ~/agent_device.l
 > HybridRouter are active (see `nanobot/cli/commands.py` ~line 719).
 > Without a local LLM, the device tool won't be registered.  You can still
 > verify mesh connectivity, enrollment, and transport through the gateway logs.
-
-Since you don't have a local LLM, the HybridRouter won't be active — the agent will use your configured remote provider (OpenRouter/stepfun). The device control tool is only registered when both mesh AND HybridRouter are enabled (see commands.py line ~719). So for pure device testing without local LLM, you can interact with the mesh channel directly through the protocol.
 
 ### Step 6: Set auto-start on ESP32
 
@@ -287,29 +522,80 @@ Future power-ons will automatically connect to the hub.
 
 ## F. Troubleshooting
 
-### ESP32 not detected (`/dev/ttyUSB0` missing)
+### ESP32 not detected on Windows
+
+1. Open **Device Manager** → check under **Ports (COM & LPT)**
+2. If the device shows with a yellow warning icon, install the driver:
+   - **CP2102**: Download from <https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers>
+   - **CH9102/CH340**: Download from <https://www.wch-ic.com/downloads/CH341SER_EXE.html>
+3. After driver install, unplug and re-plug the ESP32
+
+### ESP32 not detected in WSL (`/dev/ttyUSB0` missing)
+
+WSL does not see USB devices by default.  You must use `usbipd` (see
+Option 2 above).  Verify:
+
+```powershell
+# In admin PowerShell:
+usbipd list          # device should show as "Attached"
+```
 
 ```bash
-# Check kernel messages
-dmesg | grep -i -E "cp210|ch910|usb.*serial|ttyUSB"
+# In WSL:
+ls /dev/ttyUSB*      # should show /dev/ttyUSB0
+dmesg | tail -10     # should show cp210x or ch341 driver loaded
+```
 
-# Check if driver is loaded
-lsmod | grep -E "cp210x|ch341"
+If `/dev/ttyUSB0` still doesn't appear after `usbipd attach`:
 
-# Install driver if missing (Ubuntu/Debian)
-sudo apt install linux-modules-extra-$(uname -r)
+```bash
+# WSL may lack the driver module
+sudo apt install linux-tools-generic hwdata
+# Then re-attach from PowerShell
 ```
 
 ### Flash fails with "A fatal error occurred: Failed to connect"
 
 - Hold the **BOOT** button on the ESP32 while running the flash command
 - Some boards require holding BOOT, pressing EN/RST, then releasing BOOT
-- Try a lower baud rate: edit `flash.sh` to use `--baud 115200`
+- Try a lower baud rate: `--baud 115200` instead of `460800`
+- On Windows, make sure no other program (Arduino IDE, PuTTY, serial
+  monitor) is holding the COM port open
+
+### ESP32 can't connect to hub (mesh enrollment timeout)
+
+This usually means the ESP32 can reach your WiFi but not the nanobot
+gateway port inside WSL.
+
+1. Verify the gateway is running: check `~/gateway.log` for
+   `Listening on 0.0.0.0:18800`
+2. Check Windows firewall: ensure port 18800/TCP is allowed inbound
+3. Check port forwarding (WSL2 NAT mode):
+
+```powershell
+# Verify the proxy exists
+netsh interface portproxy show v4tov4
+
+# If missing, add it (admin PowerShell):
+netsh interface portproxy add v4tov4 listenport=18800 listenaddress=0.0.0.0 connectport=18800 connectaddress=$(wsl hostname -I | ForEach-Object { $_.Trim() })
+```
+
+4. Test from Windows: `curl http://localhost:18800` — should get a
+   connection (even if the response is an error, it means the port is
+   forwarded)
 
 ### mpremote can't connect
 
-```bash
+On **Windows**:
+
+```powershell
 # Verify the port is accessible
+python -c "import serial; s = serial.Serial('COM3', 115200); print('OK'); s.close()"
+```
+
+On **WSL** (with usbipd):
+
+```bash
 python3 -c "import serial; s = serial.Serial('/dev/ttyUSB0', 115200); print('OK'); s.close()"
 
 # If busy, another process may hold the port
@@ -327,3 +613,18 @@ Generate a new one with `nanobot gateway --enroll`.
 # Make sure dev dependencies are installed
 pip install -e ".[dev]"
 ```
+
+### WSL IP changes after reboot
+
+WSL2's internal IP changes on each reboot.  If you use port forwarding,
+re-run the `netsh interface portproxy` command after each Windows restart.
+Consider adding it to a startup script, or switch to WSL mirrored
+networking mode (add to `%USERPROFILE%\.wslconfig`):
+
+```ini
+[wsl2]
+networkingMode=mirrored
+```
+
+With mirrored mode, WSL shares the host's IP and no port forwarding is
+needed.
