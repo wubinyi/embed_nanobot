@@ -163,6 +163,15 @@ class MeshChannel(BaseChannel):
         self.discovery.on_peer_seen(self._on_peer_seen)
         self.discovery.on_peer_lost(self._on_peer_lost)
 
+        # Hook persistent TCP connection events (ESP32 devices that don't use
+        # UDP discovery but maintain a long-lived TCP connection to the hub).
+        self.transport.on_device_connected(
+            lambda node_id: self.registry.mark_online(node_id)
+        )
+        self.transport.on_device_disconnected(
+            lambda node_id: self.registry.mark_offline(node_id)
+        )
+
         # --- embed_nanobot: automation rules engine (task 2.6) ---
         automation_rules_path = getattr(config, "automation_rules_path", "") or ""
         if not automation_rules_path:
@@ -476,6 +485,16 @@ class MeshChannel(BaseChannel):
                 await self.ota.handle_ota_message(env)
             return
 
+        # --- embed_nanobot: log device command responses ---
+        if env.type == MsgType.RESPONSE:
+            status = env.payload.get("status", "?")
+            cap = env.payload.get("capability", "?")
+            logger.info(
+                f"[MeshChannel] RESPONSE from {env.source}: "
+                f"{cap} → {status}"
+            )
+            return
+
         # Only route actionable types into the agent loop
         if env.type not in (MsgType.CHAT, MsgType.COMMAND):
             return
@@ -516,7 +535,58 @@ class MeshChannel(BaseChannel):
         if not state_data:
             logger.debug(f"[MeshChannel] empty STATE_REPORT from {env.source}")
             return
-        updated = await self.registry.update_state(env.source, state_data)
+
+        # --- embed_nanobot: auto-register authenticated but unknown devices ---
+        # ESP32 sends STATE_REPORT with capabilities list inside "state".
+        # If the device is authenticated (HMAC verified by transport) but not
+        # yet in the registry, register it now from the reported capabilities.
+        if self.registry.get_device(env.source) is None:
+            caps_raw = state_data.get("capabilities", [])
+            if caps_raw:
+                # Map ESP32 device types to registry CapabilityType values
+                _TYPE_MAP = {
+                    "switch": "actuator", "dimmer": "property",
+                    "servo": "actuator", "sensor": "sensor",
+                }
+                caps = []
+                for c in caps_raw:
+                    try:
+                        esp_type = c.get("type", "property")
+                        caps.append(DeviceCapability(
+                            name=c["name"],
+                            cap_type=_TYPE_MAP.get(esp_type, esp_type),
+                            data_type=c.get("value_type", "string"),
+                            unit=c.get("unit", ""),
+                        ))
+                    except (KeyError, TypeError):
+                        pass
+                fw = state_data.get("firmware_version", "")
+                metadata = {"firmware_version": fw} if fw else {}
+                await self.registry.register_device(
+                    env.source,
+                    device_type="esp32",
+                    capabilities=caps,
+                    metadata=metadata,
+                )
+                logger.info(
+                    f"[MeshChannel] auto-registered device {env.source} "
+                    f"with {len(caps)} capabilities from STATE_REPORT"
+                )
+
+        # Extract capability values for state update.
+        # ESP32 sends: {"capabilities": [...], "firmware_version": "..."}
+        # Registry expects: {"led": True, "temperature": 23.5, ...}
+        state_updates = state_data
+        caps_list = state_data.get("capabilities")
+        if isinstance(caps_list, list):
+            state_updates = {}
+            for c in caps_list:
+                name = c.get("name")
+                val = c.get("current_value")
+                if name is not None:
+                    state_updates[name] = val
+
+        updated = await self.registry.update_state(env.source, state_updates)
         if not updated:
             logger.warning(
                 f"[MeshChannel] STATE_REPORT from unregistered device {env.source}"

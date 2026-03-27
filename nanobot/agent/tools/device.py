@@ -150,6 +150,10 @@ class DeviceControlTool(Tool):
         if not cmd_action:
             return "Error: 'command_action' is required (set, get, toggle, execute)."
 
+        # Coerce string booleans from LLM ("True"/"False" → True/False)
+        if isinstance(value, str) and value.lower() in ("true", "false"):
+            value = value.lower() == "true"
+
         # Build params dict — merge explicit value into params
         if value is not None and "value" not in params:
             params = {**params, "value": value}
@@ -161,10 +165,14 @@ class DeviceControlTool(Tool):
             params=params,
         )
 
-        # Validate against registry
+        # Validate against registry — treat "offline" as advisory, not blocking
         errors = validate_command(cmd, self._registry)
-        if errors:
+        offline_tag = f"Device '{device}' is offline"
+        hard_errors = [e for e in errors if e != offline_tag]
+        if hard_errors:
             return "Command validation failed:\n" + "\n".join(f"  - {e}" for e in errors)
+        if offline_tag in errors:
+            logger.warning(f"[DeviceControlTool] {device} is offline, attempting delivery anyway")
 
         # Create mesh envelope and dispatch
         envelope = command_to_envelope(cmd, source=self._node_id)

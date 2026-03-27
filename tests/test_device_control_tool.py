@@ -286,7 +286,7 @@ class TestCommandAction:
         assert "command_action" in result.lower()
 
     @pytest.mark.asyncio
-    async def test_offline_device_warning(self, populated_tool):
+    async def test_offline_device_warning(self, populated_tool, mock_transport):
         populated_tool._registry.mark_offline("light-01")
         result = await populated_tool.execute(
             action="command",
@@ -295,8 +295,9 @@ class TestCommandAction:
             capability="power",
             value=True,
         )
-        assert "validation failed" in result
-        assert "offline" in result
+        # Offline is advisory — command should still be dispatched
+        assert "Command sent" in result
+        mock_transport.send.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_value_merged_into_params(self, populated_tool, mock_transport):

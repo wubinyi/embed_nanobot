@@ -34,6 +34,7 @@ ALWAYS_FILES=(
     transport.py
     device.py
     main.py
+    boot.py
 )
 
 # Copy always-files
@@ -62,7 +63,4 @@ echo ""
 echo "Next steps:"
 echo "  1. Open REPL:  mpremote connect $PORT repl"
 echo "  2. First boot: >>> import main; main.run(enrollment_pin='YOUR_PIN')"
-echo "  3. After enrollment the device will run automatically on future boots."
-echo ""
-echo "To set auto-start on boot, run in REPL:"
-echo "  >>> f = open('/boot.py','w'); f.write('import main\\nmain.run()\\n'); f.close()"
+echo "  3. After enrollment the device will auto-start on future power-on (boot.py deployed)."

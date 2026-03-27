@@ -257,3 +257,98 @@ Removed `import hmac` from both files.
 **Fix**: Wrapped the capability data under a `"state"` key in `get_state_report_payload()`.
 
 **Files changed**: `esp32/mesh_client/device.py`
+
+---
+
+## BUG-011: Unregistered device STATE_REPORT rejected
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-27 |
+| **Severity** | High (device connects but can't receive commands) |
+| **Found by** | Gap analysis — auto-registration missing |
+| **Phase** | 5.3.2 (ESP32 SDK testing) |
+
+**Symptom**: After enrollment, ESP32 sends STATE_REPORT but hub logs `STATE_REPORT from unregistered device esp32-01`. The device is authenticated but never auto-registered in the DeviceRegistry.
+
+**Root cause**: `_handle_state_report()` called `registry.update_state()` which returns `False` for unknown devices. No auto-registration path existed — the only way to register was via UDP discovery beacons, which ESP32 doesn't emit.
+
+**Fix**: Added auto-registration in `_handle_state_report()`: when a device is authenticated (has PSK) but not in the registry, parse capabilities from STATE_REPORT and call `registry.register_device()`. Added `_TYPE_MAP` for ESP32→registry type mapping.
+
+**Files changed**: `nanobot/mesh/channel.py`
+
+---
+
+## BUG-012: COMMAND payload mismatch (hub vs ESP32)
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-27 |
+| **Severity** | High (commands never execute on device) |
+| **Found by** | Code review during gap analysis |
+| **Phase** | 5.3.2 (ESP32 SDK testing) |
+
+**Symptom**: Hub sends COMMAND with `{"params": {"value": true}}` but ESP32 reads `payload.get("value")` → None. Also hub uses "set"/"get" but ESP32 expects "turn_on"/"turn_off"/"read".
+
+**Root cause**: Value nested in params dict; action name mismatch between hub and device.
+
+**Fix**: ESP32 `_dispatch()` reads from `params` dict, maps hub actions to device actions.
+
+**Files changed**: `esp32/mesh_client/main.py`
+
+---
+
+## BUG-013: Hub closes TCP after one envelope (no persistent connection)
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-27 |
+| **Severity** | Critical (bidirectional communication impossible) |
+| **Found by** | Gap analysis — transport.py code review |
+| **Phase** | 5.3.2 (ESP32 SDK testing) |
+
+**Symptom**: ESP32 connects, sends STATE_REPORT, but can never receive COMMAND back.
+
+**Root cause**: `_handle_connection()` read one envelope then closed the TCP connection. ESP32 has no TCP server — needs persistent connection for commands.
+
+**Fix**: Added persistent connection tracking (`_device_writers`), `_persistent_read_loop` with 90s idle timeout, `send()` checks persistent connections first.
+
+**Files changed**: `nanobot/mesh/transport.py`
+
+---
+
+## BUG-014: Device always OFFLINE despite active TCP connection
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-27 |
+| **Severity** | High (agent refuses commands to "offline" device) |
+| **Found by** | E2E test — DeviceControlTool listed esp32-01 as OFFLINE |
+| **Phase** | 5.3.2 (ESP32 SDK testing) |
+
+**Symptom**: Agent sees `esp32-01 [OFFLINE]` and refuses to send commands. ESP32 is actively connected with pings flowing.
+
+**Root cause**: Online flag only set by UDP discovery callbacks. ESP32 connects via TCP only.
+
+**Fix**: Added `on_device_connected`/`on_device_disconnected` callbacks to transport. Channel hooks them to `registry.mark_online`/`mark_offline`.
+
+**Files changed**: `nanobot/mesh/transport.py`, `nanobot/mesh/channel.py`
+
+---
+
+## BUG-015: LLM sends string "True" instead of bool
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-03-27 |
+| **Severity** | Medium (validation rejects LLM commands) |
+| **Found by** | E2E test — validate_command rejects value type |
+| **Phase** | 5.3.2 (ESP32 SDK testing) |
+
+**Symptom**: LLM sends `"value": "True"` (string), validation says "must be bool, got str". Also offline treated as blocking error.
+
+**Root cause**: LLM JSON formatting; overly strict validation.
+
+**Fix**: Coerce string "True"/"False" to bool. Treat offline as advisory, not blocking.
+
+**Files changed**: `nanobot/agent/tools/device.py`, `tests/test_device_control_tool.py`

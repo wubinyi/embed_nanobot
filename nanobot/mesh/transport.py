@@ -81,12 +81,27 @@ class MeshTransport:
         self.tls_enabled = server_ssl_context is not None
         # --- embed_nanobot extensions: CRL revocation check (task 3.2) ---
         self.revocation_check_fn: Callable[[str], bool] | None = None
+        # --- embed_nanobot: persistent device connections (task 5.3.2) ---
+        # Maps node_id → (reader, writer) for devices that maintain long-lived
+        # inbound TCP connections (ESP32 clients).  Used by send() as a
+        # fallback when the peer is not in the UDP discovery table.
+        self._device_writers: dict[str, asyncio.StreamWriter] = {}
+        self._connect_handlers: list[Callable[[str], None]] = []
+        self._disconnect_handlers: list[Callable[[str], None]] = []
 
     # -- handler registration ------------------------------------------------
 
     def on_message(self, handler: MessageHandler) -> None:
         """Register a callback that is invoked for every received envelope."""
         self._handlers.append(handler)
+
+    def on_device_connected(self, handler: Callable[[str], None]) -> None:
+        """Register a callback fired when a device persistent connection is established."""
+        self._connect_handlers.append(handler)
+
+    def on_device_disconnected(self, handler: Callable[[str], None]) -> None:
+        """Register a callback fired when a device persistent connection drops."""
+        self._disconnect_handlers.append(handler)
 
     # -- lifecycle -----------------------------------------------------------
 
@@ -105,6 +120,14 @@ class MeshTransport:
         )
 
     async def stop(self) -> None:
+        # Close persistent device connections
+        for node_id, writer in list(self._device_writers.items()):
+            writer.close()
+            try:
+                await writer.wait_closed()
+            except Exception:
+                pass
+        self._device_writers.clear()
         if self._server:
             self._server.close()
             await self._server.wait_closed()
@@ -118,12 +141,15 @@ class MeshTransport:
         reader: asyncio.StreamReader,
         writer: asyncio.StreamWriter,
     ) -> None:
-        """Handle one inbound TCP connection (one envelope per connection)."""
+        """Handle an inbound TCP connection.
+
+        For authenticated devices (PSK-verified), the connection is kept alive
+        so the hub can send commands back over the same TCP socket.  This is
+        essential for ESP32 devices that don't run their own TCP server.
+        """
+        peer_id: str | None = None
         try:
             # --- embed_nanobot: CRL revocation check (task 3.2) ---
-            # Check if the peer's certificate has been revoked before
-            # processing any data.  Done at application level because
-            # Python's ssl module doesn't support CRL file loading.
             if self.tls_enabled and self.revocation_check_fn is not None:
                 from nanobot.mesh.ca import MeshCA
                 peer_id = MeshCA.get_peer_node_id(writer.transport)
@@ -137,45 +163,110 @@ class MeshTransport:
             env = await asyncio.wait_for(read_envelope(reader), timeout=10.0)
             if env is None:
                 return
-            # --- embed_nanobot: PSK authentication check ---
-            # When TLS is active, transport-level auth is already done;
-            # skip HMAC verification and AES-GCM decryption.
             if not self.tls_enabled:
                 if not self._verify_inbound(env):
                     return
-                # --- embed_nanobot: decrypt payload after auth verification ---
                 self._decrypt_inbound(env)
+
+            peer_id = env.source
             logger.debug(
-                f"[Mesh/Transport] received {env.type} from {env.source}"
+                f"[Mesh/Transport] received {env.type} from {peer_id}"
             )
-            # Auto-reply with PONG when we receive a PING
-            if env.type == MsgType.PING:
-                pong = MeshEnvelope(
-                    type=MsgType.PONG,
-                    source=self.node_id,
-                    target=env.source,
+
+            # --- embed_nanobot: persistent device connections (task 5.3.2) ---
+            # If this is an authenticated device (has PSK), keep the connection
+            # alive for bidirectional communication.
+            is_persistent = (
+                self.psk_auth_enabled
+                and self.key_store is not None
+                and self.key_store.get_psk(peer_id) is not None
+                and env.type != MsgType.ENROLL_REQUEST
+            )
+
+            await self._process_envelope(env, writer)
+
+            if is_persistent:
+                self._device_writers[peer_id] = writer
+                logger.info(
+                    f"[Mesh/Transport] persistent connection from {peer_id}"
                 )
-                write_envelope(writer, pong)
-                await writer.drain()
-            # --- embed_nanobot: attach writer for enrollment replies ---
-            # Enrollment devices are not yet in the discovery table, so the
-            # handler needs the raw writer to reply on the same connection.
-            if env.type == MsgType.ENROLL_REQUEST:
-                env.payload["_reply_writer"] = writer
-            # Dispatch to handlers
-            for handler in self._handlers:
-                try:
-                    await handler(env)
-                except Exception as exc:
-                    logger.error(f"[Mesh/Transport] handler error: {exc}")
+                for cb in self._connect_handlers:
+                    try:
+                        cb(peer_id)
+                    except Exception as exc:
+                        logger.error(f"[Mesh/Transport] connect handler error: {exc}")
+                # Enter persistent read loop for this device
+                await self._persistent_read_loop(reader, writer, peer_id)
+
         except (asyncio.IncompleteReadError, asyncio.TimeoutError, ConnectionError) as exc:
             logger.debug(f"[Mesh/Transport] connection error: {exc}")
+        except Exception as exc:
+            logger.error(f"[Mesh/Transport] unexpected error: {exc}")
         finally:
+            if peer_id:
+                was_persistent = self._device_writers.pop(peer_id, None) is not None
+                logger.debug(f"[Mesh/Transport] {peer_id} disconnected")
+                if was_persistent:
+                    for cb in self._disconnect_handlers:
+                        try:
+                            cb(peer_id)
+                        except Exception as exc:
+                            logger.error(f"[Mesh/Transport] disconnect handler error: {exc}")
             writer.close()
             try:
                 await writer.wait_closed()
             except Exception:
                 pass
+
+    async def _process_envelope(
+        self,
+        env: MeshEnvelope,
+        writer: asyncio.StreamWriter,
+    ) -> None:
+        """Process a single verified envelope: auto-reply, attach writer, dispatch."""
+        if env.type == MsgType.PING:
+            pong = MeshEnvelope(
+                type=MsgType.PONG,
+                source=self.node_id,
+                target=env.source,
+            )
+            write_envelope(writer, pong)
+            await writer.drain()
+        if env.type == MsgType.ENROLL_REQUEST:
+            env.payload["_reply_writer"] = writer
+        for handler in self._handlers:
+            try:
+                await handler(env)
+            except Exception as exc:
+                logger.error(f"[Mesh/Transport] handler error: {exc}")
+
+    async def _persistent_read_loop(
+        self,
+        reader: asyncio.StreamReader,
+        writer: asyncio.StreamWriter,
+        peer_id: str,
+    ) -> None:
+        """Read envelopes from a persistent device connection until it closes."""
+        while True:
+            try:
+                env = await asyncio.wait_for(
+                    read_envelope(reader), timeout=90.0,
+                )
+            except asyncio.TimeoutError:
+                logger.debug(f"[Mesh/Transport] {peer_id} idle timeout")
+                break
+            except (asyncio.IncompleteReadError, ConnectionError):
+                break
+            if env is None:
+                break
+            if not self.tls_enabled:
+                if not self._verify_inbound(env):
+                    continue
+                self._decrypt_inbound(env)
+            logger.debug(
+                f"[Mesh/Transport] received {env.type} from {env.source}"
+            )
+            await self._process_envelope(env, writer)
 
     # -- sending -------------------------------------------------------------
 
@@ -183,7 +274,30 @@ class MeshTransport:
         """Send an envelope to the target peer.
 
         Returns ``True`` on success, ``False`` if the peer is unreachable.
+        Checks persistent device connections first, then falls back to
+        discovery-based outbound connections.
         """
+        # --- embed_nanobot: try persistent connection first (task 5.3.2) ---
+        writer = self._device_writers.get(env.target)
+        if writer is not None and not writer.is_closing():
+            try:
+                if not self.tls_enabled:
+                    self._encrypt_outbound(env)
+                    self._sign_outbound(env)
+                write_envelope(writer, env)
+                await writer.drain()
+                logger.debug(
+                    f"[Mesh/Transport] sent {env.type} to {env.target} "
+                    f"via persistent connection"
+                )
+                return True
+            except (ConnectionError, OSError) as exc:
+                logger.debug(
+                    f"[Mesh/Transport] persistent connection to "
+                    f"{env.target} broken: {exc}"
+                )
+                self._device_writers.pop(env.target, None)
+
         peer = self.discovery.get_peer(env.target)
         if peer is None:
             logger.warning(

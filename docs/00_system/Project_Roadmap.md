@@ -2,7 +2,7 @@
 
 > Single source of truth for project progress. Updated after each feature completion.
 
-**Last updated**: 2026-03-26 (Gateway bugs fixed, enrollment flow ready for testing)
+**Last updated**: 2026-03-27 (E2E COMMAND flow verified: CHAT → agent → DeviceControlTool → COMMAND → ESP32 via persistent TCP)
 
 ---
 
@@ -182,6 +182,7 @@ and the other is remotely updatable by the Hub.
 | | Hardware testing with physical ESP32 Dev Board now underway | | | | |
 | | See [docs/GETTING_STARTED.md](../GETTING_STARTED.md) for setup + deployment guide | | | | |
 | | **2026-03-26**: ESP32 flashed and deployed via WSL (`deploy.sh`). Gateway bugs fixed (BUG-001/002/003). `--enroll` flag implemented. Next: test enrollment + LED command. See `docs/02_bugfix/BUGFIX_LOG.md`. | | | | |
+| | **2026-03-27**: Full E2E verified — enrollment → PSK auth → STATE_REPORT → auto-registration → persistent TCP → COMMAND delivery to ESP32 via DeviceControlTool. Fixes: auto-registration from STATE_REPORT, COMMAND action mapping, persistent bidirectional TCP, device online/offline tracking via TCP callbacks, bool value coercion for LLM, boot.py auto-start. MicroPython guide written. | | | | |
 | 5.3.3 | **Cloud dashboard (web-based)** | P3 | L | Dashboard (3.6) | Proposed |
 | | Remote access to device dashboard over HTTPS | | | | |
 | | Authentication + RBAC for multi-user environments | | | | |
@@ -229,6 +230,20 @@ See [docs/sync/SYNC_LOG.md](../sync/SYNC_LOG.md) for full merge history.
 - **Workflow established**: Created `docs/02_bugfix/BUGFIX_LOG.md` for tracking, updated `copilot-instructions.md` v1.5 with Bugfix Workflow and Hardware Testing & Feedback Loop.
 - **Provider**: Using OpenRouter/stepfun (`stepfun/step-3.5-flash:free`), no local LLM.
 - **Next steps**: Run `nanobot gateway --enroll`, test ESP32 enrollment over Wi-Fi, then test NL device commands.
+
+### 2026-03-27 — E2E COMMAND Flow Verified
+- **Full pipeline working**: CHAT from authenticated client → nanobot agent → DeviceControlTool → COMMAND envelope → ESP32 via persistent TCP connection. Agent correctly calls `device_control(action="command")` and command arrives at ESP32.
+- **6 gap fixes implemented**:
+  1. **Auto-registration**: `_handle_state_report()` now auto-registers devices from STATE_REPORT capabilities when authenticated but not in registry.
+  2. **COMMAND dispatch**: ESP32 `_dispatch()` fixed to extract `value` from `params` dict; maps hub actions (set/get/toggle) to device actions (turn_on/turn_off/read/set_value).
+  3. **boot.py**: Created with 3-second grace period, `/no_autostart` flag file, KeyboardInterrupt handling.
+  4. **Persistent bidirectional TCP**: Major transport.py refactor — `_device_writers` dict, `_persistent_read_loop` with 90s idle timeout, `send()` uses persistent connections.
+  5. **Device online/offline tracking**: Transport fires `on_device_connected`/`on_device_disconnected` callbacks; channel hooks these to `registry.mark_online/mark_offline`.
+  6. **Bool value coercion**: `_send_command()` coerces string "True"/"False" from LLM to Python bool. Offline status treated as advisory, not blocking.
+- **Files modified**: `nanobot/mesh/channel.py`, `nanobot/mesh/transport.py`, `nanobot/agent/tools/device.py`, `esp32/mesh_client/main.py`, `esp32/mesh_client/boot.py`, `esp32/tools/deploy.sh`, `tests/test_device_control_tool.py`.
+- **New documentation**: `docs/MICROPYTHON_GUIDE.md` — comprehensive MicroPython/mpremote reference.
+- **Test baseline**: 1454 passed, 1 skipped (only failure is unrelated `duckduckgo_search` module).
+- **16 upstream commits pending** — low priority, deferred.
 
 ### 2026-02-17 — Major Upstream Sync Complete
 - **116 upstream commits merged** (77 non-merge): MCP support, OpenAI Codex provider, redesigned memory system, CLI overhaul with prompt_toolkit, security hardening, cron improvements.

@@ -48,8 +48,21 @@ def _dispatch(envelope: dict, transport: MeshTransport) -> None:
     elif msg_type == "command":
         cap    = payload.get("capability", "")
         action = payload.get("action", "")
-        value  = payload.get("value", None)
-        print("[device] Command from hub: {} → {} = {}".format(cap, action, value))
+        params = payload.get("params", {})
+        value  = params.get("value", payload.get("value", None))
+        # Map hub actions (set/get/toggle) to device actions (turn_on/turn_off/read/set_value)
+        if action == "set" and isinstance(value, bool):
+            action = "turn_on" if value else "turn_off"
+        elif action == "set":
+            action = "set_value"
+        elif action == "get":
+            action = "read"
+        elif action == "toggle":
+            # Read current state and invert
+            from device import _state as dev_state
+            cur = dev_state.get(cap, False)
+            action = "turn_off" if cur else "turn_on"
+        print("[device] Command from hub: {} -> {} = {}".format(cap, action, value))
         result = execute_command(cap, action, value)
         resp = {"capability": cap, "action": action}
         resp.update(result)
