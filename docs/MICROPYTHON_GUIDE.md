@@ -21,6 +21,7 @@ in the embed_nanobot project.
 12. [Common Workflows](#common-workflows)
 13. [Troubleshooting](#troubleshooting)
 14. [MicroPython Coding Rules (ESP32)](#micropython-coding-rules-esp32)
+15. [Operations FAQ](#operations-faq)
 
 ---
 
@@ -613,4 +614,369 @@ When writing code for the ESP32 mesh client, follow these constraints
 
 ---
 
-*Last updated: 2026-03-27*
+## Operations FAQ
+
+Practical answers for day-to-day operation of the nanobot gateway and ESP32 mesh devices.
+
+### Q1: How do I check if nanobot is working? How do I enable it?
+
+**Check if the gateway process is running:**
+
+```bash
+# Check for running gateway process
+pgrep -af "nanobot gateway"
+
+# Quick status check (shows config, workspace, model, API keys)
+nanobot status
+```
+
+**Start the gateway:**
+
+```bash
+# Start with verbose logging (recommended for testing)
+nanobot gateway -v 2>&1 | tee ~/gateway.log
+
+# Start with enrollment enabled (for new devices)
+nanobot gateway --enroll -v 2>&1 | tee ~/gateway.log
+
+# Start with a custom config file
+nanobot gateway -c /path/to/config.json -v
+```
+
+**Gateway startup — what to look for in the log:**
+
+```
+🤖 Starting nanobot gateway...
+✓ Channels enabled: mesh
+[Mesh/Transport] TCP server listening on 0.0.0.0:18800
+[Mesh/Transport] UDP discovery listening on port 18799
+```
+
+If you see `✓ Channels enabled: mesh`, the mesh transport is active and waiting for ESP32 connections.
+
+**Configuration location:**
+
+The gateway reads config from `~/.embed_nanobot/config.json`. Key fields:
+
+```json
+{
+  "channels": {
+    "mesh": {
+      "enabled": true,
+      "tcp_port": 18800,
+      "discovery_port": 18799,
+      "registry_path": "~/.nanobot/workspace/device_registry.json"
+    }
+  }
+}
+```
+
+---
+
+### Q2: How do I check if ESP32 is working? How do I enable it?
+
+**Check if ESP32 is reachable via USB:**
+
+```bash
+# List connected MicroPython devices
+mpremote devs
+
+# Quick alive check
+mpremote connect /dev/ttyUSB0 exec "print('alive')"
+```
+
+**Check WiFi connection on ESP32:**
+
+```bash
+mpremote connect /dev/ttyUSB0 exec "
+import network
+sta = network.WLAN(network.STA_IF)
+print('Connected:', sta.isconnected())
+if sta.isconnected():
+    print('IP:', sta.ifconfig()[0])
+"
+```
+
+**Check if PSK (pre-shared key) exists (device is enrolled):**
+
+```bash
+mpremote connect /dev/ttyUSB0 exec "
+import os
+files = os.listdir('/')
+print('PSK exists:', 'psk.key' in files)
+"
+```
+
+**Deploy the mesh client to ESP32:**
+
+```bash
+# Full deploy (all mesh_client files)
+bash esp32/tools/deploy.sh /dev/ttyUSB0
+
+# Force update config.py too
+FORCE_CONFIG=1 bash esp32/tools/deploy.sh /dev/ttyUSB0
+```
+
+**Start the mesh client manually (for debugging):**
+
+```bash
+# Run the mesh client manually (see output in terminal)
+mpremote connect /dev/ttyUSB0 exec "import main; main.run()"
+
+# First-time enrollment (gateway must be running with --enroll)
+mpremote connect /dev/ttyUSB0 exec "import main; main.run(enrollment_pin='XXXX')"
+```
+
+**ESP32 automatic startup:**
+
+After deployment, `boot.py` auto-starts the mesh client with a 3-second
+grace period. To disable auto-start:
+
+```bash
+# Create the no-autostart flag
+mpremote connect /dev/ttyUSB0 exec "open('/no_autostart','w').close()"
+
+# Re-enable auto-start (delete the flag)
+mpremote connect /dev/ttyUSB0 exec "import os; os.remove('/no_autostart')"
+```
+
+**ESP32 startup sequence (what you see in the serial log):**
+
+```
+[wifi] Connected — IP: 192.168.5.72
+[security] PSK loaded (32 bytes)
+[transport] Connecting to hub 192.168.5.1:18800...
+[transport] Hub connected
+[transport] STATE_REPORT sent
+```
+
+**ESP32 config reference (`config.py` on device):**
+
+```python
+WIFI_SSID = "YourSSID"
+WIFI_PASS = "YourPassword"
+HUB_HOST = "192.168.5.1"       # Gateway machine IP (not localhost)
+HUB_PORT = 18800
+NODE_ID = "esp32-01"
+DEVICE_TYPE = "esp32"
+CAPABILITIES = "led"
+RECONNECT_DELAY_S = 5
+```
+
+---
+
+### Q3: How do I verify they are connected? How to check via nanobot?
+
+**Gateway log patterns confirming ESP32 connected:**
+
+```
+[Mesh/Transport] persistent connection from esp32-01
+[MeshChannel] received state_report from esp32-01
+[DeviceRegistry] auto-registered device esp32-01 (type=esp32, caps=['led'])
+[DeviceRegistry] device esp32-01 is online
+```
+
+**Ask the nanobot agent (in chat/CLI):**
+
+```
+You: "List all connected devices"
+→ Agent calls device_control(action="list")
+→ Output:
+   Registered devices (1):
+     • esp32-01 (esp32-01) [ONLINE] — esp32, caps: led
+
+You: "What is the state of esp32-01?"
+→ Agent calls device_control(action="state", device="esp32-01")
+→ Output:
+   esp32-01 (esp32-01) — esp32 [ONLINE]
+   Current state:
+     • led: True
+   Capabilities:
+     • led (actuator)
+```
+
+**Check the device registry file directly:**
+
+```bash
+cat ~/.nanobot/workspace/device_registry.json | python3 -m json.tool
+```
+
+The JSON shows each device with its `online` status, `last_seen` timestamp,
+capabilities, and current state.
+
+---
+
+### Q4: How do I know if ESP32 can't be accessed? Which devices are connected and which are not?
+
+**Use `device_control(action="list")` — shows ALL devices with ONLINE/OFFLINE status:**
+
+```
+You: "List all devices"
+→ Registered devices (3):
+    • esp32-01 (esp32-01) [ONLINE] — esp32, caps: led
+    • sensor-02 (sensor-02) [OFFLINE] — temperature_sensor, caps: temperature
+    • relay-03 (relay-03) [OFFLINE] — smart_relay, caps: relay
+```
+
+**Gateway log patterns when a device goes offline:**
+
+```
+[Mesh/Transport] esp32-01 idle timeout          # 90s no data on TCP
+[Mesh/Transport] esp32-01 disconnected
+[DeviceRegistry] device esp32-01 is offline
+```
+
+**When a command fails to reach an offline device:**
+
+```
+[DeviceControlTool] esp32-01 is offline, attempting delivery anyway
+[DeviceControlTool] failed to deliver to esp32-01
+→ "Failed to deliver command to esp32-01 — device may be unreachable."
+```
+
+**On gateway restart**: All devices start as `offline`. They go `online`
+only when they reconnect and send a STATE_REPORT. This is by design —
+the gateway doesn't assume a previous connection is still valid.
+
+**Check the registry summary (via agent):**
+
+```
+You: "Show device status summary"
+→ Connected devices (1 online / 3 total):
+    - esp32-01 (esp32) [ONLINE] — led: True
+    - sensor-02 (temperature_sensor) [OFFLINE] — last seen 5min ago
+    - relay-03 (smart_relay) [OFFLINE] — last seen 2h ago
+```
+
+---
+
+### Q5: If ESP32 has errors, how do I get them?
+
+**Method 1: Read errors via USB serial (best for debugging):**
+
+```bash
+# Open interactive REPL — see live errors in real-time (Ctrl-X to exit)
+mpremote connect /dev/ttyUSB0 repl
+
+# Import and run manually to see full traceback
+mpremote connect /dev/ttyUSB0 exec "import main; main.run()"
+
+# Test a specific module for import errors
+mpremote connect /dev/ttyUSB0 exec "import device; print('OK')"
+
+# Soft-reset first to clear cached modules
+mpremote connect /dev/ttyUSB0 reset
+```
+
+**Method 2: Check command responses via gateway log:**
+
+When the ESP32 executes a command, it sends a RESPONSE back to the gateway.
+The gateway logs it:
+
+```
+[MeshChannel] RESPONSE from esp32-01: led → ok          # Success
+[MeshChannel] RESPONSE from esp32-01: temperature → error  # Failure
+```
+
+The error detail is included in the response payload:
+
+```json
+{"status": "error", "detail": "unknown capability: xxx"}
+{"status": "error", "detail": "unhandled action 'yyy' for type 'zzz'"}
+```
+
+**Method 3: Detect crashes via connection drop:**
+
+If ESP32 crashes before sending a response, the gateway only sees the
+TCP disconnection:
+
+```
+[Mesh/Transport] esp32-01 disconnected
+[DeviceRegistry] device esp32-01 is offline
+```
+
+This means the ESP32 hit an unhandled exception. Connect via USB and
+check the REPL for the traceback.
+
+**ESP32 transport-level errors (shown on ESP32 serial):**
+
+```
+[transport] Error: [Errno 104] ECONNRESET — reconnecting in 5 s
+[transport] Error: [Errno 113] EHOSTUNREACH — reconnecting in 5 s
+```
+
+The ESP32 reconnects automatically after `RECONNECT_DELAY_S` seconds.
+
+---
+
+### Q6: How do I update ESP32 firmware via OTA?
+
+**Method 1: USB deploy (recommended for development):**
+
+```bash
+# Deploy all mesh_client files via USB
+bash esp32/tools/deploy.sh /dev/ttyUSB0
+
+# Force config update too
+FORCE_CONFIG=1 bash esp32/tools/deploy.sh /dev/ttyUSB0
+```
+
+**Method 2: OTA via the nanobot agent (over WiFi, no USB needed):**
+
+The agent has a `device_reprogram` tool that pushes code updates to
+ESP32 devices over the mesh network.
+
+```
+You: "Deploy a sensor reader to esp32-01 that reads temperature on pin 36 every 5 seconds"
+→ Agent calls device_reprogram(action="deploy", device="esp32-01",
+     template_name="sensor_reader",
+     params={"pin": 36, "sensor_type": "temperature", "read_interval_ms": 5000})
+```
+
+**Available `device_reprogram` actions:**
+
+| Action | Purpose |
+|--------|---------|
+| `templates` | List available code templates |
+| `generate` | Fill a template with parameters → validated code |
+| `validate` | Safety-check raw MicroPython code |
+| `deploy` | Package code + push to device via OTA |
+| `status` | Check OTA progress for a device |
+
+**OTA protocol flow:**
+
+```
+Hub sends OTA_OFFER → ESP32 replies OTA_ACCEPT →
+Hub sends OTA_CHUNK (×N with ACKs) → ESP32 sends OTA_VERIFY →
+Hub sends OTA_COMPLETE
+```
+
+**OTA requirements:**
+
+- The device must be **online** (connected to the gateway)
+- The gateway config must have `firmware_dir` set:
+  ```json
+  { "channels": { "mesh": { "firmware_dir": "~/.embed_nanobot/firmware" } } }
+  ```
+- Code is safety-validated: only whitelisted MicroPython imports, no `eval`/`exec`,
+  max 64KB, must define `setup()+loop()` or `main()`
+
+**OTA timeouts:**
+
+| Phase | Timeout |
+|-------|---------|
+| Offer → Accept/Reject | 60s |
+| Chunk → ACK | 30s |
+| Verify | 60s |
+| Chunk size | 4096 bytes |
+
+**Check OTA status:**
+
+```
+You: "Check OTA status for esp32-01"
+→ Agent calls device_reprogram(action="status", device="esp32-01")
+```
+
+---
+
+*Last updated: 2026-03-28*
