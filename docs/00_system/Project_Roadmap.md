@@ -169,10 +169,8 @@ and the other is remotely updatable by the Hub.
 
 | # | Task | Priority | Complexity | Dependencies | Status |
 |---|------|----------|------------|--------------|--------|
-| 5.3.1 | **MCP-based device protocol tools** | P2 | M | MCP (upstream) | Not Started |
-| | Expose device control as MCP tools for external AI agents | | | | |
-| | Enables integration with other AI systems (e.g., Claude Desktop, ChatGPT plugins) | | | | |
-| | *Note: Device control exists as native nanobot `Tool` subclasses (DeviceControlTool, ReprogramTool). This task wraps them as MCP-standard tools.* | | | | |
+| 5.3.1 | **MCP-based device protocol tools** | P2 | M | MCP (upstream) | **Done** (2026-03-29) |
+| | `nanobot/mesh/mcp_server.py` — MeshMCPServer wraps nanobot Tool instances as MCP tools. SSE transport via Starlette/uvicorn. Config: `mcp_server_port` in MeshConfig (0=disabled). Wired in commands.py: registers device_control + device_reprogram tools, starts alongside gateway. 12 tests. | | | | |
 | 5.3.2 | **ESP32 SDK (MicroPython mesh client)** | P1 | XL | All mesh | **Done** (2026-03-29) |
 | | `esp32/mesh_client/` — 8 modules, 889 lines of real MicroPython code. | | | | |
 | | WiFi connection + NTP sync (`transport.py`), PIN-based enrollment + PBKDF2 (`enrollment.py`), HMAC-SHA256 signing (`security.py`), TCP transport with auto-reconnect, GPIO device control (`device.py`), OTA chunk receiver with base64 decode + SHA-256 verify + file install + reset (`main.py`), protocol framing (`protocol.py`). | | | | |

@@ -70,6 +70,8 @@ class MeshConfig(Base):
     autonomous_level: str = "monitor-only"   # off | monitor-only | suggest | act
     autonomous_topics: list[str] = Field(default_factory=list)  # User-defined exploration topics.
     autonomous_keep_messages: int = 8        # Recent session messages to retain between runs.
+    # --- embed_nanobot extensions: MCP server (task 5.3.1) ---
+    mcp_server_port: int = 0                 # Port for MCP SSE server. 0 = disabled.
 
 
 class ChannelsConfig(Base):

@@ -848,6 +848,28 @@ def gateway(
         except Exception as e:
             _embed_logger.warning("Autonomous mode not available: {}", e)
 
+    # --- embed_nanobot extensions: MCP server for device tools (task 5.3.1) ---
+    mcp_task = None
+    _mcp_port = getattr(mesh_cfg, "mcp_server_port", 0) if mesh_cfg else 0
+    if _mcp_port and isinstance(_mcp_port, int) and _mcp_port > 0:
+        try:
+            from nanobot.mesh.mcp_server import MeshMCPServer
+            mcp_srv = MeshMCPServer()
+            # Register all mesh-related tools from the agent
+            for tname in ("device_control", "device_reprogram"):
+                t = agent.tools.get(tname)
+                if t:
+                    mcp_srv.register_tool(t)
+            console.print(
+                f"[green]✓[/green] MCP server: port {_mcp_port} "
+                f"({len(mcp_srv._tools)} tools)"
+            )
+        except Exception as e:
+            _embed_logger.warning("MCP server not available: {}", e)
+            mcp_srv = None
+    else:
+        mcp_srv = None
+
     # --- embed_nanobot extensions: device enrollment PIN (task 1.10) ---
     if enroll:
         if "mesh" in channels.channels:
@@ -873,10 +895,13 @@ def gateway(
             await heartbeat.start()
             if autonomous_svc:
                 await autonomous_svc.start()
-            await asyncio.gather(
+            tasks = [
                 agent.run(),
                 channels.start_all(),
-            )
+            ]
+            if mcp_srv:
+                tasks.append(mcp_srv.run_sse(port=_mcp_port))
+            await asyncio.gather(*tasks)
         except KeyboardInterrupt:
             console.print("\nShutting down...")
         except Exception:
