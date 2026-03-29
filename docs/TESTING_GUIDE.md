@@ -381,6 +381,19 @@ NODE_ID        = "esp32-01"
 > **ESP32 only supports 2.4 GHz WiFi**. If your router broadcasts both 2.4G
 > and 5G SSIDs (e.g., `MyNet` and `MyNet-5G`), use the 2.4G one.
 
+#### Known WiFi networks
+
+Reference table of WiFi credentials used during testing:
+
+| Name | Location | SSID | Password | Notes |
+|------|----------|------|----------|-------|
+| ShenZhen Home | ShenZhen | PPAY | PP&AY1023 | 2.4 GHz, primary dev location |
+| DongGuan ZhongXi | DongGuan | 1704 | 17041014 | 2.4 GHz, secondary location |
+
+When switching locations, update `esp32/mesh_client/config.py` with the
+correct SSID/password and re-deploy with `FORCE_CONFIG=1`.
+`HUB_IP` must also be updated to match the new LAN IP.
+
 Then deploy with force-config:
 
 ```bash

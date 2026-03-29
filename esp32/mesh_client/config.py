@@ -5,8 +5,8 @@
 # ------------------------------------------------------------------
 # WiFi credentials
 # ------------------------------------------------------------------
-WIFI_SSID     = "YourNetworkSSID"
-WIFI_PASSWORD = "YourNetworkPassword"
+WIFI_SSID     = "1704"
+WIFI_PASSWORD = "17041014"
 WIFI_TIMEOUT  = 20   # seconds to wait for connection
 
 # ------------------------------------------------------------------
