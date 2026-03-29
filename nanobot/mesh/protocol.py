@@ -53,6 +53,9 @@ class MsgType(str, Enum):
     # --- embed_nanobot extensions: dual-partition management (task 5.2.1) ---
     PARTITION_REPORT = "partition_report"    # Device → Hub: current partition state
     PARTITION_QUERY = "partition_query"      # Hub → Device: request partition state
+    # --- embed_nanobot extensions: core integrity (task 5.2.5) ---
+    CORE_INTEGRITY_QUERY = "core_integrity_query"    # Hub → Device: request core file hashes
+    CORE_INTEGRITY_REPORT = "core_integrity_report"  # Device → Hub: core file hashes
     # --- embed_nanobot extensions: hub-to-hub federation (task 4.2) ---
     FEDERATION_HELLO = "federation_hello"
     FEDERATION_SYNC = "federation_sync"

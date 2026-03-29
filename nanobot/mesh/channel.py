@@ -512,6 +512,13 @@ class MeshChannel(BaseChannel):
                         env.payload.get("boot_state", "?"))
             return
 
+        # --- embed_nanobot: handle core integrity reports (task 5.2.5) ---
+        if env.type == MsgType.CORE_INTEGRITY_REPORT:
+            ok = env.payload.get("integrity", {}).get("ok", False)
+            ver = env.payload.get("core_version", "?")
+            logger.info("[MeshChannel] Core integrity from {}: ok={} v{}", env.source, ok, ver)
+            return
+
         # --- embed_nanobot: log device command responses ---
         if env.type == MsgType.RESPONSE:
             status = env.payload.get("status", "?")

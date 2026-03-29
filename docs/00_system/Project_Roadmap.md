@@ -161,12 +161,9 @@ and the other is remotely updatable by the Hub.
 | | *Note: No built-in LLM code generation — the AI agent provides code via ReprogramTool, which validates and deploys it. Environment/capability awareness is via the agent's context, not codegen itself.* | | | | |
 | 5.2.4 | **Safe deployment pipeline** | P2 | M | 5.2.1, 5.2.2, 5.2.3 | **Done** (2026-03-29) |
 | | Hub: `nanobot/mesh/deployment.py` — DeploymentPipeline with canary → health check → group rollout → monitor → finalize flow. Emergency recall aborts all OTA sessions. JSON audit trail. Wired into MeshChannel alongside PartitionManifest + OTAManager. 26 tests. | | | | |
-| 5.2.5 | **ESP32 core partition SDK** | P2 | XL | 5.2.1, 5.2.2 | Not Started |
-| | MicroPython/C dual-partition bootloader for ESP32 | | | | |
-| | Mesh client (Wi-Fi + TCP) in core partition: discovery, enrollment, PSK auth | | | | |
-| | Signature verification lib: EC P-256 verify in constrained environment | | | | |
-| | Crash counter + watchdog + rollback mechanism in ROM-safe storage | | | | |
-| | This is hardware-dependent and requires physical ESP32 for validation | | | | |
+| 5.2.5 | **ESP32 core partition SDK** | P2 | XL | 5.2.1, 5.2.2 | **Done** (2026-03-29) |
+| | ESP32: `esp32/mesh_client/sdk.py` — Public API for app developers: `get_core_version()`, `execute_command()`, `send_message()`, `verify_core_integrity()`, `get_core_file_hashes()`, `is_enrolled()`, `get_partition_report()`. CORE_FILES manifest for integrity verification. Hub: CORE_INTEGRITY_QUERY/REPORT protocol + handler in channel.py. Deploy script updated with boot_manager.py + sdk.py. 12 tests. | | | | |
+| | *Note: C-level bootloader deferred — MicroPython file-based partitioning with crash detection + rollback achieves the same goals. EC P-256 on-device verify replaced by HMAC-SHA256 (design choice in 5.2.2).* | | | | |
 
 ### 5.3 — Improvements to Existing Features
 

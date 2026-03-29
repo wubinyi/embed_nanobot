@@ -35,6 +35,8 @@ ALWAYS_FILES=(
     device.py
     main.py
     boot.py
+    boot_manager.py
+    sdk.py
 )
 
 # Copy always-files

@@ -89,6 +89,9 @@ def _dispatch(envelope, transport):
     elif msg_type == "partition_query":
         _handle_partition_query(transport, source)
 
+    elif msg_type == "core_integrity_query":
+        _handle_core_integrity_query(transport, source)
+
     elif msg_type == "pong":
         pass   # Hub replied to our ping — connection confirmed
 
@@ -329,6 +332,20 @@ def _send_partition_report(transport, target):
         print("[main] Sent partition report: state=" + report.get("boot_state", "?"))
     except Exception as e:
         print("[main] Failed to send partition report: " + str(e))
+
+
+def _handle_core_integrity_query(transport, source):
+    """Respond to CORE_INTEGRITY_QUERY with file hashes."""
+    try:
+        import sdk
+        report = {}
+        report["core_version"] = sdk.CORE_VERSION
+        report["integrity"] = sdk.verify_core_integrity()
+        report["file_hashes"] = sdk.get_core_file_hashes()
+        transport.send("core_integrity_report", source, report)
+        print("[main] Sent core integrity report: ok=" + str(report["integrity"]["ok"]))
+    except Exception as e:
+        print("[main] Failed core integrity report: " + str(e))
 
 
 # ------------------------------------------------------------------
