@@ -770,6 +770,84 @@ def gateway(
 
     console.print(f"[green]✓[/green] Heartbeat: every {hb_cfg.interval_s}s")
 
+    # --- embed_nanobot extensions: autonomous device monitoring (task 5.1.1) ---
+    autonomous_svc = None
+    mesh_cfg = getattr(config.channels, "mesh", None)
+    if mesh_cfg and getattr(mesh_cfg, "autonomous_enabled", False):
+        try:
+            from nanobot.mesh.autonomous import AutonomousService
+            from nanobot.mesh.awareness import AwarenessLoop
+            from nanobot.mesh.exploration import ExplorationManager
+            from nanobot.mesh.refinement import AutomationAnalyzer
+
+            _auto_registry = None
+            _auto_pipeline = None
+            _auto_automation = None
+            if "mesh" in channels.channels:
+                mesh_ch = channels.channels["mesh"]
+                _auto_registry = getattr(mesh_ch, "registry", None)
+                _auto_pipeline = getattr(mesh_ch, "pipeline", None)
+                _auto_automation = getattr(mesh_ch, "automation", None)
+
+            _awareness = AwarenessLoop(
+                registry=_auto_registry,
+                pipeline=_auto_pipeline,
+                automation=_auto_automation,
+            )
+
+            _analyzer = AutomationAnalyzer(
+                automation=_auto_automation,
+                registry=_auto_registry,
+            )
+
+            _exploration = ExplorationManager(
+                topics=list(getattr(mesh_cfg, "autonomous_topics", [])),
+                log_path=str(config.workspace_path / "exploration_log.json"),
+            )
+
+            async def on_autonomous_execute(context: str) -> str:
+                channel, chat_id = _pick_heartbeat_target()
+
+                async def _silent(*_args, **_kwargs):
+                    pass
+
+                resp = await agent.process_direct(
+                    context,
+                    session_key="autonomous",
+                    channel=channel,
+                    chat_id=chat_id,
+                    on_progress=_silent,
+                )
+                session = agent.sessions.get_or_create("autonomous")
+                session.retain_recent_legal_suffix(
+                    getattr(mesh_cfg, "autonomous_keep_messages", 8)
+                )
+                agent.sessions.save(session)
+                return resp.content if resp else ""
+
+            autonomous_svc = AutonomousService(
+                registry=_auto_registry,
+                pipeline=_auto_pipeline,
+                automation=_auto_automation,
+                awareness=_awareness,
+                analyzer=_analyzer,
+                exploration=_exploration,
+                on_execute=on_autonomous_execute,
+                on_notify=on_heartbeat_notify,
+                provider=provider,
+                model=agent.model,
+                interval_s=getattr(mesh_cfg, "autonomous_interval_s", 1800),
+                autonomy_level=getattr(mesh_cfg, "autonomous_level", "monitor-only"),
+                exploration_topics=getattr(mesh_cfg, "autonomous_topics", []),
+                enabled=True,
+            )
+            console.print(
+                f"[green]✓[/green] Autonomous mode: level={mesh_cfg.autonomous_level}, "
+                f"every {mesh_cfg.autonomous_interval_s}s"
+            )
+        except Exception as e:
+            _embed_logger.warning("Autonomous mode not available: {}", e)
+
     # --- embed_nanobot extensions: device enrollment PIN (task 1.10) ---
     if enroll:
         if "mesh" in channels.channels:
@@ -793,6 +871,8 @@ def gateway(
         try:
             await cron.start()
             await heartbeat.start()
+            if autonomous_svc:
+                await autonomous_svc.start()
             await asyncio.gather(
                 agent.run(),
                 channels.start_all(),
@@ -805,6 +885,8 @@ def gateway(
             console.print(traceback.format_exc())
         finally:
             await agent.close_mcp()
+            if autonomous_svc:
+                autonomous_svc.stop()
             heartbeat.stop()
             cron.stop()
             agent.stop()

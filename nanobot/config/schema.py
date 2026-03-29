@@ -64,6 +64,12 @@ class MeshConfig(Base):
     ble_config_path: str = ""                # Path to BLE config JSON. Empty = disabled.
     # --- embed_nanobot extensions: device codegen (task 4.3) ---
     codegen_templates_path: str = ""         # Path to custom code templates JSON. Empty = builtins only.
+    # --- embed_nanobot extensions: autonomous mode (task 5.1.1) ---
+    autonomous_enabled: bool = False         # Enable periodic autonomous device monitoring.
+    autonomous_interval_s: int = 1800        # Seconds between autonomous scans (default 30min).
+    autonomous_level: str = "monitor-only"   # off | monitor-only | suggest | act
+    autonomous_topics: list[str] = Field(default_factory=list)  # User-defined exploration topics.
+    autonomous_keep_messages: int = 8        # Recent session messages to retain between runs.
 
 
 class ChannelsConfig(Base):

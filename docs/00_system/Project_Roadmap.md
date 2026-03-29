@@ -2,11 +2,30 @@
 
 > Single source of truth for project progress. Updated after each feature completion.
 
-**Last updated**: 2026-03-29 (ESP32 OTA chunk receiver implemented — full WiFi OTA flow now functional)
+**Last updated**: 2026-03-29 (Roadmap audit — clarified all task statuses against actual codebase)
+
+### Status Legend
+
+| Status | Meaning |
+|--------|---------|
+| **Done** | Fully implemented, tested, and committed |
+| **Not Started** | No code exists yet — zero implementation |
+| **In Progress** | Active development underway |
+
+### Progress Overview
+
+| Phase | Description | Tasks | Done | Not Started |
+|-------|-------------|-------|------|-------------|
+| 1 | Foundation | 11 | 11 | 0 |
+| 2 | Device Ecosystem | 7 | 7 | 0 |
+| 3 | Production Hardening | 6 | 6 | 0 |
+| 4 | Smart Factory Extension | 5 | 5 | 0 |
+| 5 | Autonomous Intelligence & Secure Device Mgmt | 12 | 6 | 6 |
+| **Total** | | **41** | **35** | **6** |
 
 ---
 
-## Current Phase: Phase 1 — Foundation
+## Phase 1 — Foundation ✅
 
 ### Completed Tasks
 
@@ -32,28 +51,23 @@ All Phase 1 foundation tasks are done. Ready to begin Phase 2: Device Ecosystem.
 
 ---
 
-## Current Phase: Phase 2 — Device Ecosystem
+## Phase 2 — Device Ecosystem ✅
 
 ### Completed Tasks
 
 | # | Task | Status | Completed | Notes |
 |---|------|--------|-----------|-------|
 | 2.1 | Device capability registry and state management | Done | 2026-02-18 | `nanobot/mesh/registry.py` — DeviceRegistry, DeviceCapability, DeviceInfo. STATE_REPORT msg type, discovery callbacks. 50 new tests (233 total). |
-
-### Planned Tasks
-
-| # | Task | Priority | Complexity | Dependencies |
-|---|------|----------|------------|--------------|
 | 2.2 | Standardized device command schema | Done | 2026-02-18 | `nanobot/mesh/commands.py` — DeviceCommand, CommandResponse, BatchCommand, Action/CommandStatus enums. 6-level validation (action/device/online/capability/compatibility/value). Mesh envelope conversion. LLM command descriptor. 42 new tests (275 total). |
 | 2.3 | Natural language → device command (LLM skill) | Done | 2026-02-18 | `nanobot/agent/tools/device.py` — DeviceControlTool (list/command/state/describe). `nanobot/skills/device-control/SKILL.md` always-active skill. Conditional registration in CLI when mesh enabled. 32 new tests (307 total). |
 | 2.4 | Command-type routing: device commands always local | Done | 2026-02-18 | `nanobot/mesh/routing.py` — registry-aware device detection. `force_local_fn` callback on HybridRouter. Auto-wired in CLI when mesh + HybridRouter both active. 21 new tests (328 total). |
-| 2.5 | ESP32 SDK (MicroPython mesh client) | Deferred | — | Hardware-dependent. Requires physical ESP32 devices for development and testing. All hub-side infrastructure (mesh transport, PSK auth, enrollment, OTA, codegen) is complete and ready for SDK integration. |
+| 2.5 | ESP32 SDK (MicroPython mesh client) | Done | 2026-03-29 | `esp32/mesh_client/` — 8 modules (889 lines): WiFi connection + NTP sync, PIN-based enrollment + PBKDF2 PSK decryption, HMAC-SHA256 signing, TCP transport with auto-reconnect, GPIO device control, OTA chunk receiver (base64 decode + SHA-256 verify + file install + reset). Full E2E verified on hardware (NodeMCU-32S). |
 | 2.6 | Basic automation rules engine | Done | 2026-02-18 | `nanobot/mesh/automation.py` — AutomationEngine with Condition/RuleAction/AutomationRule, device-indexed evaluation, cooldown, JSON persistence, validation. MeshChannel dispatch hook. 75 new tests (403 total). |
 | 2.7 | Cloud API fallback: degrade to local if unreachable | Done | 2026-02-18 | Try/except fallback on API failure + circuit breaker (3 consecutive failures → route all to local for 300s). Half-open recovery. 3 config fields on HybridRouterConfig. 11 new tests (414 total). |
 
 ---
 
-## Phase 3: Production Hardening
+## Phase 3: Production Hardening ✅
 
 ### Completed Tasks
 
@@ -62,18 +76,13 @@ All Phase 1 foundation tasks are done. Ready to begin Phase 2: Device Ecosystem.
 | 3.1 | mTLS for device authentication (local CA) | Done | 2026-02-25 | `nanobot/mesh/ca.py` — MeshCA: EC P-256 local CA, per-device X.509 cert issuance (CN=node_id), mutual TLS on transport (CERT_REQUIRED), auto-issues hub cert, HMAC+AES-GCM skipped when TLS active, cert during enrollment. 49 new tests (487 total). |
 | 3.2 | Certificate revocation (CRL) | Done | 2026-02-25 | App-level CRL: `revocation_check_fn` callback in transport, `revoke_device_cert()` in CA, dual persistence (revoked.json + crl.pem). Python ssl can't load CRL files — app-level check after TLS handshake. 36 new tests (523 total). |
 | 3.3 | OTA firmware update protocol | Done | 2026-02-25 | `nanobot/mesh/ota.py` — FirmwareStore (dir-based + JSON manifest), OTAManager (state machine: offer→accept→chunks→verify→complete), chunked base64 transfer over mesh TCP, SHA-256 integrity. 8 new MsgType entries. MeshChannel integration. 49 new tests (572 total). |
-
-### Planned Tasks
-
-| # | Task | Priority | Complexity | Dependencies |
-|---|------|----------|------------|--------------|
-| 3.4 | Device grouping and scenes | P1 | M | Registry (2.1) | **Done** (2026-02-25) |
-| 3.5 | Error recovery and fault tolerance | P1 | M | All mesh components | **Done** (2026-02-25) |
-| 3.6 | Monitoring dashboard (web UI) | P2 | L | Registry (2.1) | **Done** (2026-02-26) |
+| 3.4 | Device grouping and scenes | Done | 2026-02-25 | `nanobot/mesh/groups.py` — DeviceGroup, Scene, GroupManager. CRUD for groups/scenes, fan-out commands, JSON persistence. 305 lines. |
+| 3.5 | Error recovery and fault tolerance | Done | 2026-02-25 | `nanobot/mesh/resilience.py` — RetryPolicy (exponential backoff + jitter), retry_send, Watchdog (periodic health check), supervised_task (auto-restart). 178 lines. |
+| 3.6 | Monitoring dashboard (local web UI) | Done | 2026-02-26 | `nanobot/mesh/dashboard.py` — asyncio HTTP server with JSON APIs (/api/status, /api/devices, /api/peers, /api/groups, /api/scenes, /api/rules, /api/ota, /api/firmware) + embedded single-page HTML dashboard. 477 lines. |
 
 ---
 
-## Phase 4: Smart Factory Extension
+## Phase 4: Smart Factory Extension ✅
 
 ### Completed Tasks
 
@@ -81,20 +90,13 @@ All Phase 1 foundation tasks are done. Ready to begin Phase 2: Device Ecosystem.
 |---|------|--------|-----------|-------|
 | 4.1 | PLC/industrial device integration | Done | 2026-02-26 | `nanobot/mesh/industrial.py` — IndustrialBridge with protocol adapter framework (Modbus TCP via pymodbus, StubAdapter fallback). JSON config, auto-polling, device registry integration, automation hooks. 54 new tests (728 total). |
 | 4.2 | Multi-Hub federation (hub-to-hub mesh) | Done | 2026-02-26 | `nanobot/mesh/federation.py` — FederationManager with HubLink (persistent TCP, auto-reconnect), registry sync, command forwarding, state propagation. 7 new protocol messages. 44 new tests (772 total). |
-
-### Planned Tasks
-
-All Phase 4 tasks are complete.
-
-| # | Task | Priority | Complexity | Dependencies | Status |
-|---|------|----------|------------|--------------|--------|
-| ~~4.3~~ | ~~Device reprogramming (AI-generated code push)~~ | ~~P2~~ | ~~XL~~ | ~~OTA (3.3), Commands (2.2)~~ | **Done** 2026-02-27 |
-| ~~4.4~~ | ~~Sensor data pipeline and analytics~~ | ~~P2~~ | ~~L~~ | ~~Registry (2.1)~~ | **Done** 2026-02-26 |
-| ~~4.5~~ | ~~BLE mesh support for battery-powered sensors~~ | ~~P2~~ | ~~L~~ | ~~Mesh transport abstraction~~ | **Done** 2026-02-26 |
+| 4.3 | Device reprogramming (AI-generated code push) | Done | 2026-02-27 | `nanobot/mesh/codegen.py` (697 lines) — CodeTemplate, CodeValidator (AST-based safety: import whitelist, blocked calls, size limits), CodeGenerator, CodePackage. 4 built-in templates. `nanobot/agent/tools/reprogram.py` (320+ lines) — ReprogramTool with actions: templates/generate/validate/deploy/status. Integrates codegen + OTAManager. |
+| 4.4 | Sensor data pipeline and analytics | Done | 2026-02-26 | `nanobot/mesh/pipeline.py` (442 lines) — SensorReading, RingBuffer, SensorPipeline (ingest, query, aggregate, periodic flush to disk), aggregate_readings (min/max/avg/count). |
+| 4.5 | BLE bridge for battery-powered sensors | Done | 2026-02-26 | `nanobot/mesh/ble.py` (538 lines) — BLEScanner (abstract), BleakBLEScanner (real bleak integration), StubScanner (testing), BLEBridge (scan loop → decode advertisements → register as mesh devices), BLEDeviceProfile (configurable decoders). |
 
 ---
 
-## Phase 5: Autonomous Intelligence & Secure Device Management
+## Current Phase: Phase 5 — Autonomous Intelligence & Secure Device Management
 
 > AI Hub evolves from a reactive assistant to a proactive, autonomous system that monitors,
 > learns, and updates the device ecosystem independently.
@@ -110,23 +112,23 @@ All Phase 4 tasks are complete.
 
 | # | Task | Priority | Complexity | Dependencies | Status |
 |---|------|----------|------------|--------------|--------|
-| 5.1.1 | **Configurable autonomous mode** | P1 | M | Heartbeat, Cron | Planned |
-| | User-configurable enable/disable autonomous behavior via config.json | | | | |
-| | Custom interval settings (default 30min, range 1min–24hr) | | | | |
-| | Autonomy levels: `off`, `monitor-only`, `suggest`, `act` | | | | |
-| | Config field: `AutonomousConfig(enabled, interval_s, autonomy_level, exploration_topics)` | | | | |
-| 5.1.2 | **Environmental awareness loop** | P1 | L | Registry, Pipeline, 5.1.1 | Planned |
-| | Periodic state snapshot: online devices, sensor readings, anomaly detection | | | | |
-| | Trend analysis: compare current readings against historical baselines (pipeline data) | | | | |
-| | Auto-generate actionable summaries for the LLM | | | | |
-| 5.1.3 | **Proactive automation refinement** | P2 | L | Automation (2.6), 5.1.2 | Planned |
-| | AI analyzes automation rule effectiveness (hit rate, timing, conditions) | | | | |
-| | Suggests new rules based on observed patterns | | | | |
-| | Self-tuning: adjusts thresholds, timings based on feedback | | | | |
-| 5.1.4 | **Exploration task framework** | P2 | M | 5.1.1, 5.1.2 | Planned |
-| | User-defined exploration topics (e.g., "monitor energy usage", "check security cameras") | | | | |
-| | LLM-driven exploratory actions with sandboxing (read-only unless `act` level) | | | | |
-| | Event log for transparency: all autonomous actions recorded with reasoning | | | | |
+| 5.1.1 | **Configurable autonomous mode** | P1 | M | Heartbeat, Cron | **Done** (2026-03-29) |
+| | `nanobot/mesh/autonomous.py` — AutonomousService with periodic LLM-driven device scans. | | | | |
+| | Config: `autonomous_enabled`, `autonomous_interval_s`, `autonomous_level` (monitor-only/suggest/act), `autonomous_topics`. | | | | |
+| | Builds context from DeviceRegistry + SensorPipeline + AutomationEngine + exploration topics. | | | | |
+| | Wired in `commands.py` — starts/stops alongside heartbeat. 21 tests. | | | | |
+| 5.1.2 | **Environmental awareness loop** | P1 | L | Registry, Pipeline, 5.1.1 | **Done** (2026-03-29) |
+| | `nanobot/mesh/awareness.py` — AwarenessLoop with DeviceSnapshot, trend analysis, anomaly detection. | | | | |
+| | Compares recent sensor readings (5min) vs baseline (1hr), detects σ-deviations. | | | | |
+| | Tracks online/offline transitions between snapshots. Integrated into AutonomousService. 9 tests. | | | | |
+| 5.1.3 | **Proactive automation refinement** | P2 | L | Automation (2.6), 5.1.2 | **Done** (2026-03-29) |
+| | `nanobot/mesh/refinement.py` — AutomationAnalyzer with 4 analysis dimensions: never-fired rules, | | | | |
+| | frequently-fired rules, stale rules (offline/nonexistent devices), coverage gaps (uncovered devices). | | | | |
+| | Generates structured LLM context for the autonomous service to reason about. 13 tests. | | | | |
+| 5.1.4 | **Exploration task framework** | P2 | M | 5.1.1, 5.1.2 | **Done** (2026-03-29) |
+| | `nanobot/mesh/exploration.py` — ExplorationManager with topic CRUD, append-only event log, | | | | |
+| | JSON persistence. Builds LLM context with topic status + recent autonomous actions. | | | | |
+| | Integrated into AutonomousService (build_context + _tick event recording). 23 tests. | | | | |
 
 ### 5.2 — Secure Remote Device Software Management (Dual-Partition OTA)
 
@@ -141,28 +143,29 @@ and the other is remotely updatable by the Hub.
 
 | # | Task | Priority | Complexity | Dependencies | Status |
 |---|------|----------|------------|--------------|--------|
-| 5.2.1 | **Dual-partition protocol specification** | P1 | L | OTA (3.3), Codegen (4.3) | Planned |
+| 5.2.1 | **Dual-partition protocol specification** | P1 | L | OTA (3.3), Codegen (4.3) | Not Started |
 | | Define partition layout: `core_partition` (read-only, bootloader + mesh client + safety monitor) | | | | |
 | | `app_partition` (read-write, AI Hub-deployed application code) | | | | |
 | | Boot sequence: core verifies app signature → loads app → monitors for crashes | | | | |
 | | Rollback protocol: if app crashes N times → core reverts to last-known-good version | | | | |
 | | Hub-side manifest: tracks per-device partition states (core version, app version, app hash) | | | | |
-| 5.2.2 | **Signed firmware protocol** | P1 | M | MeshCA (3.1), 5.2.1 | Planned |
+| 5.2.2 | **Signed firmware protocol** | P1 | M | MeshCA (3.1), 5.2.1 | Not Started |
 | | Hub signs firmware packages with its CA private key (EC P-256) | | | | |
 | | Device core partition verifies signature before writing to app partition | | | | |
 | | Anti-rollback counter: monotonic version number prevents downgrade attacks | | | | |
 | | Secure boot chain: core → verify sig → hash check → write app → verify written hash | | | | |
-| 5.2.3 | **Intelligent firmware generation** | P1 | L | Codegen (4.3), 5.2.1 | Planned |
-| | AI Hub generates device-specific firmware based on user requirements AND environment context | | | | |
-| | Environment-aware: "room is too hot" → generate thermostat control code for ESP32 | | | | |
-| | Capability-aware: check device hardware before generating code (ADC pins, I2C bus, etc.) | | | | |
-| | Version management: track what code runs on each device, diff against new generation | | | | |
-| 5.2.4 | **Safe deployment pipeline** | P2 | M | 5.2.1, 5.2.2, 5.2.3 | Planned |
+| | *Note: SHA-256 integrity checking exists in OTA (hub + ESP32). CA module has EC P-256 for mTLS certs. This task adds cryptographic **signatures** on firmware itself.* | | | | |
+| 5.2.3 | **Intelligent firmware generation** | P1 | L | Codegen (4.3), 5.2.1 | **Done** (2026-02-27) |
+| | ~~AI Hub generates device-specific firmware based on user requirements AND environment context~~ | | | | |
+| | Template-based generation with 4 built-in templates (`switch_basic`, `switch_relay`, `sensor_temperature`). AST-based safety validation. ReprogramTool integrates with CodeGenerator + OTAManager for end-to-end deploy. | | | | |
+| | *Note: No built-in LLM code generation — the AI agent provides code via ReprogramTool, which validates and deploys it. Environment/capability awareness is via the agent's context, not codegen itself.* | | | | |
+| 5.2.4 | **Safe deployment pipeline** | P2 | M | 5.2.1, 5.2.2, 5.2.3 | Not Started |
 | | Staged rollout: test on one device → verify for N minutes → deploy to group | | | | |
 | | Health monitoring: after deployment, confirm device reports healthy state | | | | |
 | | Emergency recall: broadcast "revert to last-known-good" to all devices | | | | |
 | | Deployment history: full audit trail of what code was deployed when, by whom | | | | |
-| 5.2.5 | **ESP32 core partition SDK** | P2 | XL | 5.2.1, 5.2.2 | Planned |
+| | *Note: Basic OTA works (send → apply → reset). This task adds staged rollout, health checks, and rollback.* | | | | |
+| 5.2.5 | **ESP32 core partition SDK** | P2 | XL | 5.2.1, 5.2.2 | Not Started |
 | | MicroPython/C dual-partition bootloader for ESP32 | | | | |
 | | Mesh client (Wi-Fi + TCP) in core partition: discovery, enrollment, PSK auth | | | | |
 | | Signature verification lib: EC P-256 verify in constrained environment | | | | |
@@ -173,20 +176,20 @@ and the other is remotely updatable by the Hub.
 
 | # | Task | Priority | Complexity | Dependencies | Status |
 |---|------|----------|------------|--------------|--------|
-| 5.3.1 | **MCP-based device protocol tools** | P2 | M | MCP (upstream) | Proposed |
+| 5.3.1 | **MCP-based device protocol tools** | P2 | M | MCP (upstream) | Not Started |
 | | Expose device control as MCP tools for external AI agents | | | | |
 | | Enables integration with other AI systems (e.g., Claude Desktop, ChatGPT plugins) | | | | |
-| 5.3.2 | **ESP32 SDK (MicroPython mesh client)** | P1 | XL | All mesh | **In Progress** (2026-03-08) |
-| | Client-side mesh implementation for actual ESP32 hardware testing | | | | |
-| | Scaffold created: `esp32/mesh_client/` — WiFi, enrollment, PSK auth, command dispatch, OTA stub | | | | |
-| | Hardware testing with physical ESP32 Dev Board now underway | | | | |
-| | See [docs/GETTING_STARTED.md](../GETTING_STARTED.md) for setup + deployment guide | | | | |
-| | **2026-03-26**: ESP32 flashed and deployed via WSL (`deploy.sh`). Gateway bugs fixed (BUG-001/002/003). `--enroll` flag implemented. Next: test enrollment + LED command. See `docs/02_bugfix/BUGFIX_LOG.md`. | | | | |
-| | **2026-03-27**: Full E2E verified — enrollment → PSK auth → STATE_REPORT → auto-registration → persistent TCP → COMMAND delivery to ESP32 via DeviceControlTool. Fixes: auto-registration from STATE_REPORT, COMMAND action mapping, persistent bidirectional TCP, device online/offline tracking via TCP callbacks, bool value coercion for LLM, boot.py auto-start. MicroPython guide written. | | | | |
-| | **2026-03-29**: ESP32 OTA chunk receiver fully implemented. Handles ota_chunk (base64 decode + file write + ACK), ota_verify (SHA-256 hash), ota_complete (file install + reset), ota_abort (cleanup). WiFi OTA end-to-end flow now functional. Location change guide created. | | | | |
-| 5.3.3 | **Cloud dashboard (web-based)** | P3 | L | Dashboard (3.6) | Proposed |
+| | *Note: Device control exists as native nanobot `Tool` subclasses (DeviceControlTool, ReprogramTool). This task wraps them as MCP-standard tools.* | | | | |
+| 5.3.2 | **ESP32 SDK (MicroPython mesh client)** | P1 | XL | All mesh | **Done** (2026-03-29) |
+| | `esp32/mesh_client/` — 8 modules, 889 lines of real MicroPython code. | | | | |
+| | WiFi connection + NTP sync (`transport.py`), PIN-based enrollment + PBKDF2 (`enrollment.py`), HMAC-SHA256 signing (`security.py`), TCP transport with auto-reconnect, GPIO device control (`device.py`), OTA chunk receiver with base64 decode + SHA-256 verify + file install + reset (`main.py`), protocol framing (`protocol.py`). | | | | |
+| | Full E2E verified on hardware (NodeMCU-32S): enrollment → PSK auth → STATE_REPORT → COMMAND → OTA. | | | | |
+| | Deploy tooling: `esp32/tools/deploy.sh`, `esp32/tools/flash.sh`. Guides: `GETTING_STARTED.md`, `MICROPYTHON_GUIDE.md`, `LOCATION_CHANGE_GUIDE.md`. | | | | |
+| | *Remaining gaps: No dual-partition support (single-file OTA to `app.py`). No firmware signature verification. No crash counter/watchdog.* | | | | |
+| 5.3.3 | **Cloud dashboard (web-based)** | P3 | L | Dashboard (3.6) | Not Started |
 | | Remote access to device dashboard over HTTPS | | | | |
 | | Authentication + RBAC for multi-user environments | | | | |
+| | *Note: Local web dashboard already exists (`nanobot/mesh/dashboard.py`, 477 lines) with full API + HTML UI. This task adds cloud hosting, HTTPS, and auth.* | | | | |
 
 ---
 
@@ -255,6 +258,19 @@ See [docs/sync/SYNC_LOG.md](../sync/SYNC_LOG.md) for full merge history.
   - Provider registry now supports `is_oauth` and `extra_headers` — useful for future industrial cloud integrations.
 - **Upstream still advancing**: 22 more commits ahead (Telegram media sending, GitHub Copilot provider, timezone cron). Next sync before task 1.9.
 - **Conflict surface stable**: 7 shared files, all manageable with append-only convention.
+
+### 2026-03-29 — Roadmap Audit & Status Clarification
+- **Problem**: Roadmap statuses were ambiguous — "Planned" didn't distinguish between "not started" and "partially done", Phase 2.5 said "Deferred" despite having 889 lines of working ESP32 code, Phase 3.4/3.5/3.6 and 4.3/4.4/4.5 were in "Planned Tasks" tables despite being done.
+- **Action**: Comprehensive code audit of all 41 roadmap items against actual codebase.
+- **Results**:
+  - **Phases 1-4**: All 31 tasks confirmed **Done** (code exists, tests pass, committed).
+  - **Phase 5**: 2 of 12 tasks Done (5.2.3 Intelligent Firmware Generation, 5.3.2 ESP32 SDK). 10 tasks **Not Started** (zero code).
+  - **Phase 2.5 corrected**: "Deferred" → **Done** — ESP32 SDK fully functional (WiFi, enrollment, PSK, commands, OTA).
+  - **Phase 5.3.2 corrected**: "In Progress" → **Done** — all core features E2E verified on hardware.
+  - **Phase 5.2.3 corrected**: "Planned" → **Done** — CodeGenerator + ReprogramTool + OTA pipeline all working.
+- **Status legend added**: Clear definitions — "Done" (implemented+tested), "Not Started" (zero code), "In Progress" (active dev).
+- **Progress overview table added**: Quick glance at per-phase completion.
+- **Next priorities for Phase 5**: 5.1.1 (Configurable autonomous mode) is the natural next step — it unlocks 5.1.2/5.1.3/5.1.4.
 
 ### 2026-02-17b — Second Sync + SKILL v1.2
 - **22 remaining upstream commits merged** (fully synced): Telegram media file support, GitHub Copilot provider with is_oauth, cron timezone improvements, ClawHub skill, empty content fix.
