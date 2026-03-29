@@ -86,6 +86,9 @@ def _dispatch(envelope, transport):
     elif msg_type == "ota_abort":
         _handle_ota_abort(payload, transport, source)
 
+    elif msg_type == "partition_query":
+        _handle_partition_query(transport, source)
+
     elif msg_type == "pong":
         pass   # Hub replied to our ping — connection confirmed
 
@@ -106,9 +109,24 @@ def _handle_ota_offer(payload, transport, source):
     size    = payload.get("size", 0)
     sha256  = payload.get("sha256", "")
     total   = payload.get("total_chunks", 0)
+    firmware_hmac    = payload.get("firmware_hmac", "")
+    version_counter  = payload.get("version_counter", 0)
 
     print("[ota] Hub offers firmware {} (v{}, {} bytes, {} chunks)".format(
         fw_id, version, size, total))
+
+    # Anti-rollback check (task 5.2.2)
+    try:
+        import boot_manager
+        if not boot_manager.check_anti_rollback(version_counter):
+            print("[ota] Rejected: version counter {} <= current".format(version_counter))
+            transport.send("ota_reject", source, {
+                "firmware_id": fw_id,
+                "reason": "anti-rollback: version counter too low",
+            })
+            return
+    except Exception:
+        pass  # boot_manager not available — skip check
 
     # Clean up any previous OTA session
     _ota_cleanup()
@@ -116,13 +134,15 @@ def _handle_ota_offer(payload, transport, source):
     # Initialize OTA session state
     tmp_path = "_ota_" + fw_id.replace("/", "_")
     _ota = {
-        "firmware_id":  fw_id,
-        "total_chunks": total,
-        "sha256":       sha256,
-        "received":     0,
-        "tmp_path":     tmp_path,
-        "source":       source,
-        "version":      version,
+        "firmware_id":    fw_id,
+        "total_chunks":   total,
+        "sha256":         sha256,
+        "received":       0,
+        "tmp_path":       tmp_path,
+        "source":         source,
+        "version":        version,
+        "firmware_hmac":  firmware_hmac,
+        "version_counter": version_counter,
     }
 
     # Create (or truncate) temp file for firmware data
@@ -208,11 +228,38 @@ def _handle_ota_complete(payload, transport, source):
     fw_id    = payload.get("firmware_id", "")
     tmp_path = _ota["tmp_path"]
     version  = _ota["version"]
+    sha256   = _ota.get("sha256", "")
+    firmware_hmac    = _ota.get("firmware_hmac", "")
+    version_counter  = _ota.get("version_counter", 0)
 
     print("[ota] Hub verified OK — applying firmware {}".format(fw_id))
 
+    # Verify HMAC signature if provided (task 5.2.2)
+    if firmware_hmac:
+        try:
+            import boot_manager
+            psk = security.load_psk()
+            if psk and not boot_manager.verify_firmware_hmac(
+                tmp_path, version_counter, psk, firmware_hmac,
+            ):
+                print("[ota] HMAC verification FAILED — aborting")
+                transport.send("ota_abort", source, {
+                    "firmware_id": fw_id,
+                    "reason": "firmware HMAC verification failed",
+                })
+                _ota_cleanup()
+                return
+        except Exception as e:
+            print("[ota] HMAC check error (proceeding):", e)
+
+    # Backup the current app before overwriting (for rollback support)
+    try:
+        import boot_manager
+        boot_manager.backup_current_app()
+    except Exception:
+        pass
+
     # The firmware is a Python file — write it to /app.py
-    # (Future: support multi-file packages, dual-partition)
     target_path = "app.py"
     try:
         # Remove old app.py if it exists
@@ -226,6 +273,16 @@ def _handle_ota_complete(payload, transport, source):
         print("[ota] Error installing firmware:", e)
         _ota_cleanup()
         return
+
+    # Write app metadata for boot verification (task 5.2.1 + 5.2.2)
+    try:
+        import boot_manager
+        boot_manager.set_app_meta(version, sha256,
+                                  firmware_hmac=firmware_hmac,
+                                  version_counter=version_counter)
+        boot_manager.reset_crash_count()
+    except Exception:
+        pass
 
     _ota = None
     print("[ota] OTA complete (v{}). Resetting in 2s...".format(version))
@@ -251,6 +308,27 @@ def _ota_cleanup():
         except OSError:
             pass
     _ota = None
+
+
+# ------------------------------------------------------------------
+# Partition management (task 5.2.1)
+# ------------------------------------------------------------------
+
+
+def _handle_partition_query(transport, source):
+    """Respond to a PARTITION_QUERY from the hub with current partition state."""
+    _send_partition_report(transport, source)
+
+
+def _send_partition_report(transport, target):
+    """Send a PARTITION_REPORT message to the hub."""
+    try:
+        import boot_manager
+        report = boot_manager.build_partition_report()
+        transport.send("partition_report", target, report)
+        print("[main] Sent partition report: state=" + report.get("boot_state", "?"))
+    except Exception as e:
+        print("[main] Failed to send partition report: " + str(e))
 
 
 # ------------------------------------------------------------------

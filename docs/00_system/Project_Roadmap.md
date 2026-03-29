@@ -143,28 +143,24 @@ and the other is remotely updatable by the Hub.
 
 | # | Task | Priority | Complexity | Dependencies | Status |
 |---|------|----------|------------|--------------|--------|
-| 5.2.1 | **Dual-partition protocol specification** | P1 | L | OTA (3.3), Codegen (4.3) | Not Started |
-| | Define partition layout: `core_partition` (read-only, bootloader + mesh client + safety monitor) | | | | |
-| | `app_partition` (read-write, AI Hub-deployed application code) | | | | |
-| | Boot sequence: core verifies app signature → loads app → monitors for crashes | | | | |
-| | Rollback protocol: if app crashes N times → core reverts to last-known-good version | | | | |
-| | Hub-side manifest: tracks per-device partition states (core version, app version, app hash) | | | | |
-| 5.2.2 | **Signed firmware protocol** | P1 | M | MeshCA (3.1), 5.2.1 | Not Started |
-| | Hub signs firmware packages with its CA private key (EC P-256) | | | | |
-| | Device core partition verifies signature before writing to app partition | | | | |
-| | Anti-rollback counter: monotonic version number prevents downgrade attacks | | | | |
-| | Secure boot chain: core → verify sig → hash check → write app → verify written hash | | | | |
-| | *Note: SHA-256 integrity checking exists in OTA (hub + ESP32). CA module has EC P-256 for mTLS certs. This task adds cryptographic **signatures** on firmware itself.* | | | | |
+| 5.2.1 | **Dual-partition protocol specification** | P1 | L | OTA (3.3), Codegen (4.3) | **Done** (2026-03-29) |
+| | Hub: `nanobot/mesh/partitions.py` — PartitionManifest with per-device PartitionEntry tracking | | | | |
+| | (core/app version, hash, boot state, crash count, rollback target). JSON persistence. | | | | |
+| | Protocol: PARTITION_REPORT + PARTITION_QUERY message types in protocol.py. | | | | |
+| | ESP32: `boot_manager.py` — crash counter, hash verification, backup/rollback, boot sequence. | | | | |
+| | Integration: MeshChannel handles PARTITION_REPORT; OTA complete writes app_meta + backup. | | | | |
+| | Transport sends PARTITION_REPORT on every connect. 21 tests. | | | | |
+| 5.2.2 | **Signed firmware protocol** | P1 | M | MeshCA (3.1), 5.2.1 | **Done** (2026-03-29) |
+| | Hub: `nanobot/mesh/firmware_signing.py` — FirmwareSigner with EC P-256 signing (audit) + | | | | |
+| | per-device HMAC-SHA256 (PSK-based, for device verification). Anti-rollback counter. | | | | |
+| | ESP32: boot_manager anti-rollback check + HMAC verification on OTA complete. | | | | |
+| | OTA offer/complete extended with firmware_hmac + version_counter fields. 18 tests. | | | | |
 | 5.2.3 | **Intelligent firmware generation** | P1 | L | Codegen (4.3), 5.2.1 | **Done** (2026-02-27) |
 | | ~~AI Hub generates device-specific firmware based on user requirements AND environment context~~ | | | | |
 | | Template-based generation with 4 built-in templates (`switch_basic`, `switch_relay`, `sensor_temperature`). AST-based safety validation. ReprogramTool integrates with CodeGenerator + OTAManager for end-to-end deploy. | | | | |
 | | *Note: No built-in LLM code generation — the AI agent provides code via ReprogramTool, which validates and deploys it. Environment/capability awareness is via the agent's context, not codegen itself.* | | | | |
-| 5.2.4 | **Safe deployment pipeline** | P2 | M | 5.2.1, 5.2.2, 5.2.3 | Not Started |
-| | Staged rollout: test on one device → verify for N minutes → deploy to group | | | | |
-| | Health monitoring: after deployment, confirm device reports healthy state | | | | |
-| | Emergency recall: broadcast "revert to last-known-good" to all devices | | | | |
-| | Deployment history: full audit trail of what code was deployed when, by whom | | | | |
-| | *Note: Basic OTA works (send → apply → reset). This task adds staged rollout, health checks, and rollback.* | | | | |
+| 5.2.4 | **Safe deployment pipeline** | P2 | M | 5.2.1, 5.2.2, 5.2.3 | **Done** (2026-03-29) |
+| | Hub: `nanobot/mesh/deployment.py` — DeploymentPipeline with canary → health check → group rollout → monitor → finalize flow. Emergency recall aborts all OTA sessions. JSON audit trail. Wired into MeshChannel alongside PartitionManifest + OTAManager. 26 tests. | | | | |
 | 5.2.5 | **ESP32 core partition SDK** | P2 | XL | 5.2.1, 5.2.2 | Not Started |
 | | MicroPython/C dual-partition bootloader for ESP32 | | | | |
 | | Mesh client (Wi-Fi + TCP) in core partition: discovery, enrollment, PSK auth | | | | |

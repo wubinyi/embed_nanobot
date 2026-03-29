@@ -28,6 +28,8 @@ from nanobot.mesh.groups import GroupManager
 from nanobot.mesh.industrial import IndustrialBridge
 from nanobot.mesh.pipeline import SensorPipeline
 from nanobot.mesh.ota import FirmwareStore, OTAManager, OTASession
+from nanobot.mesh.deployment import DeploymentPipeline
+from nanobot.mesh.partitions import PartitionManifest
 from nanobot.mesh.protocol import MeshEnvelope, MsgType
 from nanobot.mesh.registry import DeviceCapability, DeviceRegistry
 from nanobot.mesh.resilience import supervised_task
@@ -202,6 +204,24 @@ class MeshChannel(BaseChannel):
                 chunk_size=ota_chunk_size,
                 chunk_ack_timeout=ota_chunk_timeout,
             )
+
+        # --- embed_nanobot: dual-partition manifest (task 5.2.1) ---
+        partition_path = ""
+        workspace = getattr(config, "_workspace_path", None)
+        if workspace:
+            partition_path = str(Path(workspace) / "partition_manifest.json")
+        self.partition_manifest = PartitionManifest(path=partition_path)
+
+        # --- embed_nanobot: safe deployment pipeline (task 5.2.4) ---
+        deploy_log = ""
+        if workspace:
+            deploy_log = str(Path(workspace) / "deployment_log.json")
+        self.deployment_pipeline = DeploymentPipeline(
+            ota_manager=self.ota,
+            partition_manifest=self.partition_manifest,
+            registry=self.registry,
+            log_path=deploy_log,
+        )
 
         # --- embed_nanobot: device grouping and scenes (task 3.4) ---
         groups_path = getattr(config, "groups_path", "") or ""
@@ -483,6 +503,13 @@ class MeshChannel(BaseChannel):
         if env.type in _OTA_TYPES:
             if self.ota:
                 await self.ota.handle_ota_message(env)
+            return
+
+        # --- embed_nanobot: handle partition reports (task 5.2.1) ---
+        if env.type == MsgType.PARTITION_REPORT:
+            self.partition_manifest.record_partition_report(env.source, env.payload)
+            logger.info("[MeshChannel] Partition report from {}: state={}", env.source,
+                        env.payload.get("boot_state", "?"))
             return
 
         # --- embed_nanobot: log device command responses ---

@@ -112,7 +112,15 @@ class MeshTransport:
                 time.sleep(cfg.RECONNECT_DELAY_S)
 
     def _on_connect(self):
-        """Send STATE_REPORT immediately after connecting (or reconnecting)."""
+        """Send STATE_REPORT and PARTITION_REPORT after connecting."""
         from device import get_state_report_payload
         self.send("state_report", "*", get_state_report_payload())
         print("[transport] STATE_REPORT sent")
+        # --- embed_nanobot: dual-partition report (task 5.2.1) ---
+        try:
+            import boot_manager
+            report = boot_manager.build_partition_report()
+            self.send("partition_report", "*", report)
+            print("[transport] PARTITION_REPORT sent: state=" + report.get("boot_state", "?"))
+        except Exception as e:
+            print("[transport] PARTITION_REPORT skipped:", e)

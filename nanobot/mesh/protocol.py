@@ -50,6 +50,9 @@ class MsgType(str, Enum):
     OTA_VERIFY = "ota_verify"
     OTA_COMPLETE = "ota_complete"
     OTA_ABORT = "ota_abort"
+    # --- embed_nanobot extensions: dual-partition management (task 5.2.1) ---
+    PARTITION_REPORT = "partition_report"    # Device → Hub: current partition state
+    PARTITION_QUERY = "partition_query"      # Hub → Device: request partition state
     # --- embed_nanobot extensions: hub-to-hub federation (task 4.2) ---
     FEDERATION_HELLO = "federation_hello"
     FEDERATION_SYNC = "federation_sync"
