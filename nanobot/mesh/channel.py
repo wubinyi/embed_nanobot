@@ -245,7 +245,7 @@ class MeshChannel(BaseChannel):
         self.groups = GroupManager(groups_path, scenes_path)
         self.groups.load()
 
-        # --- embed_nanobot: monitoring dashboard (task 3.6) ---
+        # --- embed_nanobot: monitoring dashboard (task 3.6 + 5.3.3 security) ---
         _raw_port = getattr(config, "dashboard_port", 0)
         dashboard_port = _raw_port if isinstance(_raw_port, int) else 0
         self.dashboard: MeshDashboard | None = None
@@ -262,6 +262,10 @@ class MeshChannel(BaseChannel):
                     "node_id": self.node_id,
                     "pipeline": self.pipeline,
                 },
+                tls_cert=getattr(config, "dashboard_tls_cert", "") or "",
+                tls_key=getattr(config, "dashboard_tls_key", "") or "",
+                auth_token=getattr(config, "dashboard_auth_token", "") or "",
+                cors_origin=getattr(config, "dashboard_cors_origin", "*") or "*",
             )
 
         # --- embed_nanobot: PLC/industrial integration (task 4.1) ---

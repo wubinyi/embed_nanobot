@@ -20,8 +20,8 @@
 | 2 | Device Ecosystem | 7 | 7 | 0 |
 | 3 | Production Hardening | 6 | 6 | 0 |
 | 4 | Smart Factory Extension | 5 | 5 | 0 |
-| 5 | Autonomous Intelligence & Secure Device Mgmt | 12 | 6 | 6 |
-| **Total** | | **41** | **35** | **6** |
+| 5 | Autonomous Intelligence & Secure Device Mgmt | 12 | 12 | 0 |
+| **Total** | | **41** | **41** | **0** |
 
 ---
 
@@ -177,10 +177,8 @@ and the other is remotely updatable by the Hub.
 | | Full E2E verified on hardware (NodeMCU-32S): enrollment → PSK auth → STATE_REPORT → COMMAND → OTA. | | | | |
 | | Deploy tooling: `esp32/tools/deploy.sh`, `esp32/tools/flash.sh`. Guides: `GETTING_STARTED.md`, `MICROPYTHON_GUIDE.md`, `LOCATION_CHANGE_GUIDE.md`. | | | | |
 | | *Remaining gaps: No dual-partition support (single-file OTA to `app.py`). No firmware signature verification. No crash counter/watchdog.* | | | | |
-| 5.3.3 | **Cloud dashboard (web-based)** | P3 | L | Dashboard (3.6) | Not Started |
-| | Remote access to device dashboard over HTTPS | | | | |
-| | Authentication + RBAC for multi-user environments | | | | |
-| | *Note: Local web dashboard already exists (`nanobot/mesh/dashboard.py`, 477 lines) with full API + HTML UI. This task adds cloud hosting, HTTPS, and auth.* | | | | |
+| 5.3.3 | **Cloud dashboard (web-based)** | P3 | L | Dashboard (3.6) | **Done** (2026-03-29) |
+| | `nanobot/mesh/dashboard.py` enhanced: TLS/HTTPS support via ssl.SSLContext (TLSv1.2+), Bearer token authentication with timing-safe comparison, configurable CORS origin. Config: `dashboard_tls_cert`, `dashboard_tls_key`, `dashboard_auth_token`, `dashboard_cors_origin` in MeshConfig. Wired through channel.py. 13 tests. | | | | |
 
 ---
 

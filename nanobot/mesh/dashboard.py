@@ -3,6 +3,8 @@
 Provides a zero-dependency HTTP server (stdlib asyncio only) with:
 - JSON API endpoints for devices, peers, groups, rules, OTA, firmware
 - Embedded single-page HTML dashboard
+- Optional TLS/HTTPS via ssl.SSLContext
+- Optional Bearer token authentication
 
 Start via ``MeshDashboard.start()`` inside the channel's event loop.
 """
@@ -10,7 +12,9 @@ Start via ``MeshDashboard.start()`` inside the channel's event loop.
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
+import ssl
 import time
 from typing import Any, Callable
 from urllib.parse import parse_qs, urlparse
@@ -32,20 +36,39 @@ class MeshDashboard:
            "node_id": str}``
     """
 
-    def __init__(self, port: int, data_fn: Callable[[], dict[str, Any]]) -> None:
+    def __init__(
+        self,
+        port: int,
+        data_fn: Callable[[], dict[str, Any]],
+        tls_cert: str = "",
+        tls_key: str = "",
+        auth_token: str = "",
+        cors_origin: str = "*",
+    ) -> None:
         self.port = port
         self._data_fn = data_fn
         self._server: asyncio.AbstractServer | None = None
         self._start_time = time.time()
+        self._tls_cert = tls_cert
+        self._tls_key = tls_key
+        self._auth_token = auth_token
+        self._cors_origin = cors_origin
 
     # -- lifecycle -----------------------------------------------------------
 
     async def start(self) -> None:
         self._start_time = time.time()
+        ssl_ctx = None
+        if self._tls_cert and self._tls_key:
+            ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            ssl_ctx.load_cert_chain(self._tls_cert, self._tls_key)
+            ssl_ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+            logger.info("[Dashboard] TLS enabled (cert={})", self._tls_cert)
         self._server = await asyncio.start_server(
-            self._handle_connection, "0.0.0.0", self.port,
+            self._handle_connection, "0.0.0.0", self.port, ssl=ssl_ctx,
         )
-        logger.info("[Dashboard] started on http://0.0.0.0:{}", self.port)
+        proto = "https" if ssl_ctx else "http"
+        logger.info("[Dashboard] started on {}://0.0.0.0:{}", proto, self.port)
 
     async def stop(self) -> None:
         if self._server is not None:
@@ -67,13 +90,32 @@ class MeshDashboard:
                 writer.close()
                 return
 
-            request_line = data.split(b"\r\n")[0].decode("utf-8", errors="replace")
+            lines = data.split(b"\r\n")
+            request_line = lines[0].decode("utf-8", errors="replace")
             parts = request_line.split(" ")
             if len(parts) < 2:
                 await self._send_response(writer, 400, "text/plain", b"Bad Request")
                 return
 
             method, raw_path = parts[0], parts[1]
+
+            # Parse headers for auth
+            if self._auth_token:
+                headers = {}
+                for line in lines[1:]:
+                    decoded = line.decode("utf-8", errors="replace")
+                    if ":" in decoded:
+                        key, val = decoded.split(":", 1)
+                        headers[key.strip().lower()] = val.strip()
+                auth_header = headers.get("authorization", "")
+                if not auth_header.startswith("Bearer "):
+                    await self._send_response(writer, 401, "text/plain", b"Unauthorized")
+                    return
+                provided = auth_header[7:]
+                if not hmac.compare_digest(provided, self._auth_token):
+                    await self._send_response(writer, 403, "text/plain", b"Forbidden")
+                    return
+
             parsed = urlparse(raw_path)
             path = parsed.path
 
@@ -128,13 +170,14 @@ class MeshDashboard:
         content_type: str,
         body: bytes,
     ) -> None:
-        status_text = {200: "OK", 400: "Bad Request", 404: "Not Found",
+        status_text = {200: "OK", 400: "Bad Request", 401: "Unauthorized",
+                       403: "Forbidden", 404: "Not Found",
                        405: "Method Not Allowed", 500: "Internal Server Error"}
         header = (
             f"HTTP/1.1 {status} {status_text.get(status, 'Error')}\r\n"
             f"Content-Type: {content_type}\r\n"
             f"Content-Length: {len(body)}\r\n"
-            f"Access-Control-Allow-Origin: *\r\n"
+            f"Access-Control-Allow-Origin: {self._cors_origin}\r\n"
             f"Connection: close\r\n"
             f"\r\n"
         )
