@@ -33,10 +33,16 @@ from device import execute_command, get_state_report_payload
 
 
 # ------------------------------------------------------------------
+# OTA session state (module-level, persists across messages)
+# ------------------------------------------------------------------
+_ota = None   # dict with firmware_id, total_chunks, sha256, received, tmp_path
+
+
+# ------------------------------------------------------------------
 # Message dispatch — routes hub messages to device actions
 # ------------------------------------------------------------------
 
-def _dispatch(envelope: dict, transport: MeshTransport) -> None:
+def _dispatch(envelope, transport):
     """Handle a single incoming message from the hub."""
     msg_type = envelope.get("type", "")
     payload  = envelope.get("payload", {})
@@ -71,6 +77,15 @@ def _dispatch(envelope: dict, transport: MeshTransport) -> None:
     elif msg_type == "ota_offer":
         _handle_ota_offer(payload, transport, source)
 
+    elif msg_type == "ota_chunk":
+        _handle_ota_chunk(payload, transport, source)
+
+    elif msg_type == "ota_complete":
+        _handle_ota_complete(payload, transport, source)
+
+    elif msg_type == "ota_abort":
+        _handle_ota_abort(payload, transport, source)
+
     elif msg_type == "pong":
         pass   # Hub replied to our ping — connection confirmed
 
@@ -79,27 +94,163 @@ def _dispatch(envelope: dict, transport: MeshTransport) -> None:
 
 
 # ------------------------------------------------------------------
-# OTA offer handler (stub — extend in Phase 5.2)
+# OTA handlers
 # ------------------------------------------------------------------
 
-def _handle_ota_offer(payload: dict, transport: MeshTransport, source: str) -> None:
-    """Respond to an OTA firmware offer from the hub.
+def _handle_ota_offer(payload, transport, source):
+    """Respond to an OTA firmware offer from the hub."""
+    global _ota
 
-    For now we always accept.  In Phase 5.2 this will verify the
-    firmware signature before writing to the app partition.
-    """
     fw_id   = payload.get("firmware_id", "")
     version = payload.get("version", "?")
     size    = payload.get("size", 0)
     sha256  = payload.get("sha256", "")
+    total   = payload.get("total_chunks", 0)
 
-    print("[ota] Hub offers firmware {} (v{}, {} bytes)".format(fw_id, version, size))
+    print("[ota] Hub offers firmware {} (v{}, {} bytes, {} chunks)".format(
+        fw_id, version, size, total))
+
+    # Clean up any previous OTA session
+    _ota_cleanup()
+
+    # Initialize OTA session state
+    tmp_path = "_ota_" + fw_id.replace("/", "_")
+    _ota = {
+        "firmware_id":  fw_id,
+        "total_chunks": total,
+        "sha256":       sha256,
+        "received":     0,
+        "tmp_path":     tmp_path,
+        "source":       source,
+        "version":      version,
+    }
+
+    # Create (or truncate) temp file for firmware data
+    f = open(tmp_path, "wb")
+    f.close()
 
     # Accept the offer
     transport.send("ota_accept", source, {"firmware_id": fw_id})
+    print("[ota] Accepted, waiting for chunks...")
 
-    # Chunks will follow as ota_chunk messages — handled in _dispatch
-    # TODO (Phase 5.2): write chunks to app partition, verify SHA-256, reboot
+
+def _handle_ota_chunk(payload, transport, source):
+    """Receive a single OTA data chunk, write to flash, ACK back."""
+    global _ota
+
+    if _ota is None:
+        print("[ota] Chunk received but no active OTA session — ignoring")
+        return
+
+    fw_id = payload.get("firmware_id", "")
+    seq   = payload.get("seq", -1)
+    total = payload.get("total_chunks", 0)
+    data  = payload.get("data", "")
+
+    if fw_id != _ota["firmware_id"]:
+        print("[ota] Chunk firmware_id mismatch — ignoring")
+        return
+
+    # Decode base64 data
+    import ubinascii
+    chunk_bytes = ubinascii.a2b_base64(data)
+
+    # Append to temp file
+    f = open(_ota["tmp_path"], "ab")
+    f.write(chunk_bytes)
+    f.close()
+
+    _ota["received"] = seq + 1
+    print("[ota] Chunk {}/{} ({} bytes)".format(seq + 1, total, len(chunk_bytes)))
+
+    # ACK this chunk
+    transport.send("ota_chunk_ack", source, {"firmware_id": fw_id, "seq": seq})
+
+    # If all chunks received, compute SHA-256 and send verify
+    if _ota["received"] >= _ota["total_chunks"]:
+        _ota_verify(transport, source)
+
+
+def _ota_verify(transport, source):
+    """Compute SHA-256 of received firmware and send ota_verify to hub."""
+    import hashlib
+
+    fw_id = _ota["firmware_id"]
+    tmp_path = _ota["tmp_path"]
+    print("[ota] All chunks received. Verifying SHA-256...")
+
+    h = hashlib.sha256()
+    f = open(tmp_path, "rb")
+    while True:
+        block = f.read(1024)
+        if not block:
+            break
+        h.update(block)
+    f.close()
+
+    import ubinascii
+    digest = ubinascii.hexlify(h.digest()).decode()
+    print("[ota] Computed SHA-256: {}".format(digest[:16] + "..."))
+
+    transport.send("ota_verify", source, {"firmware_id": fw_id, "sha256": digest})
+
+
+def _handle_ota_complete(payload, transport, source):
+    """Hub confirmed integrity. Apply the firmware and reset."""
+    global _ota
+    import os
+    import machine as mach
+
+    if _ota is None:
+        print("[ota] Complete received but no active OTA session")
+        return
+
+    fw_id    = payload.get("firmware_id", "")
+    tmp_path = _ota["tmp_path"]
+    version  = _ota["version"]
+
+    print("[ota] Hub verified OK — applying firmware {}".format(fw_id))
+
+    # The firmware is a Python file — write it to /app.py
+    # (Future: support multi-file packages, dual-partition)
+    target_path = "app.py"
+    try:
+        # Remove old app.py if it exists
+        try:
+            os.remove(target_path)
+        except OSError:
+            pass
+        os.rename(tmp_path, target_path)
+        print("[ota] Firmware installed at {}".format(target_path))
+    except Exception as e:
+        print("[ota] Error installing firmware:", e)
+        _ota_cleanup()
+        return
+
+    _ota = None
+    print("[ota] OTA complete (v{}). Resetting in 2s...".format(version))
+    import time
+    time.sleep(2)
+    mach.reset()
+
+
+def _handle_ota_abort(payload, transport, source):
+    """Hub aborted the OTA session. Clean up."""
+    reason = payload.get("reason", "unknown")
+    print("[ota] Hub aborted OTA: {}".format(reason))
+    _ota_cleanup()
+
+
+def _ota_cleanup():
+    """Remove temp OTA file and clear session state."""
+    global _ota
+    if _ota is not None:
+        try:
+            import os
+            os.remove(_ota["tmp_path"])
+        except OSError:
+            pass
+    _ota = None
 
 
 # ------------------------------------------------------------------

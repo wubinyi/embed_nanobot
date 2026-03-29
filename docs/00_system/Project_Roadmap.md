@@ -2,7 +2,7 @@
 
 > Single source of truth for project progress. Updated after each feature completion.
 
-**Last updated**: 2026-03-27 (E2E COMMAND flow verified: CHAT → agent → DeviceControlTool → COMMAND → ESP32 via persistent TCP)
+**Last updated**: 2026-03-29 (ESP32 OTA chunk receiver implemented — full WiFi OTA flow now functional)
 
 ---
 
@@ -183,6 +183,7 @@ and the other is remotely updatable by the Hub.
 | | See [docs/GETTING_STARTED.md](../GETTING_STARTED.md) for setup + deployment guide | | | | |
 | | **2026-03-26**: ESP32 flashed and deployed via WSL (`deploy.sh`). Gateway bugs fixed (BUG-001/002/003). `--enroll` flag implemented. Next: test enrollment + LED command. See `docs/02_bugfix/BUGFIX_LOG.md`. | | | | |
 | | **2026-03-27**: Full E2E verified — enrollment → PSK auth → STATE_REPORT → auto-registration → persistent TCP → COMMAND delivery to ESP32 via DeviceControlTool. Fixes: auto-registration from STATE_REPORT, COMMAND action mapping, persistent bidirectional TCP, device online/offline tracking via TCP callbacks, bool value coercion for LLM, boot.py auto-start. MicroPython guide written. | | | | |
+| | **2026-03-29**: ESP32 OTA chunk receiver fully implemented. Handles ota_chunk (base64 decode + file write + ACK), ota_verify (SHA-256 hash), ota_complete (file install + reset), ota_abort (cleanup). WiFi OTA end-to-end flow now functional. Location change guide created. | | | | |
 | 5.3.3 | **Cloud dashboard (web-based)** | P3 | L | Dashboard (3.6) | Proposed |
 | | Remote access to device dashboard over HTTPS | | | | |
 | | Authentication + RBAC for multi-user environments | | | | |
