@@ -180,6 +180,13 @@ and the other is remotely updatable by the Hub.
 | 5.3.3 | **Cloud dashboard (web-based)** | P3 | L | Dashboard (3.6) | **Done** (2026-03-29) |
 | | `nanobot/mesh/dashboard.py` enhanced: TLS/HTTPS support via ssl.SSLContext (TLSv1.2+), Bearer token authentication with timing-safe comparison, configurable CORS origin. Config: `dashboard_tls_cert`, `dashboard_tls_key`, `dashboard_auth_token`, `dashboard_cors_origin` in MeshConfig. Wired through channel.py. 13 tests. | | | | |
 
+### 5.4 — Hardware Validation (Radxa 5T, ShenZhen Home)
+
+| # | Task | Priority | Complexity | Dependencies | Status |
+|---|------|----------|------------|--------------|--------|
+| 5.4.1 | **End-to-end OTA WiFi test on Radxa 5T** | P1 | S | 5.3.2, 3.3 | **Planned** |
+| | Both hub (`nanobot/mesh/ota.py`) and ESP32 (`esp32/mesh_client/main.py` OTA handlers) are implemented. Needs live end-to-end test: enroll ESP32 → push app.py via OTA over WiFi → verify ESP32 resets and runs new code. No USB needed after initial deploy. | | | | |
+
 ---
 
 ## Upstream Sync Status
@@ -248,8 +255,21 @@ See [docs/sync/SYNC_LOG.md](../sync/SYNC_LOG.md) for full merge history.
 - **Upstream still advancing**: 22 more commits ahead (Telegram media sending, GitHub Copilot provider, timezone cron). Next sync before task 1.9.
 - **Conflict surface stable**: 7 shared files, all manageable with append-only convention.
 
+### 2026-04-21 — Platform Migration: WSL2 → Radxa Rock 5T (Debian 13)
+
+- **Hub moved** from Windows 10 + WSL2 (x86-64) to Radxa Rock 5T (RK3588, aarch64, Armbian 26 / Debian 13 Trixie).
+- **Fixed IP**: `192.168.5.199` — ShenZhen Home location.
+- **Python env**: conda `embed_nanobot` (Miniforge3, Python 3.12) at `~/.miniforge3/envs/embed_nanobot`.
+- **Config path**: `~/.embed_nanobot/config.json` (unchanged — already set by `loader.py`).
+- **ESP32 access**: `/dev/ttyUSB0` directly on Debian — no usbipd-win needed.
+- **All 1638 tests passing** on ARM64 (post-migration verification).
+- **Bug fixed**: `nanobot run` does not exist — correct command is `nanobot agent`. Fixed in all docs.
+- **Docs updated**: GETTING_STARTED.md, LOCATION_CHANGE_GUIDE.md, TESTING_GUIDE.md, TESTING_FAQ.md, MICROPYTHON_GUIDE.md, copilot-instructions.md all updated with Radxa 5T platform notes (WSL2 sections preserved as reference).
+- **WiFi/OTA clarification**: nanobot already communicates with ESP32 **entirely over WiFi** (mesh TCP 18800). OTA update over WiFi is also already implemented (`nanobot/mesh/ota.py` + ESP32 `_handle_ota_*` handlers). USB (mpremote) is only needed for initial MicroPython flash + first deploy.sh.
+- **New planned task added**: `5.4.1` — End-to-end OTA WiFi test on Radxa 5T hardware (code exists on both sides; needs live validation).
+- **ESP32 config updated**: `esp32/mesh_client/config.py` now has ShenZhen Home WiFi + hub IP `192.168.5.199`.
+
 ### 2026-03-29 — Roadmap Audit & Status Clarification
-- **Problem**: Roadmap statuses were ambiguous — "Planned" didn't distinguish between "not started" and "partially done", Phase 2.5 said "Deferred" despite having 889 lines of working ESP32 code, Phase 3.4/3.5/3.6 and 4.3/4.4/4.5 were in "Planned Tasks" tables despite being done.
 - **Action**: Comprehensive code audit of all 41 roadmap items against actual codebase.
 - **Results**:
   - **Phases 1-4**: All 31 tasks confirmed **Done** (code exists, tests pass, committed).
