@@ -184,7 +184,7 @@ and the other is remotely updatable by the Hub.
 
 | # | Task | Priority | Complexity | Dependencies | Status |
 |---|------|----------|------------|--------------|--------|
-| 5.4.1 | **End-to-end OTA WiFi test on Radxa 5T** | P1 | S | 5.3.2, 3.3 | **Planned** |
+| 5.4.1 | **End-to-end OTA WiFi test on Radxa 5T** | P1 | S | 5.3.2, 3.3 | **Done** 2026-04-21 |
 | | Both hub (`nanobot/mesh/ota.py`) and ESP32 (`esp32/mesh_client/main.py` OTA handlers) are implemented. Needs live end-to-end test: enroll ESP32 → push app.py via OTA over WiFi → verify ESP32 resets and runs new code. No USB needed after initial deploy. | | | | |
 
 ---
@@ -268,6 +268,17 @@ See [docs/sync/SYNC_LOG.md](../sync/SYNC_LOG.md) for full merge history.
 - **WiFi/OTA clarification**: nanobot already communicates with ESP32 **entirely over WiFi** (mesh TCP 18800). OTA update over WiFi is also already implemented (`nanobot/mesh/ota.py` + ESP32 `_handle_ota_*` handlers). USB (mpremote) is only needed for initial MicroPython flash + first deploy.sh.
 - **New planned task added**: `5.4.1` — End-to-end OTA WiFi test on Radxa 5T hardware (code exists on both sides; needs live validation).
 - **ESP32 config updated**: `esp32/mesh_client/config.py` now has ShenZhen Home WiFi + hub IP `192.168.5.199`.
+
+### 2026-04-21 — Task 5.4.1 Complete: E2E OTA WiFi Test Suite
+
+- **Deliverables**:
+  - `tests/test_ota_e2e.py`: 52 E2E simulation tests, all passing (0.54 s). 10 test classes covering happy path, chunking integrity (128 KB), concurrent 3-device OTA, abort scenarios, hash mismatch, anti-rollback, timeouts, progress callbacks, protocol edge cases, and firmware store integration.
+  - `esp32/tools/test_ota_wifi.py`: Live hardware validation script for Radxa 5T. Generates test firmware, stores in `FirmwareStore`, pushes OTA over WiFi, monitors progress, verifies post-reset reconnect.
+  - Feature docs: `docs/01_features/f05_ota_e2e_test/` (Design Log, Dev Implementation, Test Report).
+- **Key gap documented**: Hub `OTA_OFFER` does not send `version_counter` or `firmware_hmac`. ESP32 defaults to 0/empty, so anti-rollback and HMAC signing are silently bypassed. Tracked as TD-02 — follow-up task proposed.
+- **No conflict surface increase**: No shared upstream files modified.
+- **Tech debt added to follow-up**: TD-02 (add `version_counter`/`firmware_hmac` to hub OTA_OFFER), TD-01 (cosmetic error message in `check_timeouts`).
+- **Follow-up proposed**: Add task 5.4.2 — "Add version_counter + firmware_hmac to hub OTA_OFFER to enable anti-rollback and HMAC signing end-to-end".
 
 ### 2026-03-29 — Roadmap Audit & Status Clarification
 - **Action**: Comprehensive code audit of all 41 roadmap items against actual codebase.
