@@ -286,11 +286,24 @@ Repository structure:
 
   ### Environment
 
-  - **ESP32**: NodeMCU-32S (CP2102), connected via USB at `/dev/ttyUSB0` (WSL via usbipd-win)
-  - **Gateway**: `nanobot gateway` CLI, listens on mesh TCP port (default 18800)
-  - **ESP32 firmware**: MicroPython with mesh client at `esp32/mesh_client/`
-  - **Deploy tool**: `bash esp32/tools/deploy.sh /dev/ttyUSB0`
-  - **ESP32 config**: On-device `/config.py` — WiFi creds, hub IP, node ID, capabilities
+  **Current platform: Radxa Rock 5T (RK3588, aarch64), Armbian 26 / Debian 13 Trixie**
+
+  | Component | Detail |
+  |-----------|--------|
+  | **Hub machine** | Radxa Rock 5T, hostname `rock-5t`, fixed IP `192.168.5.199` (ShenZhen Home) |
+  | **OS** | Armbian 26.2.1 / Debian 13 Trixie (aarch64) |
+  | **Python env** | conda `embed_nanobot` (Miniforge3, Python 3.12) at `/home/wubinyi/miniforge3/envs/embed_nanobot` |
+  | **Config dir** | `~/.embed_nanobot/config.json` (not `~/.nanobot/`) |
+  | **Workspace** | `~/.nanobot/workspace/` |
+  | **nanobot CLI** | `nanobot agent` (interactive chat), `nanobot gateway` (mesh hub) |
+  | **ESP32** | NodeMCU-32S (CP2102), directly at `/dev/ttyUSB0` — **no usbipd needed** |
+  | **Mesh port** | TCP 18800, UDP 18799 |
+  | **Gateway**: `nanobot gateway` CLI, listens on mesh TCP port 18800 |
+  | **ESP32 firmware** | MicroPython with mesh client at `esp32/mesh_client/` |
+  | **Deploy tool** | `bash esp32/tools/deploy.sh /dev/ttyUSB0` |
+  | **ESP32 config** | On-device `config.py` — WiFi creds, hub IP, node ID, capabilities |
+
+  > **Previous platform**: WSL2 on Windows 10 (x86-64). WSL-specific steps (usbipd, port forwarding) are documented in `docs/TESTING_GUIDE.md` and `docs/LOCATION_CHANGE_GUIDE.md` for reference.
 
   ### Available Commands
 
@@ -343,7 +356,8 @@ Repository structure:
 
   ### Troubleshooting ESP32
 
-  - **`/dev/ttyUSB0` not found**: USB cable may be charge-only, or usbipd-win not attached. Run `usbipd list` and `usbipd attach --wsl --busid X-Y` on Windows.
+  - **`/dev/ttyUSB0` not found** (Radxa 5T): USB cable may be charge-only. Check `dmesg | tail -5` after plugging in. No usbipd needed.
+  - **`/dev/ttyUSB0` not found** (WSL2): Run `usbipd list` and `usbipd attach --wsl --busid X-Y` on Windows.
   - **Import errors**: MicroPython incompatibility. Check the MicroPython coding rules in the Developer agent section.
   - **WiFi connection fails**: Check `config.py` on device — `mpremote connect /dev/ttyUSB0 cat :config.py`.
   - **Module still cached after fix**: Run `mpremote connect /dev/ttyUSB0 reset` before re-importing.

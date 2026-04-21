@@ -1,15 +1,75 @@
 # Location Change & Reboot Recovery Guide
 
-What to do when you move to a different WiFi network, reboot your PC,
-or need to re-attach the ESP32 over USB.
+What to do when you move to a different WiFi network, reboot your machine,
+or need to re-deploy the ESP32 over USB.
+
+This guide covers **two platforms**. Use the relevant section for your setup.
+
+| Platform | Hub machine | USB situation | Port-forward needed? |
+|----------|------------|---------------|----------------------|
+| **Radxa 5T (ShenZhen Home)** | Debian 13 on Radxa Rock 5T, `192.168.5.199` (fixed) | ESP32 directly on `/dev/ttyUSB0` | No |
+| **WSL2 (DongGuan / other)** | Ubuntu WSL2 on Windows 10 | usbipd-win required | Yes (NAT) |
 
 ---
 
-## Quick Checklist
+## Quick Checklist — Radxa 5T (Debian)
 
-After a PC reboot or location change, run through these steps in order:
+After a location change or reboot:
+
+1. **Find your new WiFi subnet IP** (usually `192.168.5.199` — fixed at ShenZhen Home)
+2. **Update ESP32 config** with new WiFi SSID + `HUB_IP`
+3. **Re-deploy to ESP32** via USB
+4. **Start the gateway**
+
+### Step 1 (Radxa 5T): Confirm hub IP
+
+```bash
+# The hub IP is FIXED at ShenZhen Home:
+echo "Hub IP: 192.168.5.199"
+
+# To find your actual IP at a different location:
+ip addr show | grep 'inet ' | grep -v 127
+```
+
+### Step 2 (Radxa 5T): Update ESP32 Config
+
+Edit `esp32/mesh_client/config.py`:
+
+```python
+WIFI_SSID     = "PPAY"          # ShenZhen Home WiFi
+WIFI_PASSWORD = "PP&AY1023"
+HUB_IP        = "192.168.5.199" # Fixed IP of Radxa 5T hub
+```
+
+> See [Known WiFi Networks](#known-wifi-networks) for other locations.
+
+### Step 3 (Radxa 5T): Deploy to ESP32
+
+```bash
+# ESP32 is directly at /dev/ttyUSB0 — no usbipd needed
+FORCE_CONFIG=1 bash esp32/tools/deploy.sh /dev/ttyUSB0
+mpremote connect /dev/ttyUSB0 reset
+```
+
+### Step 4 (Radxa 5T): Start the Gateway
+
+```bash
+conda activate embed_nanobot
+nanobot gateway -v 2>&1 | tee ~/gateway.log
+# Or with enrollment (for new devices):
+nanobot gateway --enroll -v 2>&1 | tee ~/gateway.log
+```
+
+---
+
+## Quick Checklist — WSL2 (Windows)
 
 1. **Attach ESP32 USB to WSL** (if using WSL)
+## Quick Checklist — WSL2 (Windows)
+
+After a PC reboot or location change on Windows + WSL2, run through these steps:
+
+1. **Attach ESP32 USB to WSL** (via usbipd-win)
 2. **Find the Windows WiFi IP** (changes per network)
 3. **Update ESP32 config** with new WiFi + HUB_IP
 4. **Re-deploy to ESP32**
@@ -155,17 +215,16 @@ See the full table in [TESTING_GUIDE.md](TESTING_GUIDE.md#known-wifi-networks).
 - ESP32 only supports **2.4 GHz** WiFi
 
 ### ESP32 connects to WiFi but not to hub
-- Verify `HUB_IP` matches your current Windows WiFi IP
-- Verify port forwarding is set up (Step 5)
-- Check Windows Firewall allows port 18800 inbound
-- Test from WSL: `curl -v telnet://localhost:18800` (should connect)
+- **[Radxa 5T]**: Verify `HUB_IP = "192.168.5.199"` and gateway is running
+- **[WSL2]**: Verify `HUB_IP` matches your current Windows WiFi IP and port forwarding is set up (Step 5)
+- Check Windows Firewall allows port 18800 inbound (WSL2 only)
+- Test connectivity: `python3 -c "import socket; s=socket.create_connection(('192.168.5.199',18800),3); print('OK')"`
 
-### `/dev/ttyUSB0` not found after reboot
-- Re-attach USB via usbipd (Step 1)
-- Try a different USB port
-- Check cable is data-capable (not charge-only)
+### `/dev/ttyUSB0` not found
+- **[Radxa 5T]**: Check cable is data-capable (not charge-only). No usbipd needed.
+- **[WSL2]**: Re-attach USB via usbipd (Step 1). Try a different USB port.
 
-### Port forwarding not working
+### Port forwarding not working (WSL2 only)
 - Must run PowerShell **as Administrator**
 - WSL IP may have changed — check with `wsl hostname -I` from PowerShell
 - Delete and re-create the rule (Step 5)

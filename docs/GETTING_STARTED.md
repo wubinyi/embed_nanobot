@@ -1,14 +1,26 @@
 # Getting Started — embed_nanobot AI Hub
 
-> **Target audience**: Hands-on deployment on a Linux x86 machine that will serve as the AI Hub,
-> with a Google Gemini LLM API and at least one ESP32 Dev Board.
+> **Target audience**: Hands-on deployment of the embed_nanobot AI Hub, with at least one ESP32 Dev Board.
+
+---
+
+## Platform Support
+
+This guide covers **two deployment platforms**:
+
+| Platform | Architecture | OS | Notes |
+|----------|--------------|----|-------|
+| **Radxa Rock 5T (RK3588)** | ARM64 (aarch64) | Armbian 26 / Debian 13 Trixie | Current production platform — `192.168.5.199` (ShenZhen Home) |
+| **WSL2 (Windows)** | x86-64 | Ubuntu 22.04 on WSL2 | Original dev / test platform |
+
+Platform-specific instructions are marked with `[Radxa 5T]` or `[WSL2]` tags where they differ.
 
 ---
 
 ## Table of Contents
 
 1. [Install the Hub](#1-install-the-hub)
-2. [Configure Google Gemini](#2-configure-google-gemini)
+2. [Configure Providers](#2-configure-providers)
 3. [Run & Verify the Hub](#3-run--verify-the-hub)
 4. [Run the Test Suite](#4-run-the-test-suite)
 5. [Connect an ESP32 Device](#5-connect-an-esp32-device)
@@ -22,9 +34,9 @@
 
 | Requirement | Minimum | Notes |
 |-------------|---------|-------|
-| OS | Linux (Debian/Ubuntu/Arch) | x86-64 tested; ARM (Raspberry Pi 4/5) also supported |
-| Python | 3.11+ | `python3 --version` to check |
-| pip | 23+ | `pip install --upgrade pip` |
+| OS | Linux (Debian/Ubuntu/Arch) | x86-64 (WSL2) and ARM64 (Radxa 5T / Raspberry Pi 4/5) both supported |
+| Python | 3.11+ | `python3 --version` to check; Radxa 5T ships with 3.12 via Miniforge conda |
+| pip / conda | — | pip via venv (WSL2) or conda via Miniforge (Radxa 5T) |
 | Git | 2.x | For pulling updates |
 | Network | WiFi or LAN | Hub and ESP32 must be on the **same subnet** |
 
@@ -36,11 +48,24 @@ cd embed_nanobot
 git checkout main_embed        # our development branch
 ```
 
-### Step 2 — Create a virtual environment
+### Step 2 — Set up the Python environment
+
+**[WSL2 / x86-64]** — Use a standard virtualenv:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
+```
+
+**[Radxa 5T / ARM64]** — Use the pre-created conda environment (Miniforge3):
+
+```bash
+# The embed_nanobot conda env is already created; just activate it:
+conda activate embed_nanobot
+
+# If you ever need to recreate it from scratch:
+# conda create -n embed_nanobot python=3.12 -y
+# conda activate embed_nanobot
 ```
 
 ### Step 3 — Install in editable mode (includes dev tools)
@@ -67,6 +92,9 @@ nanobot --help
 nanobot onboard
 ```
 
+> **[Radxa 5T note]**: embed_nanobot stores its config at `~/.embed_nanobot/config.json`
+> (not `~/.nanobot/config.json`). The workspace files remain under `~/.nanobot/workspace/`.
+
 This creates `~/.nanobot/` with:
 
 - `config.json` — main configuration file
@@ -74,7 +102,7 @@ This creates `~/.nanobot/` with:
 
 ---
 
-## 2. Configure Google Gemini
+## 2. Configure Providers
 
 ### Step 1 — Get your Gemini API key
 
@@ -82,7 +110,11 @@ This creates `~/.nanobot/` with:
 2. Create an API key under a project
 3. Copy the key (starts with `AIza...`)
 
-### Step 2 — Edit `~/.nanobot/config.json`
+### Step 2 — Edit the config file
+
+> **Config file path**:
+> - `[Radxa 5T]` → `~/.embed_nanobot/config.json`
+> - `[WSL2]` → `~/.nanobot/config.json`
 
 Replace the entire file with (or merge with) the following minimal config:
 
@@ -123,7 +155,7 @@ curl -fsSL https://ollama.com/install.sh | sh
 ollama pull llama3.2   # or qwen2.5:7b, gemma3:4b, etc.
 ```
 
-Then enable the Hybrid Router in `~/.nanobot/config.json`:
+Then enable the Hybrid Router in your config file (`~/.embed_nanobot/config.json` on Radxa 5T, `~/.nanobot/config.json` on WSL2):
 
 ```jsonc
 {
@@ -164,7 +196,7 @@ Complex queries (code generation, multi-step reasoning) are routed to Gemini, wi
 ### Step 3 — Verify Gemini connection
 
 ```bash
-nanobot run
+nanobot agent
 # Type: "hello, what can you do?"
 # Ctrl+C to exit
 ```
@@ -176,12 +208,12 @@ nanobot run
 ### Basic CLI mode
 
 ```bash
-nanobot run
+nanobot agent
 ```
 
 ### With the LAN Mesh enabled (required for ESP32)
 
-Add mesh config to `~/.nanobot/config.json`:
+Add mesh config to your config file (`~/.embed_nanobot/config.json` on Radxa 5T, `~/.nanobot/config.json` on WSL2):
 
 ```jsonc
 {
@@ -216,12 +248,14 @@ Start the hub with mesh:
 nanobot gateway
 ```
 
+> **[Radxa 5T]**: The mesh channel defaults to TCP port `18800` and UDP port `18799`.
+> Update `"port"` / `"tcpPort"` / `"udpPort"` fields in your config accordingly.
+
 Expected output:
 
 ```
-INFO | Mesh channel started on 0.0.0.0:9000
-INFO | Discovery beacon on UDP :9001
-INFO | HybridRouter: local=ollama/llama3.2, cloud=gemini/gemini-2.0-flash
+INFO | Mesh channel started on 0.0.0.0:18800 as node=hub-01
+INFO | Discovery beacon on UDP :18799
 INFO | Gateway running. Press Ctrl+C to stop.
 ```
 
@@ -229,11 +263,12 @@ INFO | Gateway running. Press Ctrl+C to stop.
 
 ```bash
 # In another terminal
+# [Radxa 5T]: PORT=18800   [WSL2]: PORT=9000
 python3 - <<'EOF'
 import socket, json, struct, time
 
 HOST = "127.0.0.1"
-PORT = 9000
+PORT = 18800  # use 9000 for legacy WSL2 config
 
 env = {"type": "ping", "source": "test-node", "target": "hub-01",
        "payload": {}, "ts": time.time(), "nonce": "aabbccdd00112233", "hmac": ""}
@@ -255,14 +290,22 @@ EOF
 
 ### Run all tests
 
+**[WSL2]**:
 ```bash
-cd /home/binyiwu/workspace/embed_nanobot
+cd ~/workspace/embed_nanobot
 source .venv/bin/activate
-
 pytest tests/ -v
 ```
 
-Expected: **~770+ tests, all passing** (no real hardware or API keys needed — all IoT tests use mocks).
+**[Radxa 5T]**:
+```bash
+cd ~/workspace/embed_nanobot
+conda activate embed_nanobot
+# If pytest is not on PATH after activation, use:
+python -m pytest tests/ -v
+```
+
+Expected: **~1638 tests, all passing** (no real hardware or API keys needed — all IoT tests use mocks).
 
 ### Run by feature area
 
@@ -356,6 +399,10 @@ esptool.py --chip esp32 --port /dev/ttyUSB0 --baud 460800 \
   write_flash -z 0x1000 ESP32_GENERIC-20241129-v1.24.1.bin
 ```
 
+> **[Radxa 5T]**: The ESP32 is attached at `/dev/ttyUSB0` (CP2102). No usbipd-win needed —
+> the device is directly accessible on the Debian host. Verify with:
+> `mpremote connect /dev/ttyUSB0 exec "print('alive')"`
+
 #### Step B — Connect to the same WiFi network
 
 On the ESP32 REPL (via `minicom` or `mpremote`):
@@ -404,8 +451,8 @@ Copy this file to the ESP32 as `main.py` using `mpremote cp main.py :main.py`:
 # Tested on MicroPython v1.24+ with ESP32 Generic
 import json, struct, socket, time, os, hashlib, hmac, ubinascii
 
-HUB_IP   = "192.168.1.100"   # <-- replace with your Hub IP
-HUB_PORT = 9000
+HUB_IP   = "192.168.5.199"   # Radxa 5T hub IP (ShenZhen Home) — adjust if different
+HUB_PORT = 18800             # embed_nanobot default mesh port
 NODE_ID  = "esp32-node-01"
 PSK      = None               # Will be set after enrollment
 
@@ -540,7 +587,7 @@ INFO | STATE_REPORT from esp32-node-01: 2 capabilities (led, temperature)
 Test a natural language command:
 
 ```bash
-nanobot run
+nanobot agent
 # Type: "turn on the LED on esp32-node-01"
 ```
 
@@ -593,7 +640,7 @@ EOF
 Tell the Hub what you want the ESP32 to do in plain English:
 
 ```bash
-nanobot run
+nanobot agent
 # Type: "Generate MicroPython code for esp32-node-01 that reads
 #        temperature every 30 seconds and reports it to the hub"
 ```
@@ -605,7 +652,8 @@ The Hub generates code, pushes it via OTA, and monitors the result.
 After the device is stably connected, enable the autonomous heartbeat:
 
 ```jsonc
-// Add to ~/.nanobot/config.json
+// Add to ~/.embed_nanobot/config.json  [Radxa 5T]
+// Add to ~/.nanobot/config.json        [WSL2]
 {
   "autonomous": {
     "enabled": true,
@@ -639,21 +687,36 @@ an app partition (AI-generated logic, updateable via OTA). This requires hardwar
 ### Hub commands
 
 ```bash
-nanobot run              # Interactive CLI chat
+nanobot agent            # Interactive CLI chat
 nanobot gateway          # Full gateway mode (mesh + all channels)
 nanobot onboard          # Create/re-create config and workspace
+nanobot status           # Show current config / provider status
 pytest tests/ -v         # Run all tests
 pytest tests/ -q --tb=short  # Run all tests (compact output)
 ```
 
 ### Config file
 
-```
-~/.nanobot/config.json
-```
+| Platform | Config path |
+|----------|-------------|
+| Radxa 5T (embed_nanobot) | `~/.embed_nanobot/config.json` |
+| WSL2 (upstream nanobot) | `~/.nanobot/config.json` |
 
 ### Key data directories
 
+**[Radxa 5T / embed_nanobot]**:
+```
+~/.embed_nanobot/
+└── config.json          # Main config
+
+~/.nanobot/
+└── workspace/
+    ├── memory/          # Agent memory (MEMORY.md, HISTORY.md)
+    ├── AGENTS.md        # Agent identity file
+    └── skills/          # Custom skills
+```
+
+**[WSL2 / upstream nanobot]**:
 ```
 ~/.nanobot/
 ├── config.json          # Main config

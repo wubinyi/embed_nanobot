@@ -71,9 +71,16 @@ pip install mpremote
 bash esp32/tools/flash.sh /dev/ttyUSB0
 ```
 
-### WSL Users (Windows Subsystem for Linux)
+### Platform: USB Access
 
-ESP32 USB access requires USB/IP passthrough:
+**[Radxa 5T / Debian]** — The ESP32 is directly accessible at `/dev/ttyUSB0`. No extra setup needed.
+
+```bash
+# Verify immediately:
+mpremote connect /dev/ttyUSB0 exec "print('alive')"
+```
+
+**[WSL2 (Windows)]** — ESP32 USB access requires USB/IP passthrough:
 
 ```powershell
 # On Windows PowerShell (admin)

@@ -62,10 +62,17 @@ Other checks:
 
 ---
 
-## Q4: WSL can't see USB devices (`/dev/ttyUSB0` missing)
+## Q4: `/dev/ttyUSB0` not accessible
 
-WSL does not have native USB access.  Use `usbipd-win` to forward the USB
-device from Windows to WSL.  See the "Option 2" section in `TESTING_GUIDE.md`.
+**[Radxa 5T / Debian]** — USB is native. Just plug in the ESP32 and:
+```bash
+ls /dev/ttyUSB0      # should exist immediately
+mpremote connect /dev/ttyUSB0 exec "print('alive')"
+```
+If not found: cable may be charge-only, or CP2102 driver not loaded. Check `dmesg | tail -10` after plugging in.
+
+**[WSL2 (Windows)]** — WSL does not have native USB access. Use `usbipd-win` to forward the USB
+device from Windows to WSL. See the "Option 2" section in `TESTING_GUIDE.md`.
 
 Key commands:
 ```powershell
@@ -80,8 +87,7 @@ usbipd attach --wsl --busid 1-3     # attach to WSL
 ls /dev/ttyUSB*                      # verify it appeared
 ```
 
-**Note**: You must re-run `usbipd attach` after every Windows reboot or
-USB re-plug.
+**Note (WSL2)**: You must re-run `usbipd attach` after every Windows reboot or USB re-plug.
 
 ---
 

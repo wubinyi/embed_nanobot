@@ -5,14 +5,14 @@
 # ------------------------------------------------------------------
 # WiFi credentials
 # ------------------------------------------------------------------
-WIFI_SSID     = "1704"
-WIFI_PASSWORD = "17041014"
+WIFI_SSID     = "PPAY"        # ShenZhen Home WiFi (2.4 GHz)
+WIFI_PASSWORD = "PP&AY1023"
 WIFI_TIMEOUT  = 20   # seconds to wait for connection
 
 # ------------------------------------------------------------------
 # Hub connection
 # ------------------------------------------------------------------
-HUB_IP   = "192.168.0.105"  # LAN IP of the machine running nanobot gateway
+HUB_IP   = "192.168.5.199"  # Radxa Rock 5T — fixed IP at ShenZhen Home
 HUB_PORT = 18800             # Must match channels.mesh.tcpPort in hub config.json
 
 # ------------------------------------------------------------------

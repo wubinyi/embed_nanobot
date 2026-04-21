@@ -74,8 +74,26 @@ This covers:
 
 ### Platform Note
 
-This project is developed in **WSL (Windows Subsystem for Linux)** while the
-ESP32 board is physically connected to the **Windows 10 host** via USB.
+| Platform | USB situation | Port-forward needed? |
+|----------|---------------|----------------------|
+| **Radxa 5T (current, Debian 13)** | ESP32 directly at `/dev/ttyUSB0` — no usbipd needed | No |
+| **WSL2 (Windows)** | Requires `usbipd-win` passthrough | Yes (NAT) |
+
+**[Radxa 5T users]**: Skip Options 1 and 2 below. Just run:
+```bash
+# Verify ESP32 is connected
+mpremote connect /dev/ttyUSB0 exec "print('alive')"
+# Flash / deploy
+bash esp32/tools/flash.sh /dev/ttyUSB0        # first-time firmware flash
+bash esp32/tools/deploy.sh /dev/ttyUSB0       # deploy mesh_client code
+```
+
+The rest of this section documents the WSL2 workflow for reference.
+
+---
+
+This project was originally developed in **WSL (Windows Subsystem for Linux)** while the
+ESP32 board was physically connected to the **Windows 10 host** via USB.
 WSL does not have native access to USB serial devices.
 
 There are **two approaches** to flash and communicate with the ESP32:
