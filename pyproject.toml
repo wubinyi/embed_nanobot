@@ -122,3 +122,6 @@ ignore = ["E501"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "hardware: marks tests that require real ESP32 hardware connected via /dev/ttyUSB0",
+]

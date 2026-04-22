@@ -58,6 +58,8 @@ class FirmwareInfo:
     size: int = 0          # File size in bytes
     sha256: str = ""       # Hex SHA-256 digest
     added_date: str = ""   # ISO date string
+    # --- embed_nanobot: anti-rollback support (task 5.3.3) ---
+    version_counter: int = 0  # Monotonically increasing anti-rollback counter
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -176,6 +178,8 @@ class FirmwareStore:
         version: str,
         device_type: str,
         data: bytes,
+        *,
+        version_counter: int = 0,
     ) -> FirmwareInfo:
         """Store a firmware image and register it in the manifest.
 
@@ -206,6 +210,7 @@ class FirmwareStore:
             size=len(data),
             sha256=sha256,
             added_date=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            version_counter=version_counter,
         )
         self._manifest[firmware_id] = info
         self._save_manifest()
@@ -355,6 +360,7 @@ class OTAManager:
                 "sha256": firmware.sha256,
                 "chunk_size": cs,
                 "total_chunks": session.total_chunks,
+                "version_counter": firmware.version_counter,
             },
         )
         await self._send(offer)

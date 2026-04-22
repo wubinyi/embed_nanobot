@@ -32,13 +32,22 @@ def connect_wifi() -> str:
     ip = wlan.ifconfig()[0]
     print("[wifi] Connected. IP:", ip)
 
-    # Sync RTC via NTP so timestamps match the hub's Unix epoch
-    try:
-        import ntptime
-        ntptime.settime()
-        print("[wifi] NTP synced")
-    except Exception as e:
-        print("[wifi] NTP sync failed:", e)
+    # Sync RTC via NTP so timestamps match the hub's Unix epoch.
+    # Retry up to 3 times with a 2-second delay; ntptime may fail immediately
+    # after WiFi connect because DNS is not yet ready.
+    for _ntp_attempt in range(3):
+        try:
+            import ntptime
+            ntptime.timeout = 5  # increase from default 1s
+            ntptime.settime()
+            print("[wifi] NTP synced")
+            break
+        except Exception as e:
+            if _ntp_attempt < 2:
+                print("[wifi] NTP retry:", e)
+                time.sleep(2)
+            else:
+                print("[wifi] NTP sync failed:", e)
 
     return ip
 
