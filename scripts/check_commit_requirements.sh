@@ -64,6 +64,11 @@ feature_impl_doc_path() {
   printf '%s/02_Dev_Implementation.md\n' "$folder"
 }
 
+feature_test_report_path() {
+  local folder="$1"
+  printf '%s/03_Test_Report.md\n' "$folder"
+}
+
 read_staged_path_content() {
   local path="$1"
   if git rev-parse --git-dir >/dev/null 2>&1; then
@@ -104,6 +109,13 @@ load_scope_aliases() {
 
 is_sync_style_commit() {
   commit_subject_matches '^(sync(\([^)]+\))?:|chore\(sync\):|merge\(upstream\):|merge upstream([[:space:]]|$))'
+}
+
+is_real_hardware_sensitive_change() {
+  has_staged_match '^esp32/' || \
+  has_staged_match '^nanobot/mesh/' || \
+  has_staged_match '^nanobot/agent/tools/device\.py$' || \
+  has_staged_match '^docs/(TESTING_GUIDE|TESTING_FAQ|MICROPYTHON_GUIDE|GETTING_STARTED)\.md$'
 }
 
 fail_requirement() {
@@ -167,6 +179,16 @@ if commit_subject_matches '^feat\([^)]+\):[[:space:]].+'; then
 
   if ! read_staged_path_content "$impl_doc" | grep -Fq 'Post-Task Reflection'; then
     fail_requirement "feature implementation docs must include a post-task reflection note" "Add a 'Post-Task Reflection' section to $impl_doc." "Required by .github/copilot-instructions.md Self-Reflection Protocol."
+  fi
+
+  if is_real_hardware_sensitive_change; then
+    test_report="$(feature_test_report_path "${doc_folders[0]}")"
+    if ! read_staged_path_content "$test_report" | grep -Fq 'Real Hardware Validation'; then
+      fail_requirement "hardware-sensitive feature commits must record real hardware validation" "Add a 'Real Hardware Validation' section to $test_report." "Required by .github/copilot-instructions.md Real Hardware Validation Policy."
+    fi
+    if ! read_staged_path_content "$test_report" | grep -Fq 'nanobot agent'; then
+      fail_requirement "hardware-sensitive feature test reports must include the real nanobot agent validation path" "Record the actual 'nanobot agent' validation command in $test_report." "User-visible device behavior must be validated through the real assistant path."
+    fi
   fi
 fi
 

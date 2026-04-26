@@ -38,6 +38,7 @@ Repository structure:
     - **Role**: System design, strategic planning, implementation plans, upstream alignment.
     - **Focus**: Ensure current work aligns with PRD goals, maintain system coherence across embedded features and upstream nanobot core, manage phased roadmap progression.
     - **Special duty**: Guard the "upstream-first / append-only" convention — our changes must not conflict with upstream patterns.
+    - **Validation duty**: For every feature or bugfix plan, explicitly classify validation as either `simulation-only` or `real-hardware required`. Hardware-sensitive work must not be planned or declared complete without that classification.
   </Agent>
 
   <Agent id="Reviewer">
@@ -70,6 +71,7 @@ Repository structure:
     - **Role**: Code audit, test writing, edge case analysis.
     - **Focus**: Boundary testing, null/empty handling, async safety, resource cleanup, IoT-specific edge cases (network loss, device timeout, malformed packets).
     - **Convention**: Tests in `tests/test_<module>.py`, using pytest + pytest-asyncio.
+    - **Hardware duty**: When a change is classified as `real-hardware required`, execute the validation on the actual Radxa 5T + ESP32 setup. For user-visible device behavior, validation must include a real `nanobot agent` interaction, not only direct module calls or synthetic scripts.
   </Agent>
 </Agents>
 
@@ -122,6 +124,7 @@ Repository structure:
     - After Phase 2 (Implementation): proceed directly to Phase 3 (Roadmap Update).
     - After Phase 3 (Roadmap Update): proceed to the next planned task if dependencies are met.
     - **Commit after each completed phase or logical checkpoint** (bootstrap sync, feature implementation, docs update).
+    - **Commit is mandatory for repo changes**: If the agent changes tracked project files, it must create the appropriate commit before declaring the task complete, unless the user explicitly says not to commit or to leave the worktree dirty.
     - Only stop and ask the user when:
       - A design decision has multiple equally valid approaches with different trade-offs.
       - An error or conflict cannot be resolved automatically.
@@ -171,7 +174,9 @@ Repository structure:
      - **Modified Files**: Existing files + specific change points.
      - **Dependencies**: Affected shared components (config schema, channel manager, tool registry).
      - **Upstream Impact**: Will this change conflict with upstream patterns? How to minimize divergence?
-     - **Test Plan**: Which test files to create/update.
+    - **Test Plan**: Which test files to create/update.
+    - **Validation Class**: State `simulation-only` or `real-hardware required`, and why.
+    - **Hardware Commands**: If `real-hardware required`, list the concrete `nanobot gateway`, `nanobot agent`, and `mpremote` commands to run.
 
   3. **[Record]**: Write the design and plan to `docs/01_features/fXX_<feature>/01_Design_Log.md`.
      
@@ -188,6 +193,7 @@ Repository structure:
      - Write/update tests in `tests/`.
      - Check edge cases: empty inputs, network failures, concurrent access, device disconnection.
      - Verify no regressions in existing functionality.
+    - If the task is `real-hardware required`, run the real hardware validation before completion and record the commands/outcomes in the test report.
 
   3. **[Documentation] (MANDATORY)**:
      - **[Developer]** writes `docs/01_features/fXX_<feature>/02_Dev_Implementation.md`.
@@ -212,6 +218,7 @@ Repository structure:
   **Before declaring ANY task (feature, sync, or fix) as complete**, verify:
 
   - [ ] All code changes committed and pushed
+  - [ ] No intended project changes remain uncommitted unless the user explicitly requested an uncommitted state
   - [ ] `docs/sync/SYNC_LOG.md` updated (if sync was performed) — summary row + detail file if >10 commits or conflicts
   - [ ] Documentation Freshness Check passed (see below)
   - [ ] `docs/00_system/Project_Roadmap.md` updated with task status
@@ -230,8 +237,13 @@ Repository structure:
   4. **Update docs**: If the bug revealed a documentation gap (missing config step,
      wrong command), update the affected docs (`TESTING_GUIDE.md`, `TESTING_FAQ.md`,
      `configuration.md`, etc.).
+    4b. **Real validation**: If the bug touches live device behavior, mesh connectivity,
+      ESP32 firmware, gateway/agent device control, or deployment tooling, validate the
+      fix on the actual Radxa 5T + ESP32 setup before declaring it fixed. For user-visible
+      device behavior, a real `nanobot agent` interaction is mandatory.
   5. **Commit**: Use format `fix(<scope>): <description>` — e.g., `fix(cli): correct ota attribute name`.
      Batch related fixes into a single commit when they share the same root cause.
+    5b. **Do not stop at edited files**: If the fix changed repo files, create the commit before reporting completion unless the user explicitly asked to keep changes uncommitted.
   6. **Roadmap**: Only update the roadmap if the bug blocks a roadmap task or reveals
      a new task to add.
 
@@ -258,6 +270,9 @@ Repository structure:
   - **Always verify before declaring fixed**: After editing code, check for
     import errors, run relevant tests if feasible, and confirm the fix makes
     sense logically.
+  - **Prefer real path over synthetic path**: If the issue is observable through the
+    actual gateway/agent/device flow, validate it through that same flow first. Use
+    direct module or script tests only as supporting evidence.
   - **Log everything**: Every fix, config change, or workaround must be
     recorded in `BUGFIX_LOG.md`. This is the team's memory for cross-session
     continuity.
@@ -266,9 +281,27 @@ Repository structure:
     `TESTING_FAQ.md` in the same commit.
   - **Commit after each fix batch**: Don't accumulate uncommitted fixes.
     Commit after each logical fix so the user can pull/test incrementally.
+  - **Commit before close-out**: Do not end a turn with intended repo changes left uncommitted unless the user explicitly requested that state.
   - **Session recovery**: When starting a new session, read
     `docs/02_bugfix/BUGFIX_LOG.md` to understand what was fixed recently
     and `docs/00_system/Project_Roadmap.md` to understand current phase.
+
+  ### Commit Discipline
+
+  Commits are part of the required workflow in this repository, not an optional
+  cleanup step.
+
+  Rules:
+
+  - If the agent modifies project files under version control, it must either:
+    - create the appropriate commit, or
+    - have an explicit user instruction to leave the changes uncommitted.
+  - The agent must not treat "implemented but uncommitted" as an acceptable
+    stopping point.
+  - If multiple logical changes are completed in one session, prefer separate
+    commits per logical unit (for example: docs vs hooks, bugfix vs docs update).
+  - Before the final response, check whether intended project files are still
+    modified or untracked and either commit them or explicitly explain why they remain.
 
   ### What belongs where
 
@@ -283,6 +316,25 @@ Repository structure:
   ## ESP32 & Gateway Testing Protocol
 
   The agent has **direct control** over both the nanobot gateway (Python CLI) and ESP32 hardware (via `mpremote` over USB/serial). Use this to perform full end-to-end testing.
+
+  ### Real Hardware Validation Policy
+
+  A task is **real-hardware required** if it changes or diagnoses any of the following:
+
+  - `esp32/mesh_client/` or `esp32/tools/`
+  - mesh transport, discovery, registry, OTA, enrollment, or channel wiring under `nanobot/mesh/`
+  - agent-visible device behavior such as `nanobot/agent/tools/device.py`
+  - deploy / enrollment / connection-status behavior described in ESP32 testing docs
+
+  When a task is **real-hardware required**:
+
+  1. Start from the real runtime path, not only unit tests.
+  2. Run the actual gateway on the Radxa 5T.
+  3. If the behavior is user-visible through the assistant, validate it with a real `nanobot agent` prompt.
+  4. If ESP32 firmware or deploy behavior changed, validate on the real ESP32 using `deploy.sh`, `mpremote exec`, or both.
+  5. Record the exact commands and results under a `Real Hardware Validation` section in the feature `03_Test_Report.md` or the bugfix log entry.
+
+  A task must **not** be declared complete if it is marked `real-hardware required` but the real hardware validation was skipped without an explicit blocker.
 
   ### Environment
 
@@ -353,6 +405,25 @@ Repository structure:
   6. **Run enrollment on ESP32**: `mpremote connect /dev/ttyUSB0 exec "import main; main.run(enrollment_pin='PIN')"`
   7. **Check gateway log** for enrollment success and device registration
   8. **Test device commands** via gateway CLI or nanobot agent
+
+  ### Mandatory Agent-Level Checks for User-Visible Device Behavior
+
+  For connection status, online/offline reporting, device discovery visibility,
+  and natural-language device commands, use the real assistant path:
+
+  ```bash
+  nanobot gateway -v
+  nanobot agent
+  ```
+
+  Example checks:
+
+  - Ask which ESP32 devices are connected.
+  - Ask for the state of `esp32-01`.
+  - Ask to turn the LED on or off.
+
+  If the bug or feature is about what the user sees through `nanobot agent`, then
+  validating through `nanobot agent` is mandatory.
 
   ### Troubleshooting ESP32
 

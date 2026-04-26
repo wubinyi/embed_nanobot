@@ -15,6 +15,10 @@ documentation gates described in `.github/copilot-instructions.md`.
     a folder like `docs/01_features/f23_esp32_led/`.
   - The staged `02_Dev_Implementation.md` must contain `Documentation Freshness Check`
     and `Post-Task Reflection` headings.
+  - If the staged change is hardware-sensitive (`esp32/`, `nanobot/mesh/`,
+    `nanobot/agent/tools/device.py`, or ESP32 testing docs), the staged
+    `03_Test_Report.md` must contain `Real Hardware Validation` and record a
+    real `nanobot agent` validation path.
 - `fix(scope): ...` commits must stage:
   - `docs/02_bugfix/BUGFIX_LOG.md`
 - Sync-style commits (`sync:`, `sync(...)`, `chore(sync):`, `merge(upstream):`)
