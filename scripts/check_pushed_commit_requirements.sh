@@ -5,10 +5,20 @@ set -euo pipefail
 remote_name="${1:-}"
 repo_root="$(git rev-parse --show-toplevel)"
 checker="$repo_root/scripts/check_commit_requirements.sh"
+dirty_override_file="$repo_root/.git/embed_nanobot_allow_dirty_push"
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
 
 zero_oid='0000000000000000000000000000000000000000'
+
+if [[ "${EMBED_NANOBOT_ALLOW_DIRTY_PUSH:-}" != "1" ]] && [[ ! -f "$dirty_override_file" ]]; then
+  if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
+    echo "pre-push: tracked files are still modified locally" >&2
+    echo "Commit the intended changes before pushing, or set EMBED_NANOBOT_ALLOW_DIRTY_PUSH=1 for a one-off override." >&2
+    echo "Persistent local override for exceptional cases: touch $dirty_override_file" >&2
+    exit 1
+  fi
+fi
 
 while read -r local_ref local_sha remote_ref remote_sha; do
   [[ -z "${local_sha:-}" ]] && continue

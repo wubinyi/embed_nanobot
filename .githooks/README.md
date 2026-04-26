@@ -30,6 +30,9 @@ documentation gates described in `.github/copilot-instructions.md`.
 - `commit-msg` checks the files currently staged for the commit being created.
 - `pre-push` re-checks each commit being pushed, so history that bypassed local
   commit hooks still gets blocked before it leaves the repo.
+- `pre-push` also blocks pushes when tracked files are still modified in the
+  local worktree. This prevents "pushed some commits, left the real work
+  uncommitted" drift.
 
 ## Enable the hooks
 
@@ -64,3 +67,17 @@ Format: `scope<TAB>feature_folder_slug<TAB>optional comma-separated aliases`
 
 Use `git commit --no-verify` only when you intentionally need to bypass the
 policy.
+
+For `pre-push`, the dirty-worktree guard can be overridden explicitly:
+
+```bash
+EMBED_NANOBOT_ALLOW_DIRTY_PUSH=1 git push
+```
+
+Or create a local marker for exceptional cases:
+
+```bash
+touch .git/embed_nanobot_allow_dirty_push
+```
+
+The marker lives under `.git/`, so it is local-only and never committed.
