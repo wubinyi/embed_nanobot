@@ -26,6 +26,44 @@ if ! command -v mpremote &>/dev/null; then
     exit 1
 fi
 
+MPREMOTE=(mpremote connect "$PORT" resume)
+
+interrupt_running_app() {
+    python - "$PORT" <<'PY'
+import sys
+import time
+
+try:
+    import serial
+except ImportError:
+    sys.exit(2)
+
+port = sys.argv[1]
+ser = serial.Serial(port, 115200, timeout=0.2)
+try:
+    # Send Ctrl-C twice to break out of boot.py / main.run().
+    ser.write(b"\r\x03\x03")
+    time.sleep(0.5)
+    ser.write(b"\r")
+    time.sleep(0.2)
+finally:
+    ser.close()
+PY
+}
+
+echo "==> Interrupting running app to enter REPL"
+if interrupt_running_app; then
+    echo "  -> ESP32 interrupted"
+else
+    rc=$?
+    if [[ "$rc" == "2" ]]; then
+        echo "  -- pyserial not installed; continuing with mpremote resume only"
+    else
+        echo "  -- interrupt failed; continuing with mpremote resume only"
+    fi
+fi
+echo ""
+
 # Files to copy (always)
 ALWAYS_FILES=(
     protocol.py
@@ -42,20 +80,20 @@ ALWAYS_FILES=(
 # Copy always-files
 for f in "${ALWAYS_FILES[@]}"; do
     echo "  -> $f"
-    mpremote connect "$PORT" cp "$CLIENT_DIR/$f" ":$f"
+    "${MPREMOTE[@]}" cp "$CLIENT_DIR/$f" ":$f"
 done
 
 # Config: only copy if not already present OR if forced
 if [[ "$FORCE_CONFIG" == "1" ]]; then
     echo "  -> config.py (forced)"
-    mpremote connect "$PORT" cp "$CLIENT_DIR/config.py" ":config.py"
+    "${MPREMOTE[@]}" cp "$CLIENT_DIR/config.py" ":config.py"
 else
     # Check if config already exists on device
-    if mpremote connect "$PORT" ls :/ 2>&1 | grep -q "config.py"; then
+    if "${MPREMOTE[@]}" ls :/ 2>&1 | grep -q "config.py"; then
         echo "  -- config.py already exists on device (skipping, use FORCE_CONFIG=1 to overwrite)"
     else
         echo "  -> config.py (first deploy)"
-        mpremote connect "$PORT" cp "$CLIENT_DIR/config.py" ":config.py"
+        "${MPREMOTE[@]}" cp "$CLIENT_DIR/config.py" ":config.py"
     fi
 fi
 

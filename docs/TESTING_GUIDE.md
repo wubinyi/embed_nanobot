@@ -338,10 +338,22 @@ bash esp32/tools/deploy.sh /dev/ttyUSB0
 mpremote connect /dev/ttyUSB0 repl
 ```
 
+Notes:
+
+- `deploy.sh` now interrupts the running ESP32 app before copying files, so deployment still works even if `boot.py` auto-started the mesh client.
+- `config.py` is preserved by default. To overwrite it too, run:
+
+```bash
+FORCE_CONFIG=1 bash esp32/tools/deploy.sh /dev/ttyUSB0
+```
+
 The output of `bash esp32/tools/deploy.sh /dev/ttyUSB0` is shown below:
 ```bash
 (embed_nanobot) wubinyi@DESKTOP-HJFROP3:~/workspace/embed_nanobot$ bash esp32/tools/deploy.sh /dev/ttyUSB0
 ==> Deploying mesh_client to ESP32 on /dev/ttyUSB0
+
+==> Interrupting running app to enter REPL
+  -> ESP32 interrupted
 
   -> protocol.py
 cp esp32/mesh_client/protocol.py :protocol.py
@@ -355,8 +367,8 @@ cp esp32/mesh_client/transport.py :transport.py
 cp esp32/mesh_client/device.py :device.py
   -> main.py                            
 cp esp32/mesh_client/main.py :main.py
-  -> config.py (first deploy)           
-cp esp32/mesh_client/config.py :config.py
+...
+  -- config.py already exists on device (skipping, use FORCE_CONFIG=1 to overwrite)
                                         
 ✓ Deploy complete.
 

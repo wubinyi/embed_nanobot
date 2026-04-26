@@ -442,6 +442,24 @@ Or, when the CLI gateway supports it:
 nanobot gateway --enroll    # prints a one-time PIN
 ```
 
+#### Step C.5 — Deploy the ESP32 client files
+
+From the repository root on the hub machine:
+
+```bash
+bash esp32/tools/deploy.sh /dev/ttyUSB0
+```
+
+Notes:
+
+- The deploy script interrupts the running ESP32 app first, so auto-starting `boot.py` does not block `mpremote`.
+- `config.py` is preserved by default to avoid overwriting WiFi credentials and hub settings.
+- To force-update `config.py` too:
+
+```bash
+FORCE_CONFIG=1 bash esp32/tools/deploy.sh /dev/ttyUSB0
+```
+
 #### Step D — Run the minimal MicroPython mesh client
 
 Copy this file to the ESP32 as `main.py` using `mpremote cp main.py :main.py`:

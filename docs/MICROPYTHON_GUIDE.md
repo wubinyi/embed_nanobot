@@ -190,12 +190,18 @@ mpremote connect /dev/ttyUSB0 cp :config.py ./config_backup.py
 ### Deploy the mesh client
 
 ```bash
-# Use the deploy script (copies all mesh_client files)
+# Use the deploy script (interrupts the running app, then copies all mesh_client files)
 bash esp32/tools/deploy.sh /dev/ttyUSB0
 
 # Force-update config.py too (normally skipped to preserve credentials)
 FORCE_CONFIG=1 bash esp32/tools/deploy.sh /dev/ttyUSB0
 ```
+
+Notes:
+
+- `deploy.sh` now sends a serial `Ctrl-C` first, so an auto-starting `boot.py` does not block deployment.
+- The script then uses `mpremote connect /dev/ttyUSB0 resume ...` for file operations.
+- `config.py` is skipped unless `FORCE_CONFIG=1` is set, so WiFi credentials and hub IP are preserved.
 
 ### Check what's on the device
 
@@ -522,7 +528,8 @@ mpremote connect /dev/ttyUSB0 mount . repl
 
 ### "could not enter raw repl"
 
-The ESP32 is busy (running boot.py or mesh client). Use `resume`:
+The ESP32 is busy (running `boot.py` or the mesh client). `deploy.sh` now handles this automatically.
+If you need to debug it manually, use `resume`:
 
 ```bash
 mpremote connect /dev/ttyUSB0 resume exec "print('ok')"

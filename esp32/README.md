@@ -49,6 +49,18 @@ NODE_ID       = "esp32-01"        # must be unique per device
 bash esp32/tools/deploy.sh /dev/ttyUSB0
 ```
 
+This script now:
+
+- Interrupts the running ESP32 app first so `boot.py` / `main.run()` do not block deployment
+- Uses `mpremote ... resume` for file copies
+- Preserves `/psk.bin` and skips `config.py` if it already exists on the device
+
+To overwrite the existing device config too:
+
+```bash
+FORCE_CONFIG=1 bash esp32/tools/deploy.sh /dev/ttyUSB0
+```
+
 ### 4. Get enrollment PIN from Hub
 
 ```bash
@@ -80,3 +92,14 @@ start automatically without a PIN.
     ```
     cat ~/.nanobot/workspace/device_registry.json | python3 -m json.tool
     ```
+
+### Deploy troubleshooting
+
+If you previously saw:
+
+```text
+mpremote.transport.TransportError: could not enter raw repl
+```
+
+that usually meant the ESP32 was already busy running `boot.py` / `main.py`.
+`deploy.sh` now interrupts the running app automatically before copying files.
