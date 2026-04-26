@@ -35,6 +35,8 @@ CAPABILITIES = [
         "current_value": False,
         # GPIO pin for this capability (used by device.py)
         "gpio_pin":      2,    # GPIO2 = built-in LED on most ESP32 Dev Boards
+        # Set active_low=True if your board turns the LED on when GPIO2 is LOW.
+        "active_low":    False,
     },
     # Uncomment to enable onboard temperature sensor reading via NTC or DS18B20
     # {

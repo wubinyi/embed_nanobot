@@ -92,6 +92,11 @@ class MeshTransport:
         while True:
             try:
                 if self._sock is None:
+                    try:
+                        from device import set_status_mode
+                        set_status_mode("hub_connecting")
+                    except Exception:
+                        pass
                     self._sock = connect_hub()
                     self._on_connect()
 
@@ -112,6 +117,11 @@ class MeshTransport:
 
             except Exception as e:
                 print("[transport] Error:", e, "— reconnecting in", cfg.RECONNECT_DELAY_S, "s")
+                try:
+                    from device import set_status_mode
+                    set_status_mode("reconnecting")
+                except Exception:
+                    pass
                 if self._sock:
                     try:
                         self._sock.close()
@@ -122,7 +132,8 @@ class MeshTransport:
 
     def _on_connect(self):
         """Send STATE_REPORT and PARTITION_REPORT after connecting."""
-        from device import get_state_report_payload
+        from device import get_state_report_payload, set_status_mode
+        set_status_mode("connected")
         self.send("state_report", "*", get_state_report_payload())
         print("[transport] STATE_REPORT sent")
         # --- embed_nanobot: dual-partition report (task 5.2.1) ---

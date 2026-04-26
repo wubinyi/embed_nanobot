@@ -29,7 +29,7 @@ Copy the following two lines into /boot.py on the ESP32 to auto-start on power-o
 import config as cfg
 import security
 from transport import connect_wifi, MeshTransport
-from device import execute_command, get_state_report_payload
+from device import execute_command, get_state_report_payload, set_status_mode
 
 
 # ------------------------------------------------------------------
@@ -93,7 +93,7 @@ def _dispatch(envelope, transport):
         _handle_core_integrity_query(transport, source)
 
     elif msg_type == "pong":
-        pass   # Hub replied to our ping — connection confirmed
+        set_status_mode("connected")
 
     else:
         print("[mesh] Unhandled message type:", msg_type)
@@ -362,13 +362,17 @@ def run(enrollment_pin=None):
         Get this PIN from the hub by running ``nanobot gateway --enroll``.
         After the first successful enrollment you can reboot without a PIN.
     """
+    set_status_mode("booting")
+
     # Step 1: WiFi
+    set_status_mode("wifi_connecting")
     connect_wifi()
 
     # Step 2: PSK
     psk = security.load_psk()
     if psk is None:
         if enrollment_pin is None:
+            set_status_mode("error")
             raise RuntimeError(
                 "No PSK found in flash. "
                 "Run: main.run(enrollment_pin='123456') with the PIN from the hub."
@@ -383,4 +387,5 @@ def run(enrollment_pin=None):
     # Step 3: Persistent receive loop
     transport = MeshTransport()
     transport.set_dispatch(_dispatch)
+    set_status_mode("hub_connecting")
     transport.start(psk)
