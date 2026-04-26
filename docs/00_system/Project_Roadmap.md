@@ -280,6 +280,12 @@ See [docs/sync/SYNC_LOG.md](../sync/SYNC_LOG.md) for full merge history.
 - **Tech debt added to follow-up**: TD-02 (add `version_counter`/`firmware_hmac` to hub OTA_OFFER), TD-01 (cosmetic error message in `check_timeouts`).
 - **Follow-up proposed**: Add task 5.4.2 — "Add version_counter + firmware_hmac to hub OTA_OFFER to enable anti-rollback and HMAC signing end-to-end".
 
+### 2026-04-26 — ESP32 Onboard Status LED Patterns Documented
+- **Traceability gap closed**: Added post-hoc feature docs for commit `0064c61acfb67a024d7239a6e35a910006030e00` in `docs/01_features/f23_esp32_led/`.
+- **Device UX improvement**: `esp32/mesh_client/device.py`, `main.py`, and `transport.py` now drive the onboard LED through lifecycle modes (`booting`, `wifi_connecting`, `hub_connecting`, `connected`, `reconnecting`, `error`) while preserving direct manual LED commands.
+- **Board compatibility**: `esp32/mesh_client/config.py` adds `active_low` so boards with inverted LED polarity do not need code changes.
+- **Docs refreshed**: `esp32/README.md` now explains the status LED behavior and `active_low` override.
+
 ### 2026-03-29 — Roadmap Audit & Status Clarification
 - **Action**: Comprehensive code audit of all 41 roadmap items against actual codebase.
 - **Results**:

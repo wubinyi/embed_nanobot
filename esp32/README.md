@@ -81,6 +81,27 @@ main.run(enrollment_pin="482193")   # use the PIN from step 4
 After enrollment the PSK is saved to flash (`/psk.bin`). Future reboots
 start automatically without a PIN.
 
+### 5b. Understand the onboard status LED
+
+If your device exposes a capability named `led`, the ESP32 client now reuses
+that onboard LED as a lifecycle indicator:
+
+- fast blink while booting
+- medium blink while connecting to WiFi
+- slower blink while connecting to the hub
+- steady on when connected
+- double-blink while reconnecting after a transport error
+
+Direct hub commands such as `turn on the LED on esp32-01` still work. When the
+hub explicitly commands the LED, the client switches that LED into `manual`
+mode so user intent overrides background status blinking.
+
+If your board's LED is wired active-low, set this in `esp32/mesh_client/config.py`:
+
+```python
+"active_low": True,
+```
+
 
 ### 6. Check Connection Status
 1. Ask `nanobot` in `nanobot agent`
