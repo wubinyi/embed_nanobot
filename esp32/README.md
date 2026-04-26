@@ -68,3 +68,15 @@ main.run(enrollment_pin="482193")   # use the PIN from step 4
 
 After enrollment the PSK is saved to flash (`/psk.bin`). Future reboots
 start automatically without a PIN.
+
+
+### 6. Check Connection Status
+1. Ask `nanobot` in `nanobot agent`
+2. See live device status while gateway runs:
+    ```
+    nanobot gateway -v 2>&1 | grep "persistent connection\|mark_online"
+    ```
+3. Query the registry JSON (shows last known state):
+    ```
+    cat ~/.nanobot/workspace/device_registry.json | python3 -m json.tool
+    ```

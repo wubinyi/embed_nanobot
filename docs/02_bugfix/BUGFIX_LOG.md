@@ -443,3 +443,32 @@ Two separate fixes were needed:
 - In the test, compute `fw_version_counter = int(time.time())` at test start and pass it to `add_firmware(...)` — unique per run, always ahead of the stored value.
 
 **Files changed**: `nanobot/mesh/ota.py`, `tests/test_ota_hardware.py`
+
+---
+
+## BUG-020: Gateway sees ESP32 online, but registry JSON and agent stay offline
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-04-26 |
+| **Severity** | High (live device status is wrong across processes) |
+| **Found by** | User hardware test with `nanobot gateway -v` |
+| **Phase** | 5.3.2 (ESP32 SDK testing) |
+
+**Symptom**: Gateway logs show `persistent connection from esp32-01` and `device esp32-01 is online`, but `/home/wubinyi/.nanobot/workspace/device_registry.json` still shows `"online": false`, and a separate `nanobot agent` process still answers that the device is offline.
+
+**Root cause**:
+- `DeviceRegistry.mark_online()` / `mark_offline()` updated only in-memory state and never saved the registry file.
+- `DeviceRegistry.load()` forced every loaded device back to offline, discarding any fresh persisted online state.
+- `DeviceControlTool` answered from its own in-memory registry snapshot and never reloaded the shared registry file, so a separate `nanobot agent` process could not see gateway-side updates.
+- `UDPDiscovery.prune()` could still trigger `MeshChannel._on_peer_lost()` and force the device offline even while a persistent TCP connection from the ESP32 was still active, because ESP32 devices do not rely on UDP beacon traffic for liveness.
+
+**Fix**:
+- Persist `mark_online()` and `mark_offline()` immediately to disk.
+- Preserve online state across reloads when `last_seen` is still fresh; expire it after 90 seconds without activity.
+- Refresh `last_seen` on every inbound mesh message by marking the source online in `MeshChannel._on_mesh_message()`.
+- Reload the shared registry snapshot inside `DeviceControlTool` before list/state/describe/command actions so agent and gateway processes stay aligned.
+- Ignore discovery `peer_lost` events for devices that still have a live persistent TCP connection in `MeshTransport`.
+- Added regression tests for persisted online/offline state, fresh/stale reload behavior, device-tool snapshot reload behavior, and discovery-vs-persistent-TCP liveness handling.
+
+**Files changed**: `nanobot/mesh/registry.py`, `nanobot/mesh/channel.py`, `nanobot/mesh/transport.py`, `nanobot/agent/tools/device.py`, `tests/test_device_registry.py`, `tests/test_device_control_tool.py`, `tests/test_mesh.py`

@@ -124,21 +124,34 @@ class DeviceControlTool(Tool):
 
     # -- Action implementations ----------------------------------------------
 
+    def _refresh_registry_snapshot(self) -> None:
+        """Reload the shared registry so agent and gateway processes stay aligned."""
+        self._registry.load()
+
     def _list_devices(self) -> str:
         """Return a concise device list."""
+        self._refresh_registry_snapshot()
         devices = self._registry.get_all_devices()
         if not devices:
             return "No devices registered on the mesh."
 
-        lines = [f"Registered devices ({len(devices)}):"]
+        online_count = sum(1 for d in devices if d.online)
+        lines = [f"Registered devices ({len(devices)}, {online_count} currently online):"]
         for d in devices:
             status = "ONLINE" if d.online else "OFFLINE"
             cap_names = ", ".join(d.capability_names()) if d.capabilities else "none"
             lines.append(f"  • {d.name} ({d.node_id}) [{status}] — {d.device_type}, caps: {cap_names}")
+        if online_count == 0:
+            lines.append(
+                "\nNote: All devices show OFFLINE. This is normal when the mesh gateway "
+                "is not running. Devices only appear ONLINE while the gateway (nanobot gateway) "
+                "is active and they have an active TCP connection to it."
+            )
         return "\n".join(lines)
 
     async def _send_command(self, kwargs: dict[str, Any]) -> str:
         """Validate and dispatch a device command."""
+        self._refresh_registry_snapshot()
         device = kwargs.get("device", "")
         cmd_action = kwargs.get("command_action", "")
         capability = kwargs.get("capability", "")
@@ -191,6 +204,7 @@ class DeviceControlTool(Tool):
 
     def _get_state(self, device_id: str) -> str:
         """Return the current state of a specific device."""
+        self._refresh_registry_snapshot()
         if not device_id:
             return "Error: 'device' is required for the 'state' action."
 
@@ -227,4 +241,5 @@ class DeviceControlTool(Tool):
 
     def _describe(self) -> str:
         """Return the full command description for LLM reasoning."""
+        self._refresh_registry_snapshot()
         return describe_device_commands(self._registry)

@@ -103,6 +103,11 @@ class MeshTransport:
         """Register a callback fired when a device persistent connection drops."""
         self._disconnect_handlers.append(handler)
 
+    def is_device_connected(self, node_id: str) -> bool:
+        """Return whether a device currently has a live persistent TCP connection."""
+        writer = self._device_writers.get(node_id)
+        return writer is not None and not writer.is_closing()
+
     # -- lifecycle -----------------------------------------------------------
 
     async def start(self) -> None:

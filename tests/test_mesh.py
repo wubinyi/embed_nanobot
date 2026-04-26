@@ -343,6 +343,37 @@ class TestMeshChannel:
 
         assert bus.inbound_size == 0
 
+    def test_on_peer_lost_keeps_tcp_connected_device_online(self):
+        """Discovery prune must not override a live persistent TCP device connection."""
+        from nanobot.bus.queue import MessageBus
+
+        bus = MessageBus()
+        config = MagicMock()
+        config.node_id = "hub"
+        config.tcp_port = 0
+        config.udp_port = 0
+        config.roles = ["nanobot"]
+        config.allow_from = ["*"]
+        config.psk_auth_enabled = False
+        config.key_store_path = ""
+        config.allow_unauthenticated = False
+        config.nonce_window = 60
+
+        channel = MeshChannel(config, bus, node_id="hub", tcp_port=0, udp_port=0)
+        info = channel.registry._devices.setdefault(
+            "esp32-01",
+            MagicMock(node_id="esp32-01", online=False, last_seen=0.0),
+        )
+        info.online = True
+
+        writer = MagicMock()
+        writer.is_closing.return_value = False
+        channel.transport._device_writers["esp32-01"] = writer
+
+        channel._on_peer_lost("esp32-01")
+
+        assert channel.registry.get_device("esp32-01").online is True
+
 
 # ---------------------------------------------------------------------------
 # Config schema tests

@@ -154,7 +154,26 @@ class TestListAction:
     @pytest.mark.asyncio
     async def test_shows_device_count(self, populated_tool):
         result = await populated_tool.execute(action="list")
-        assert "(2)" in result
+        assert "Registered devices (2, 2 currently online):" in result
+
+    @pytest.mark.asyncio
+    async def test_reloads_registry_snapshot_before_list(self, tmp_registry_path, mock_transport):
+        reg_gateway = DeviceRegistry(path=tmp_registry_path)
+        reg_gateway.load()
+        await reg_gateway.register_device("esp32-01", "esp32", name="ESP32")
+        reg_gateway.mark_online("esp32-01")
+
+        reg_agent = DeviceRegistry(path=tmp_registry_path)
+        reg_agent.load()
+        tool = DeviceControlTool(
+            registry=reg_agent,
+            transport=mock_transport,
+            node_id="hub-01",
+        )
+
+        result = await tool.execute(action="list")
+        assert "ESP32" in result
+        assert "ONLINE" in result
 
 
 # ===================================================================

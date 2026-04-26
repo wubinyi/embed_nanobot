@@ -189,6 +189,8 @@ class DeviceRegistry:
     - Call ``on_event()`` to subscribe to device lifecycle events.
     """
 
+    ONLINE_STALE_AFTER_S = 90.0
+
     def __init__(self, path: str | Path):
         self.path = Path(path)
         self._devices: dict[str, DeviceInfo] = {}  # node_id → DeviceInfo
@@ -228,19 +230,26 @@ class DeviceRegistry:
                 logger.debug(f"[DeviceRegistry] empty file at {self.path}, starting fresh")
                 return
             data = json.loads(text)
+            now = time.time()
+            loaded_devices: dict[str, DeviceInfo] = {}
             for d in data.get("devices", []):
                 try:
                     info = DeviceInfo.from_dict(d)
-                    # All devices start offline on load — discovery will update
-                    info.online = False
-                    self._devices[info.node_id] = info
+                    info.online = bool(info.online and self._is_online_fresh(info, now=now))
+                    loaded_devices[info.node_id] = info
                 except (KeyError, TypeError) as exc:
                     logger.warning(f"[DeviceRegistry] skipping malformed device entry: {exc}")
+            self._devices = loaded_devices
             logger.info(
                 f"[DeviceRegistry] loaded {len(self._devices)} devices from {self.path}"
             )
         except (json.JSONDecodeError, OSError) as exc:
             logger.error(f"[DeviceRegistry] failed to load {self.path}: {exc}")
+
+    def _is_online_fresh(self, info: DeviceInfo, *, now: float | None = None) -> bool:
+        """Return whether a persisted online state is still fresh enough to trust."""
+        current_time = time.time() if now is None else now
+        return (current_time - info.last_seen) <= self.ONLINE_STALE_AFTER_S
 
     async def _save(self) -> None:
         """Persist registry to disk (async-safe)."""
@@ -401,6 +410,7 @@ class DeviceRegistry:
         was_offline = not info.online
         info.online = True
         info.last_seen = time.time()
+        self._save_sync()
         if was_offline:
             self._fire_event(info, "online")
             logger.info(f"[DeviceRegistry] device {node_id} is online")
@@ -412,6 +422,7 @@ class DeviceRegistry:
             return
         was_online = info.online
         info.online = False
+        self._save_sync()
         if was_online:
             self._fire_event(info, "offline")
             logger.info(f"[DeviceRegistry] device {node_id} is offline")

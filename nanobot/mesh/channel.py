@@ -488,6 +488,8 @@ class MeshChannel(BaseChannel):
 
     async def _on_mesh_message(self, env: MeshEnvelope) -> None:
         """Convert an incoming mesh envelope to an InboundMessage."""
+        self.registry.mark_online(env.source)
+
         # --- embed_nanobot: handle enrollment requests (task 1.10) ---
         if env.type == MsgType.ENROLL_REQUEST:
             if self.enrollment:
@@ -687,6 +689,12 @@ class MeshChannel(BaseChannel):
 
     def _on_peer_lost(self, node_id: str) -> None:
         """Called by discovery when a peer is pruned as offline."""
+        if self.transport.is_device_connected(node_id):
+            logger.debug(
+                f"[MeshChannel] ignoring discovery offline for {node_id} "
+                f"because its persistent TCP connection is still active"
+            )
+            return
         self.registry.mark_offline(node_id)
 
     def get_device_summary(self) -> str:

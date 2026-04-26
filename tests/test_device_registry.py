@@ -401,6 +401,22 @@ class TestOnlineOffline:
         assert online[0].node_id == "d1"
 
     @pytest.mark.asyncio
+    async def test_mark_online_and_offline_are_persisted(self, tmp_registry_path):
+        reg1 = DeviceRegistry(path=tmp_registry_path)
+        reg1.load()
+        await reg1.register_device("d1", "test")
+
+        reg1.mark_online("d1")
+        reg2 = DeviceRegistry(path=tmp_registry_path)
+        reg2.load()
+        assert reg2.get_device("d1").online is True
+
+        reg1.mark_offline("d1")
+        reg3 = DeviceRegistry(path=tmp_registry_path)
+        reg3.load()
+        assert reg3.get_device("d1").online is False
+
+    @pytest.mark.asyncio
     async def test_sync_with_discovery(self, registry):
         await registry.register_device("d1", "test")
         await registry.register_device("d2", "test")
@@ -441,8 +457,45 @@ class TestPersistence:
         info = reg2.get_device("sensor-01")
         assert info.name == "Kitchen"
         assert info.state["temperature"] == 22.5
-        assert info.online is False  # All devices start offline on load
+        assert info.online is False
         assert len(info.capabilities) == 1
+
+    @pytest.mark.asyncio
+    async def test_load_preserves_fresh_online_state(self, tmp_registry_path):
+        reg1 = DeviceRegistry(path=tmp_registry_path)
+        reg1.load()
+        await reg1.register_device("sensor-01", "temp_sensor")
+        reg1.mark_online("sensor-01")
+
+        reg2 = DeviceRegistry(path=tmp_registry_path)
+        reg2.load()
+        assert reg2.get_device("sensor-01").online is True
+
+    @pytest.mark.asyncio
+    async def test_load_expires_stale_online_state(self, tmp_registry_path):
+        now = 1000.0
+        stale = {
+            "version": 1,
+            "updated_at": now,
+            "devices": [
+                {
+                    "node_id": "sensor-01",
+                    "device_type": "temp_sensor",
+                    "name": "Kitchen",
+                    "capabilities": [],
+                    "state": {},
+                    "online": True,
+                    "last_seen": now - 120.0,
+                    "registered_at": now - 300.0,
+                    "metadata": {},
+                }
+            ],
+        }
+        Path(tmp_registry_path).write_text(json.dumps(stale))
+
+        reg = DeviceRegistry(path=tmp_registry_path)
+        reg.load()
+        assert reg.get_device("sensor-01").online is False
 
     @pytest.mark.asyncio
     async def test_load_missing_file(self, tmp_registry_path):
