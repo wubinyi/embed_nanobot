@@ -137,6 +137,8 @@ class HybridRouterProvider(LLMProvider):
         model: str | None = None,
         max_tokens: int = 4096,
         temperature: float = 0.7,
+        reasoning_effort: str | None = None,
+        tool_choice: str | dict[str, Any] | None = None,
     ) -> LLMResponse:
         """Route the request to local or API model based on difficulty."""
         user_text = self._last_user_text(messages)
@@ -152,6 +154,7 @@ class HybridRouterProvider(LLMProvider):
                     return await self.local.chat(
                         messages, tools=tools, model=self.local_model,
                         max_tokens=max_tokens, temperature=temperature,
+                        reasoning_effort=reasoning_effort, tool_choice=tool_choice,
                     )
             except Exception as e:
                 logger.warning(f"[HybridRouter] force_local_fn failed: {e}; "
@@ -168,6 +171,7 @@ class HybridRouterProvider(LLMProvider):
             return await self.local.chat(
                 messages, tools=tools, model=self.local_model,
                 max_tokens=max_tokens, temperature=temperature,
+                reasoning_effort=reasoning_effort, tool_choice=tool_choice,
             )
 
         # 1. Judge difficulty via the local model
@@ -181,6 +185,7 @@ class HybridRouterProvider(LLMProvider):
             return await self.local.chat(
                 messages, tools=tools, model=self.local_model,
                 max_tokens=max_tokens, temperature=temperature,
+                reasoning_effort=reasoning_effort, tool_choice=tool_choice,
             )
 
         # 2. Hard → sanitise PII, then use the API model
@@ -192,6 +197,7 @@ class HybridRouterProvider(LLMProvider):
             result = await self.api.chat(
                 sanitised_messages, tools=tools, model=self.api_model,
                 max_tokens=max_tokens, temperature=temperature,
+                reasoning_effort=reasoning_effort, tool_choice=tool_choice,
             )
             self._record_api_success()
             return result
@@ -205,6 +211,7 @@ class HybridRouterProvider(LLMProvider):
                 return await self.local.chat(
                     messages, tools=tools, model=self.local_model,
                     max_tokens=max_tokens, temperature=temperature,
+                    reasoning_effort=reasoning_effort, tool_choice=tool_choice,
                 )
             raise
 

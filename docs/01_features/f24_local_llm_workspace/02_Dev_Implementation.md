@@ -36,7 +36,7 @@ config at `~/.embed_nanobot/config.json`:
 
 Key implementation detail:
 
-- The generated configs intentionally omit `hybridRouter`, because the smoke
+- The generated configs intentionally omit `hybrid_router`, because the smoke
   tests are single-provider validations and do not need hybrid routing.
 - This keeps the generated files compatible with the current Radxa runtime path
   and avoids unnecessary config-surface coupling.
@@ -98,6 +98,45 @@ Observed:
 - `nanobot.__file__` resolved to the current repository path
 - `Config.model_fields` includes `hybrid_router`
 
+### Finding 6: Live hybrid config needed the schema key, not the doc typo
+
+The live config must use `hybrid_router` as the top-level key. Earlier docs
+still showed `hybridRouter`, which the runtime does not load as the root config
+section. The tracked docs now use the correct top-level key while keeping the
+nested field names in camelCase.
+
+### Finding 7: Hybrid provider needed to accept current chat kwargs
+
+Real `nanobot agent` hybrid runs exposed that `HybridRouterProvider.chat()` was
+behind the current provider interface and did not accept `reasoning_effort`
+and `tool_choice`. The provider now accepts and forwards both kwargs across all
+routed paths so the real agent loop can enter hybrid mode cleanly.
+
+### Finding 8: Hybrid routing is validated in two separate ways
+
+The live Radxa config is now set to hybrid mode with:
+
+- local provider: `ollama`
+- local model: `qwen2.5:0.5b-nb`
+- difficulty threshold: `0.85`
+
+That setting makes simple prompts route locally on the current small judge
+model. A second probe config with `difficultyThreshold = 0.30` was used to
+force the hard-task branch and confirm the API route in real logs.
+
+### Finding 9: RKLLM can now build natively on the Radxa
+
+The RKLLM upstream `build-linux.sh` script assumes a cross-compiler layout, so
+the practical Radxa path is a native CMake build instead:
+
+- installed native prerequisites with `sudo apt-get install -y build-essential cmake`
+- built `examples/rkllm_api_demo/deploy` natively with GCC 14
+- installed and launched the demo bundle with `LD_LIBRARY_PATH=./lib`
+
+The runtime printed `platform: RK3588` and only failed because no converted
+`.rkllm` model file was available yet. That means the current blocker is model
+availability, not compiler setup or missing runtime linkage.
+
 ### Finding 3: The installer needed current Ollama archive endpoints
 
 The helper supports two install paths:
@@ -139,7 +178,7 @@ used a fixed `180s` timeout. Measured wall-clock runtime on the Radxa was about
 ## Documentation Freshness Check
 
 - `architecture.md`: OK — no architecture change required for this operational workspace
-- `configuration.md`: OK — no schema changes
+- `configuration.md`: Updated — corrected the top-level hybrid config key to `hybrid_router`
 - `customization.md`: OK — no extension-point changes
 - `PRD.md`: OK — local LLM support already documented; this task adds operational workflow
 - `agent.md`: OK — no upstream convention changes
@@ -149,8 +188,8 @@ used a fixed `180s` timeout. Measured wall-clock runtime on the Radxa was about
 - **Workflow**: OK — design first, then scripts, then live validation was the right order
 - **Team roles**: OK — Reviewer surfaced the runtime-vs-timeout mismatch before unnecessary provider changes
 - **Conflict surface**: Unchanged — no shared runtime files modified
-- **Tech debt**: Local CPU inference is still slow on RK3588 even with the validated small model
-- **Docs**: Updated — local_llm workspace now documents the validated small-model workflow
+- **Tech debt**: Local CPU inference is still slow on RK3588 even with the validated small model; RKLLM still needs a converted `.rkllm` model before NPU inference can be validated end-to-end
+- **Docs**: Updated — local_llm workspace now documents the validated small-model workflow and the correct hybrid config key
 - **User preferences**: None recorded
 - **Opportunities**: Add a helper to generate validated Ollama aliases automatically instead of documenting manual `Modelfile` creation
 - **Security**: OK — no secrets committed; runtime configs are generated from local user config and ignored from git

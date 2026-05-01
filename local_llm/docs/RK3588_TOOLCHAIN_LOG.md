@@ -20,12 +20,29 @@ Record every local-LLM setup step executed on the Radxa Rock 5T.
 | 2026-05-01 11:32 | Direct local endpoint check | `curl -sS http://127.0.0.1:11434/v1/chat/completions ...` | PASS | Ollama returned `LOCAL_OK` directly |
 | 2026-05-01 11:40 | Direct local agent timing | `time python -m nanobot agent -c local_llm/runtime/local_ollama.json ...` | PASS | Real local agent path returned `LOCAL_OK` in about `371s` |
 | 2026-05-01 11:47 | Smoke runner revalidation | `bash local_llm/scripts/run_agent_smoke.sh --mode local` | PASS | Updated local timeout (`600s`) matches measured RK3588 latency |
+| 2026-05-01 14:21 | Live hybrid config enablement | `cp ~/.embed_nanobot/config.json ... && edit hybrid settings` | PASS | Set `agents.defaults.provider` to `hybrid`, enabled `hybrid_router`, removed duplicate disabled block |
+| 2026-05-01 14:28 | Live hybrid local-route check | `python -m nanobot agent -m 'Reply with exactly HYBRID_LOCAL_OK and nothing else.' --logs --no-markdown` | PASS | Router logged local branch and final output was `HYBRID_LOCAL_OK` |
+| 2026-05-01 14:33 | Hybrid API-route check | `python -m nanobot agent -c local_llm/runtime/hybrid_remote_probe.json -m 'Write a correct Python implementation of Dijkstra\'s algorithm ... HYBRID_REMOTE_OK.' --logs --no-markdown` | PASS | Router logged API branch; remote provider then rejected the request with `unsupported_country_region_territory` |
+| 2026-05-01 14:38 | RKLLM upstream repo fetch | `git clone --depth 1 https://github.com/airockchip/rknn-llm.git /tmp/rknn-llm` | PASS | Official sources reachable on the Radxa through proxy |
+| 2026-05-01 14:40 | RKLLM board-side build attempt | `cd /tmp/rknn-llm/examples/rkllm_api_demo/deploy && bash build-linux.sh` | FAIL | Build script assumes toolchain components not yet installed on the Radxa; first blocker was missing `cmake` |
+| 2026-05-01 16:02 | RKLLM native build prerequisites | `sudo apt-get install -y build-essential cmake` | PASS | Installed native compiler toolchain and CMake on the Radxa |
+| 2026-05-01 16:10 | RKLLM native demo build | `cmake ../.. -DCMAKE_BUILD_TYPE=Release && make -j4` | PASS | Built `examples/rkllm_api_demo/deploy/build/native/llm_demo` with native GCC 14 |
+| 2026-05-01 16:11 | RKLLM runtime linkage probe | `cmake --install . && LD_LIBRARY_PATH=./lib ./llm_demo /tmp/does-not-exist.rkllm 16 32` | PASS | `librkllmrt.so` loaded and reported `platform: RK3588`; init failed only because no `.rkllm` model file was provided |
 
 ## Summary
 
 The Radxa host now has a working repo-local Ollama runtime and a validated local
 agent workflow. The stable CPU-only path on this hardware uses the small-model
 alias `qwen2.5:0.5b-nb` plus a longer local smoke timeout.
+
+Hybrid mode is also live-validated on the Radxa: the local branch completed
+end-to-end, and the remote branch was reached successfully before hitting the
+current remote provider region restriction.
+
+The RKLLM board-side toolchain is now partially installed and verified: the
+native demo compiles and the runtime library initializes on RK3588. The next
+required input is a converted `.rkllm` model file before real NPU inference can
+be exercised.
 
 The two earlier `FAIL` entries are historical setup attempts, not current
 blockers. They were superseded by the later successful repo-local install and

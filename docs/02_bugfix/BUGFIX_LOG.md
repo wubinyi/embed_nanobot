@@ -419,6 +419,28 @@ Two separate fixes were needed:
 - Fixed `datetime.utcnow()` → `datetime.now(datetime.timezone.utc)` (deprecation).
 - Fixed `"query_partitions"` → `"partition_query"` to match ESP32's `_dispatch` handler.
 
+---
+
+## BUG-019: Hybrid router rejected agent chat kwargs
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-05-01 |
+| **Severity** | High (real `nanobot agent` hybrid mode crashes before routing) |
+| **Found by** | Radxa 5T hybrid routing validation |
+| **Phase** | Local LLM / hybrid routing validation |
+
+**Symptom**: With `agents.defaults.provider` set to `"hybrid"`, real `nanobot agent` requests failed before model inference because `HybridRouterProvider.chat()` did not accept newer chat kwargs such as `reasoning_effort`.
+
+**Root cause**: `AgentLoop` passes provider-specific chat options through the common provider interface. `HybridRouterProvider.chat()` lagged behind the current provider signature and only accepted `messages`, `tools`, `model`, `max_tokens`, and `temperature`, so hybrid mode raised `TypeError` before the router could reach either local or remote execution.
+
+**Fix**:
+- Extended `HybridRouterProvider.chat()` to accept `reasoning_effort` and `tool_choice`
+- Forwarded both kwargs through every routed path: forced-local, judged-local, API, and local fallback
+- Added a focused regression test to assert the routed provider receives those kwargs
+
+**Files changed**: `nanobot/providers/hybrid_router.py`, `tests/test_hybrid_router.py`
+
 **Files changed**: `tests/test_ota_hardware.py`
 
 ---

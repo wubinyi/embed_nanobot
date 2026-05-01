@@ -38,7 +38,7 @@ export NANOBOT_AGENTS__DEFAULTS__MODEL="anthropic/claude-opus-4-5"
     }
   },
   "providers": { ... },     // See Providers section
-  "hybridRouter": { ... },  // See Hybrid Router section
+  "hybrid_router": { ... }, // See Hybrid Router section
   "channels": { ... },      // See Channels section
   "gateway": { ... },       // See Gateway section
   "tools": { ... }          // See Tools section
@@ -778,7 +778,7 @@ The hybrid router enables dual-model routing: a local model judges task difficul
 
 ```jsonc
 {
-  "hybridRouter": {
+  "hybrid_router": {
     "enabled": false,                            // Enable hybrid routing
     "localProvider": "vllm",                     // Config key of local provider
     "localModel": "meta-llama/Llama-3.1-8B-Instruct",  // Local model name
@@ -791,6 +791,9 @@ The hybrid router enables dual-model routing: a local model judges task difficul
   }
 }
 ```
+
+Note: the live config key is `hybrid_router` at the top level. The nested
+field names remain camelCase in `config.json`.
 
 ### How It Works
 
@@ -823,7 +826,7 @@ Route simple tasks to a local Llama model, send complex tasks to Claude:
       "model": "meta-llama/Llama-3.1-8B-Instruct"  // Ignored when hybrid routing is enabled
     }
   },
-  "hybridRouter": {
+  "hybrid_router": {
     "enabled": true,
     "localProvider": "vllm",
     "localModel": "meta-llama/Llama-3.1-8B-Instruct",

@@ -191,7 +191,7 @@ Then enable the Hybrid Router in your config file (`~/.embed_nanobot/config.json
       "apiBase": "http://localhost:11434/v1"
     }
   },
-  "hybridRouter": {
+  "hybrid_router": {
     "enabled": true,
     "localProvider": "ollama",
     "localModel": "qwen2.5:0.5b-nb",
@@ -204,6 +204,9 @@ Then enable the Hybrid Router in your config file (`~/.embed_nanobot/config.json
   }
 }
 ```
+
+Note: the top-level config key is `hybrid_router`. The nested field names stay
+camelCase.
 
 **How the Hybrid Router works**:  
 Simple device commands ("turn on light", "set thermostat to 22°C") are processed **entirely locally** by Ollama — sub-second, no cloud, no data leaves your home.  

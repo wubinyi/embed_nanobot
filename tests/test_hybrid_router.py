@@ -32,6 +32,8 @@ class FakeProvider(LLMProvider):
         model: str | None = None,
         max_tokens: int = 4096,
         temperature: float = 0.7,
+        reasoning_effort: str | None = None,
+        tool_choice: str | dict[str, Any] | None = None,
     ) -> LLMResponse:
         self.calls.append({
             "messages": messages,
@@ -39,6 +41,8 @@ class FakeProvider(LLMProvider):
             "model": model,
             "max_tokens": max_tokens,
             "temperature": temperature,
+            "reasoning_effort": reasoning_effort,
+            "tool_choice": tool_choice,
         })
         if self.responses:
             return self.responses.pop(0)
@@ -63,11 +67,15 @@ class FailingProvider(LLMProvider):
         model: str | None = None,
         max_tokens: int = 4096,
         temperature: float = 0.7,
+        reasoning_effort: str | None = None,
+        tool_choice: str | dict[str, Any] | None = None,
     ) -> LLMResponse:
         self.calls.append({
             "messages": messages,
             "tools": tools,
             "model": model,
+            "reasoning_effort": reasoning_effort,
+            "tool_choice": tool_choice,
         })
         raise self.error
 
@@ -92,11 +100,15 @@ class SometimesFailingProvider(LLMProvider):
         model: str | None = None,
         max_tokens: int = 4096,
         temperature: float = 0.7,
+        reasoning_effort: str | None = None,
+        tool_choice: str | dict[str, Any] | None = None,
     ) -> LLMResponse:
         self.calls.append({
             "messages": messages,
             "tools": tools,
             "model": model,
+            "reasoning_effort": reasoning_effort,
+            "tool_choice": tool_choice,
         })
         self._call_count += 1
         if self._call_count <= self._fail_count:
@@ -310,6 +322,36 @@ async def test_tools_forwarded_to_chosen_provider():
 
     # Second local call (the answer) should receive tools
     assert local.calls[1]["tools"] == tools
+
+
+@pytest.mark.asyncio
+async def test_reasoning_effort_and_tool_choice_forwarded_to_api():
+    """Provider-specific chat options are forwarded on the routed request."""
+    local = FakeProvider([
+        _hard_judge_response(0.9),
+        _sanitised_response("sanitised msg"),
+    ])
+    api = FakeProvider([LLMResponse(content="api answer")])
+
+    router = HybridRouterProvider(
+        local_provider=local,
+        api_provider=api,
+        local_model="llama3",
+        api_model="claude-sonnet",
+        difficulty_threshold=0.5,
+    )
+
+    await router.chat(
+        messages=[{"role": "user", "content": "Write a complex program"}],
+        reasoning_effort="high",
+        tool_choice={"type": "function", "function": {"name": "plan"}},
+    )
+
+    assert api.calls[0]["reasoning_effort"] == "high"
+    assert api.calls[0]["tool_choice"] == {
+        "type": "function",
+        "function": {"name": "plan"},
+    }
 
 
 @pytest.mark.asyncio
