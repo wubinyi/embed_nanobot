@@ -156,7 +156,12 @@ bash local_llm/scripts/install_ollama.sh
 # If installed into the repo-local fallback path, export it first
 export PATH=/home/wubinyi/workspace/embed_nanobot/local_llm/runtime/bin:$PATH
 
-ollama pull llama3.2   # or qwen2.5:3b, qwen2.5:7b, gemma3:4b, etc.
+ollama pull qwen2.5:0.5b
+cat > local_llm/runtime/Modelfile.qwen2.5-0.5b-nb <<'EOF'
+FROM qwen2.5:0.5b
+PARAMETER num_ctx 8192
+EOF
+ollama create qwen2.5:0.5b-nb -f local_llm/runtime/Modelfile.qwen2.5-0.5b-nb
 ```
 
 The repository now includes a dedicated local-model workspace under
@@ -220,6 +225,9 @@ For reproducible single-message validation on Radxa 5T, prefer:
 bash local_llm/scripts/run_agent_smoke.sh --mode local
 bash local_llm/scripts/run_agent_smoke.sh --mode remote
 ```
+
+The validated CPU-only local path on Radxa currently uses `qwen2.5:0.5b-nb`
+and can take about 6 minutes for the local smoke check.
 
 ---
 

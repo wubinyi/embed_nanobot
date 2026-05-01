@@ -3,7 +3,7 @@
 **Task**: Radxa 5T local LLM workspace + real agent validation  
 **Branch**: `main_embed`  
 **Date**: 2026-05-01  
-**Status**: Partial completion with external blocker
+**Status**: Complete with real-hardware validation
 
 ---
 
@@ -55,6 +55,7 @@ Important implementation choices:
 - Execute `python -m nanobot` instead of a standalone `nanobot` binary, so the
   current repository code is always used
 - Write an explicit `PASS:` or `FAIL:` verdict into the captured log file
+- Use a longer default timeout for local CPU inference on RK3588 (`600s`)
 
 ### 4. Documentation updates
 
@@ -97,19 +98,41 @@ Observed:
 - `nanobot.__file__` resolved to the current repository path
 - `Config.model_fields` includes `hybrid_router`
 
-### Finding 3: Ollama install is blocked by outbound GitHub connectivity
+### Finding 3: The installer needed current Ollama archive endpoints
 
 The helper supports two install paths:
 
 1. official installer via sudo when available
 2. user-local fallback extraction into `local_llm/runtime/ollama-dist`
 
-On this Radxa host:
+The original fallback assumed GitHub release asset URLs. The working Radxa path
+now uses the current upstream download endpoints from `ollama.com`:
 
-- sudo is not passwordless
-- downloading the ARM64 Ollama archive from GitHub fails with connection timeout
+- prefer `.tar.zst` when `zstd` is available
+- fall back to `.tgz` when needed
 
-This is an external environment blocker, not a repo-code defect.
+This kept the installer compatible with the repo-local runtime workflow.
+
+### Finding 4: The validated local model is a small alias, not the earlier 3B default
+
+The first local validation target, `qwen2.5:3b`, was too heavy for stable CPU
+use on the Radxa. The validated path now uses:
+
+- base model: `qwen2.5:0.5b`
+- alias: `qwen2.5:0.5b-nb`
+- alias parameter: `num_ctx 8192`
+
+`render_agent_configs.py` and `local_llm/configs/ollama.example.jsonc` now
+default to this validated local model.
+
+### Finding 5: The local smoke failure was a timeout mismatch, not a provider failure
+
+The direct local `nanobot agent` path succeeded, but the original smoke helper
+used a fixed `180s` timeout. Measured wall-clock runtime on the Radxa was about
+`371s`, so the helper falsely reported failure. The script now defaults to:
+
+- local mode: `600s`
+- remote mode: `180s`
 
 ---
 
@@ -124,11 +147,11 @@ This is an external environment blocker, not a repo-code defect.
 ### Post-Task Reflection
 
 - **Workflow**: OK — design first, then scripts, then live validation was the right order
-- **Team roles**: OK — Reviewer surfaced the environment mismatch and config-compat issue quickly
+- **Team roles**: OK — Reviewer surfaced the runtime-vs-timeout mismatch before unnecessary provider changes
 - **Conflict surface**: Unchanged — no shared runtime files modified
-- **Tech debt**: External environment blocker remains for GitHub reachability to install Ollama locally
-- **Docs**: Updated — local_llm workspace is now discoverable from user-facing docs
+- **Tech debt**: Local CPU inference is still slow on RK3588 even with the validated small model
+- **Docs**: Updated — local_llm workspace now documents the validated small-model workflow
 - **User preferences**: None recorded
-- **Opportunities**: Add a proxy-aware or mirror-aware local runtime installer for restricted networks
+- **Opportunities**: Add a helper to generate validated Ollama aliases automatically instead of documenting manual `Modelfile` creation
 - **Security**: OK — no secrets committed; runtime configs are generated from local user config and ignored from git
 - **Skill updates applied**: None

@@ -562,8 +562,13 @@ On the Radxa 5T, use the dedicated `local_llm/` workspace:
 bash local_llm/scripts/install_ollama.sh
 export PATH=/home/wubinyi/workspace/embed_nanobot/local_llm/runtime/bin:$PATH
 
-# Pull a small model suitable for RK3588
-ollama pull qwen2.5:3b
+# Pull the validated small model suitable for RK3588 CPU inference
+ollama pull qwen2.5:0.5b
+cat > local_llm/runtime/Modelfile.qwen2.5-0.5b-nb <<'EOF'
+FROM qwen2.5:0.5b
+PARAMETER num_ctx 8192
+EOF
+ollama create qwen2.5:0.5b-nb -f local_llm/runtime/Modelfile.qwen2.5-0.5b-nb
 
 # Render runtime configs from ~/.embed_nanobot/config.json
 /home/wubinyi/miniforge3/envs/embed_nanobot/bin/python local_llm/scripts/render_agent_configs.py
@@ -575,6 +580,9 @@ bash local_llm/scripts/run_agent_smoke.sh --mode remote
 
 Captured logs go to `local_llm/logs/`, and the validation record belongs in
 `local_llm/docs/AGENT_VALIDATION.md`.
+
+On Radxa CPU, the local smoke check can take about 6 minutes. The helper now
+defaults to `600s` for `--mode local`.
 
 ### Step 5: Set auto-start on ESP32
 

@@ -15,6 +15,7 @@ mode=""
 config_path=""
 prompt=""
 expect=""
+timeout_seconds=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -32,6 +33,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --expect)
             expect="$2"
+            shift 2
+            ;;
+        --timeout)
+            timeout_seconds="$2"
             shift 2
             ;;
         *)
@@ -55,11 +60,13 @@ case "$mode" in
         config_path="${config_path:-$RUNTIME_DIR/local_ollama.json}"
         prompt="${prompt:-Reply with exactly LOCAL_OK and nothing else.}"
         expect="${expect:-LOCAL_OK}"
+        timeout_seconds="${timeout_seconds:-600}"
         ;;
     remote)
         config_path="${config_path:-$RUNTIME_DIR/remote_current.json}"
         prompt="${prompt:-Reply with exactly REMOTE_OK and nothing else.}"
         expect="${expect:-REMOTE_OK}"
+        timeout_seconds="${timeout_seconds:-180}"
         ;;
     *)
         echo "Unsupported mode: $mode" >&2
@@ -76,10 +83,11 @@ fi
 cmd=("$PYTHON_BIN" -m nanobot agent -c "$config_path" -m "$prompt" --no-logs)
 
 printf 'Running %s smoke test\n' "$mode" | tee "$log_path"
+printf 'Timeout: %ss\n' "$timeout_seconds" | tee -a "$log_path"
 printf 'Command: %s\n' "${cmd[*]}" | tee -a "$log_path"
 
-if timeout 180 "${cmd[@]}" 2>&1 | tee -a "$log_path"; then
-    if grep -q "$expect" "$log_path"; then
+if timeout "$timeout_seconds" "${cmd[@]}" 2>&1 | tee -a "$log_path"; then
+    if grep -Eq "^[[:space:]]*${expect}[[:space:]]*$" "$log_path"; then
         printf 'PASS: found %s in %s\n' "$expect" "$log_path" | tee -a "$log_path"
         exit 0
     fi

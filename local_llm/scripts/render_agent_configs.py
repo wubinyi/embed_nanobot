@@ -8,7 +8,7 @@ from pathlib import Path
 
 DEFAULT_SOURCE = Path.home() / ".embed_nanobot" / "config.json"
 DEFAULT_OUTPUT = Path(__file__).resolve().parents[1] / "runtime"
-DEFAULT_LOCAL_MODEL = "ollama/qwen2.5:3b"
+DEFAULT_LOCAL_MODEL = "qwen2.5:0.5b-nb"
 DEFAULT_LOCAL_BASE = "http://localhost:11434/v1"
 
 

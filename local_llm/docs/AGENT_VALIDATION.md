@@ -22,11 +22,21 @@ Record real `nanobot agent` validation runs for both local and remote providers.
 ### Local provider
 
 - Command: `bash local_llm/scripts/run_agent_smoke.sh --mode local`
-- Result: FAIL
-- Evidence: `Error calling LLM: Connection error.` followed by `FAIL: nanobot agent exited non-zero for local`
-- Root cause: no reachable Ollama server at `http://localhost:11434/v1`
+- Result: PASS
+- Model: `qwen2.5:0.5b-nb` (`qwen2.5:0.5b` with `num_ctx 8192`)
+- Evidence: real `nanobot agent` returned `LOCAL_OK`
+- Runtime note: direct wall-clock measurement on the Radxa was about `371s`, so
+	the smoke helper now defaults to `600s` for local mode
+
+### Local endpoint isolation check
+
+- Command: `curl -sS http://127.0.0.1:11434/v1/chat/completions ...`
+- Result: PASS
+- Evidence: Ollama returned `LOCAL_OK` directly for the same model
+- Purpose: separate provider/runtime health from CLI wrapper behavior
 
 ### Conclusion
 
-The real remote-agent path is verified. The real local-agent path is wired and
-attempted, but remains blocked by the missing Ollama runtime on this Radxa host.
+Both the real remote-agent path and the real local-agent path are verified on
+the Radxa 5T. The validated local workflow uses the repo-local Ollama runtime
+plus the small-model alias `qwen2.5:0.5b-nb`.

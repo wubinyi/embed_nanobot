@@ -53,7 +53,7 @@ Create a new top-level `local_llm/` folder with the following responsibilities:
 ~/.embed_nanobot/config.json
     -> render_agent_configs.py
     -> local_llm/runtime/local_ollama.json
-    -> local_llm/runtime/remote_openrouter.json
+   -> local_llm/runtime/remote_current.json
 
 run_agent_smoke.sh --config <generated config>
     -> nanobot agent -c <config> -m <prompt>
@@ -129,14 +129,20 @@ Why:
 ```bash
 # Toolchain install / verification
 bash local_llm/scripts/install_ollama.sh
+export PATH=/home/wubinyi/workspace/embed_nanobot/local_llm/runtime/bin:$PATH
 ollama --version
-ollama pull qwen2.5:3b
+ollama pull qwen2.5:0.5b
+cat > local_llm/runtime/Modelfile.qwen2.5-0.5b-nb <<'EOF'
+FROM qwen2.5:0.5b
+PARAMETER num_ctx 8192
+EOF
+ollama create qwen2.5:0.5b-nb -f local_llm/runtime/Modelfile.qwen2.5-0.5b-nb
 
 # Local runtime
 ollama serve
 
 # Config generation
-/home/wubinyi/workspace/embed_nanobot/.conda/bin/python local_llm/scripts/render_agent_configs.py
+/home/wubinyi/miniforge3/envs/embed_nanobot/bin/python local_llm/scripts/render_agent_configs.py
 
 # Real agent tests
 bash local_llm/scripts/run_agent_smoke.sh --mode local
@@ -158,6 +164,6 @@ bash local_llm/scripts/run_agent_smoke.sh --mode remote
 | Risk | Impact | Mitigation |
 |------|--------|------------|
 | Ollama install requires sudo/systemd interaction | Medium | Log exact privilege requirement; use non-destructive checks first |
-| Model too large for acceptable RK3588 latency | Medium | Start with `qwen2.5:3b` |
+| Model too large for acceptable RK3588 latency | Medium | Start with `qwen2.5:0.5b` and raise `num_ctx` via a local alias if needed |
 | Remote provider key/config drift | Medium | Generate runtime configs from the existing user config |
 | Existing dirty worktree | Low | Avoid unrelated files and commit only task-owned changes |

@@ -4,8 +4,8 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 LOCAL_INSTALL_DIR="$ROOT_DIR/local_llm/runtime/ollama-dist"
 LOCAL_BIN_DIR="$ROOT_DIR/local_llm/runtime/bin"
-LOCAL_ARCHIVE="$ROOT_DIR/local_llm/runtime/ollama-linux-arm64.tgz"
-ARCHIVE_URL="https://github.com/ollama/ollama/releases/latest/download/ollama-linux-arm64.tgz"
+ZST_ARCHIVE_URL="https://ollama.com/download/ollama-linux-arm64.tar.zst"
+TGZ_ARCHIVE_URL="https://ollama.com/download/ollama-linux-arm64.tgz"
 
 echo "[1/4] Checking platform"
 arch="$(uname -m)"
@@ -35,9 +35,11 @@ else
     echo "No passwordless sudo available; installing into $LOCAL_INSTALL_DIR"
     mkdir -p "$LOCAL_INSTALL_DIR" "$LOCAL_BIN_DIR"
     rm -rf "$LOCAL_INSTALL_DIR/bin" "$LOCAL_INSTALL_DIR/lib"
-    rm -f "$LOCAL_ARCHIVE"
-    curl -fL "$ARCHIVE_URL" -o "$LOCAL_ARCHIVE"
-    tar -xzf "$LOCAL_ARCHIVE" -C "$LOCAL_INSTALL_DIR"
+    if command -v zstd >/dev/null 2>&1 && curl --fail --silent --head --location "$ZST_ARCHIVE_URL" >/dev/null 2>&1; then
+        curl -fL "$ZST_ARCHIVE_URL" | zstd -d | tar -xf - -C "$LOCAL_INSTALL_DIR"
+    else
+        curl -fL "$TGZ_ARCHIVE_URL" | tar -xzf - -C "$LOCAL_INSTALL_DIR"
+    fi
     ln -sf "$LOCAL_INSTALL_DIR/bin/ollama" "$LOCAL_BIN_DIR/ollama"
 fi
 

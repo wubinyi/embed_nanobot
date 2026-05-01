@@ -2,7 +2,7 @@
 
 > Single source of truth for project progress. Updated after each feature completion.
 
-**Last updated**: 2026-05-01 (activity log refactor, chronology cleanup, and local LLM update)
+**Last updated**: 2026-05-01 (activity log refactor, chronology cleanup, and validated local LLM update)
 
 ### Status Legend
 
@@ -221,7 +221,7 @@ Chronological project notes, audits, sync milestones, and hardware validation re
 
 | Date | Area | Summary |
 |------|------|---------|
-| 2026-05-01 | Local LLM | Local LLM workspace bootstrapped on Radxa 5T |
+| 2026-05-01 | Local LLM | Local LLM workspace validated on Radxa 5T |
 | 2026-04-26 | ESP32 UX | Onboard status LED patterns documented |
 | 2026-04-21 | Hardware Validation | Task 5.4.1 complete: E2E OTA WiFi test suite |
 | 2026-04-21 | Platform | Migration from WSL2 to Radxa Rock 5T |
@@ -257,16 +257,15 @@ Chronological project notes, audits, sync milestones, and hardware validation re
 
 ### Entries
 
-### 2026-05-01 — Local LLM Workspace Bootstrapped on Radxa 5T
+### 2026-05-01 — Local LLM Workspace Validated on Radxa 5T
 
 - **New operational workspace**: `local_llm/` added for local-model scripts, docs, generated configs, and validation logs.
 - **Real agent validation added**: `local_llm/scripts/run_agent_smoke.sh` now exercises `nanobot agent` in both remote and local modes using generated runtime configs.
 - **Remote validation succeeded**: real `nanobot agent` returned `REMOTE_OK` through the current OpenRouter-backed config.
-- **Local validation reached the real agent path but failed at the model endpoint**: `Error calling LLM: Connection error.`
-- **Root cause**: local Ollama runtime could not be installed on the Radxa host because:
-  - passwordless sudo is unavailable for the official `/usr/local` install path
-  - outbound access to GitHub release assets failed for the user-local ARM64 archive fallback
-- **Next unblock step**: restore GitHub access or provide a local mirror/proxy for the Ollama ARM64 release, then rerun `bash local_llm/scripts/install_ollama.sh` and `bash local_llm/scripts/run_agent_smoke.sh --mode local`.
+- **Local runtime validated**: repo-local Ollama is installed under `local_llm/runtime/`, and the real local `nanobot agent` path returned `LOCAL_OK` on the Radxa host.
+- **Validated local model**: `qwen2.5:0.5b-nb` (`qwen2.5:0.5b` with `num_ctx 8192`) is now the documented local default for CPU-only Radxa validation.
+- **Operational finding**: the earlier local smoke failure was a timeout mismatch, not a provider failure. Direct local `nanobot agent` runtime was about `371s`, so local smoke now defaults to `600s`.
+- **Toolchain improvement**: `local_llm/scripts/install_ollama.sh` now follows the current `ollama.com` ARM64 archive endpoints instead of the older GitHub release URL pattern.
 
 ### 2026-04-26 — ESP32 Onboard Status LED Patterns Documented
 
