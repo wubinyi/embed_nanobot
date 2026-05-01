@@ -193,15 +193,14 @@ Then enable the Hybrid Router in your config file (`~/.embed_nanobot/config.json
   },
   "hybridRouter": {
     "enabled": true,
-    "localModel": "ollama/llama3.2",
-    "cloudModel": "gemini/gemini-2.0-flash",
-    "complexityThreshold": 5.0,
-    "sanitizePii": true,
-    "fallback": {
-      "enabled": true,
-      "failureThreshold": 3,
-      "recoverySecs": 300
-    }
+    "localProvider": "ollama",
+    "localModel": "qwen2.5:0.5b-nb",
+    "apiProvider": "gemini",
+    "apiModel": "gemini/gemini-2.0-flash",
+    "difficultyThreshold": 0.5,
+    "fallbackToLocal": true,
+    "circuitBreakerThreshold": 3,
+    "circuitBreakerTimeout": 300
   }
 }
 ```

@@ -26,3 +26,7 @@ Record every local-LLM setup step executed on the Radxa Rock 5T.
 The Radxa host now has a working repo-local Ollama runtime and a validated local
 agent workflow. The stable CPU-only path on this hardware uses the small-model
 alias `qwen2.5:0.5b-nb` plus a longer local smoke timeout.
+
+The two earlier `FAIL` entries are historical setup attempts, not current
+blockers. They were superseded by the later successful repo-local install and
+validation steps in the same log.
