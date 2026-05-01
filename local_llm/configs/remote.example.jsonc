@@ -1,0 +1,16 @@
+{
+  "agents": {
+    "defaults": {
+      "workspace": "~/.nanobot/workspace",
+      "model": "openrouter/example-model",
+      "provider": "openrouter",
+      "temperature": 0.1,
+      "maxToolIterations": 40
+    }
+  },
+  "providers": {
+    "openrouter": {
+      "apiKey": "<set-in-user-config>"
+    }
+  }
+}

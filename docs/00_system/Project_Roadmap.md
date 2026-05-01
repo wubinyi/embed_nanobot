@@ -258,6 +258,17 @@ See [docs/sync/SYNC_LOG.md](../sync/SYNC_LOG.md) for full merge history.
 ### 2026-04-21 — Platform Migration: WSL2 → Radxa Rock 5T (Debian 13)
 
 - **Hub moved** from Windows 10 + WSL2 (x86-64) to Radxa Rock 5T (RK3588, aarch64, Armbian 26 / Debian 13 Trixie).
+
+### 2026-05-01 — Local LLM Workspace Bootstrapped on Radxa 5T
+
+- **New operational workspace**: `local_llm/` added for local-model scripts, docs, generated configs, and validation logs.
+- **Real agent validation added**: `local_llm/scripts/run_agent_smoke.sh` now exercises `nanobot agent` in both remote and local modes using generated runtime configs.
+- **Remote validation succeeded**: real `nanobot agent` returned `REMOTE_OK` through the current OpenRouter-backed config.
+- **Local validation reached the real agent path but failed at the model endpoint**: `Error calling LLM: Connection error.`
+- **Root cause**: local Ollama runtime could not be installed on the Radxa host because:
+  - passwordless sudo is unavailable for the official `/usr/local` install path
+  - outbound access to GitHub release assets failed for the user-local ARM64 archive fallback
+- **Next unblock step**: restore GitHub access or provide a local mirror/proxy for the Ollama ARM64 release, then rerun `bash local_llm/scripts/install_ollama.sh` and `bash local_llm/scripts/run_agent_smoke.sh --mode local`.
 - **Fixed IP**: `192.168.5.199` — ShenZhen Home location.
 - **Python env**: conda `embed_nanobot` (Miniforge3, Python 3.12) at `~/.miniforge3/envs/embed_nanobot`.
 - **Config path**: `~/.embed_nanobot/config.json` (unchanged — already set by `loader.py`).

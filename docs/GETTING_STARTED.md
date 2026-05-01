@@ -151,9 +151,21 @@ If you also run a local Ollama model (recommended for privacy):
 
 ```bash
 # Install Ollama
-curl -fsSL https://ollama.com/install.sh | sh
-ollama pull llama3.2   # or qwen2.5:7b, gemma3:4b, etc.
+bash local_llm/scripts/install_ollama.sh
+
+# If installed into the repo-local fallback path, export it first
+export PATH=/home/wubinyi/workspace/embed_nanobot/local_llm/runtime/bin:$PATH
+
+ollama pull llama3.2   # or qwen2.5:3b, qwen2.5:7b, gemma3:4b, etc.
 ```
+
+The repository now includes a dedicated local-model workspace under
+`local_llm/`:
+
+- `local_llm/scripts/install_ollama.sh` installs the runtime
+- `local_llm/scripts/render_agent_configs.py` generates local and remote configs
+- `local_llm/scripts/run_agent_smoke.sh` runs real `nanobot agent` smoke tests
+- `local_llm/docs/` records toolchain and validation history
 
 Then enable the Hybrid Router in your config file (`~/.embed_nanobot/config.json` on Radxa 5T, `~/.nanobot/config.json` on WSL2):
 
@@ -199,6 +211,14 @@ Complex queries (code generation, multi-step reasoning) are routed to Gemini, wi
 nanobot agent
 # Type: "hello, what can you do?"
 # Ctrl+C to exit
+```
+
+For reproducible single-message validation on Radxa 5T, prefer:
+
+```bash
+/home/wubinyi/miniforge3/envs/embed_nanobot/bin/python local_llm/scripts/render_agent_configs.py
+bash local_llm/scripts/run_agent_smoke.sh --mode local
+bash local_llm/scripts/run_agent_smoke.sh --mode remote
 ```
 
 ---

@@ -553,6 +553,29 @@ nanobot agent -m "What is the state of esp32-01?" 2>&1 | tee -a ~/agent_device.l
 > Without a local LLM, the device tool won't be registered.  You can still
 > verify mesh connectivity, enrollment, and transport through the gateway logs.
 
+### Step 4b: Test local vs remote LLM with real `nanobot agent`
+
+On the Radxa 5T, use the dedicated `local_llm/` workspace:
+
+```bash
+# Install local runtime
+bash local_llm/scripts/install_ollama.sh
+export PATH=/home/wubinyi/workspace/embed_nanobot/local_llm/runtime/bin:$PATH
+
+# Pull a small model suitable for RK3588
+ollama pull qwen2.5:3b
+
+# Render runtime configs from ~/.embed_nanobot/config.json
+/home/wubinyi/miniforge3/envs/embed_nanobot/bin/python local_llm/scripts/render_agent_configs.py
+
+# Real agent checks
+bash local_llm/scripts/run_agent_smoke.sh --mode local
+bash local_llm/scripts/run_agent_smoke.sh --mode remote
+```
+
+Captured logs go to `local_llm/logs/`, and the validation record belongs in
+`local_llm/docs/AGENT_VALIDATION.md`.
+
 ### Step 5: Set auto-start on ESP32
 
 Once enrollment works, configure automatic boot:
