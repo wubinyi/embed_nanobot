@@ -30,6 +30,9 @@ Record every local-LLM setup step executed on the Radxa Rock 5T.
 | 2026-05-01 16:11 | RKLLM runtime linkage probe | `cmake --install . && LD_LIBRARY_PATH=./lib ./llm_demo /tmp/does-not-exist.rkllm 16 32` | PASS | `librkllmrt.so` loaded and reported `platform: RK3588`; init failed only because no `.rkllm` model file was provided |
 | 2026-05-03 10:05 | RKNPU kernel package check | `uname -r && dpkg -l 'linux-image*' | grep rk35xx && apt-cache search '^linux-image.*rk35xx'` | PASS | Running `6.1.115-vendor-rk35xx`; host package is `linux-image-vendor-rk35xx 26.2.1` |
 | 2026-05-03 10:06 | RKNPU runtime evidence capture | `sed -n '1,5p' local_llm/rknn-llm-src/examples/multimodal_model_demo/deploy/install/demo_Linux_aarch64/demo.log` | PASS | RKLLM demo reported `rknpu driver version: 0.9.8` on RK3588 |
+| 2026-05-03 09:40 | RKLLM local-provider launcher fix | `bash local_llm/local_provider/start_local_provider.sh` | PASS | Launcher now normalizes the copied RKLLM demo server to the model-safe `4096` context and starts both backend `:8080` and adapter `:18000` |
+| 2026-05-03 09:42 | RKLLM adapter direct probe | `curl -s http://127.0.0.1:18000/v1/chat/completions ...` | PASS | OpenAI-compatible adapter returned `RKLLM_OK` after flattening OpenAI chat history into a single backend prompt |
+| 2026-05-03 09:45 | RKLLM agent smoke | `bash local_llm/scripts/run_agent_smoke.sh --mode rkllm` | PASS | Real `nanobot agent` returned `RKLLM_OK` when built-in skills and tool schemas were disabled for the low-context smoke path |
 
 ## Summary
 
@@ -41,10 +44,10 @@ Hybrid mode is also live-validated on the Radxa: the local branch completed
 end-to-end, and the remote branch was reached successfully before hitting the
 current remote provider region restriction.
 
-The RKLLM board-side toolchain is now partially installed and verified: the
-native demo compiles and the runtime library initializes on RK3588. The next
-required input is a converted `.rkllm` model file before real NPU inference can
-be exercised.
+The RKLLM board-side toolchain is now installed and validated far enough for a
+real `nanobot agent` smoke path on RK3588. The current model is still limited
+to a hard `4096` context window, so the validated RKLLM smoke path uses a
+reduced-context agent configuration.
 
 For this Radxa setup, the kernel-side RKNPU driver is already supplied by the
 Armbian vendor kernel package `linux-image-vendor-rk35xx`; driver installation

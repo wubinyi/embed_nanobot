@@ -234,7 +234,7 @@ class AgentLoop:
         while iteration < self.max_iterations:
             iteration += 1
 
-            tool_defs = self.tools.get_definitions()
+            tool_defs = [] if os.environ.get("NANOBOT_DISABLE_TOOLS") == "1" else self.tools.get_definitions()
 
             if on_stream:
                 response = await self.provider.chat_stream_with_retry(

@@ -47,7 +47,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$mode" ]]; then
-    echo "Usage: $0 --mode <local|remote> [--config PATH] [--prompt TEXT] [--expect TOKEN]" >&2
+    echo "Usage: $0 --mode <local|remote|rkllm> [--config PATH] [--prompt TEXT] [--expect TOKEN]" >&2
     exit 2
 fi
 
@@ -68,6 +68,12 @@ case "$mode" in
         expect="${expect:-REMOTE_OK}"
         timeout_seconds="${timeout_seconds:-180}"
         ;;
+    rkllm)
+        config_path="${config_path:-$RUNTIME_DIR/local_rkllm.json}"
+        prompt="${prompt:-Reply with exactly RKLLM_OK and nothing else.}"
+        expect="${expect:-RKLLM_OK}"
+        timeout_seconds="${timeout_seconds:-180}"
+        ;;
     *)
         echo "Unsupported mode: $mode" >&2
         exit 2
@@ -81,12 +87,47 @@ if [[ ! -f "$config_path" ]]; then
 fi
 
 cmd=("$PYTHON_BIN" -m nanobot agent -c "$config_path" -m "$prompt" --no-logs)
+env_prefix=()
+if [[ "$mode" == "rkllm" ]]; then
+    rkllm_workspace="$RUNTIME_DIR/workspaces/rkllm"
+    mkdir -p "$rkllm_workspace"
+    cat > "$rkllm_workspace/AGENTS.md" <<'EOF'
+# Agent Instructions
+
+Be concise. Reply directly. Avoid tool use unless strictly required.
+EOF
+    cat > "$rkllm_workspace/HEARTBEAT.md" <<'EOF'
+# Heartbeat
+EOF
+    cat > "$rkllm_workspace/SOUL.md" <<'EOF'
+# Soul
+
+I am nanobot.
+EOF
+    cat > "$rkllm_workspace/TOOLS.md" <<'EOF'
+# Tool Notes
+
+Use tools only when needed.
+EOF
+    cat > "$rkllm_workspace/USER.md" <<'EOF'
+# User
+
+Technical user.
+EOF
+    mkdir -p "$rkllm_workspace/memory"
+    cat > "$rkllm_workspace/memory/MEMORY.md" <<'EOF'
+# Memory
+EOF
+    : > "$rkllm_workspace/memory/HISTORY.md"
+    env_prefix=(NANOBOT_DISABLE_BUILTIN_SKILLS=1 NANOBOT_DISABLE_TOOLS=1)
+    cmd+=(--workspace "$rkllm_workspace" --session "cli:rkllm-smoke-$timestamp")
+fi
 
 printf 'Running %s smoke test\n' "$mode" | tee "$log_path"
 printf 'Timeout: %ss\n' "$timeout_seconds" | tee -a "$log_path"
 printf 'Command: %s\n' "${cmd[*]}" | tee -a "$log_path"
 
-if timeout "$timeout_seconds" "${cmd[@]}" 2>&1 | tee -a "$log_path"; then
+if timeout "$timeout_seconds" env "${env_prefix[@]}" "${cmd[@]}" 2>&1 | tee -a "$log_path"; then
     if grep -Eq "^[[:space:]]*${expect}[[:space:]]*$" "$log_path"; then
         printf 'PASS: found %s in %s\n' "$expect" "$log_path" | tee -a "$log_path"
         exit 0

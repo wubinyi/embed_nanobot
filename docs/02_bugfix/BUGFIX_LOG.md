@@ -6,9 +6,49 @@
 
 ## Bug ID Index
 
-- Assigned bug IDs in this file currently run from `BUG-001` through `BUG-021`.
-- Next bug ID to assign: `BUG-022`.
+- Assigned bug IDs in this file currently run from `BUG-001` through `BUG-022`.
+- Next bug ID to assign: `BUG-023`.
 - Rule: use the next unassigned bug ID, even when backfilling an older incident, and update this index in the same edit.
+
+---
+
+## BUG-022: RKLLM local-provider startup and agent prompt exceeded model limits
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-05-03 |
+| **Severity** | Major (local RKLLM provider started inconsistently and real `nanobot agent` returned empty output) |
+| **Found by** | RK3588 local-provider integration testing |
+| **Phase** | Local LLM / RKLLM bring-up |
+
+**Symptom**:
+- `bash local_llm/local_provider/start_local_provider.sh` sometimes failed during RKLLM init with:
+```
+E rkllm: max_context[8192] must be less than the model's max_context_limit[4096]
+```
+- After startup was fixed, direct adapter probes could work but real `nanobot agent` still returned:
+```
+I've completed processing but have no response to give.
+```
+
+**Root cause**:
+1. The copied upstream RKLLM demo server source under `local_llm/rknn-llm-src/.../flask_server.py` had already been changed to `rkllm_param.max_context_len = 8192`, but the validated model hard-caps context at `4096`.
+2. The upstream RKLLM demo server skips normal `system` and later chat-history messages in a way that returns an empty completion for ordinary OpenAI-style multi-message chat payloads.
+3. Even after fixing request normalization, the real `nanobot agent` prompt still exceeded the model limit because built-in skills and full tool schemas were always injected, pushing the prompt to about `4263` tokens.
+
+**Fix**:
+- `local_llm/local_provider/start_local_provider.sh`: normalize the copied backend server to `max_context_len = 4096` and `max_new_tokens = 1024` before launch.
+- `local_llm/local_provider/openai_adapter.py`: flatten OpenAI-style chat history into a single backend `user` prompt, keep OpenAI-compatible non-stream and stream responses, and normalize tag-based tool-call output.
+- `nanobot/agent/skills.py`: honor `NANOBOT_DISABLE_BUILTIN_SKILLS=1` to suppress built-in skill injection for low-context runs.
+- `nanobot/agent/loop.py`: honor `NANOBOT_DISABLE_TOOLS=1` to suppress tool-schema injection for low-context runs.
+- `local_llm/scripts/run_agent_smoke.sh`: RKLLM mode now uses a dedicated minimal workspace plus both env vars above so the real smoke request fits inside the model's hard `4096` context limit.
+
+**Files changed**: `local_llm/local_provider/start_local_provider.sh`, `local_llm/local_provider/openai_adapter.py`, `local_llm/scripts/run_agent_smoke.sh`, `nanobot/agent/skills.py`, `nanobot/agent/loop.py`, `local_llm/README.md`, `local_llm/local_provider/README.md`, `local_llm/docs/AGENT_VALIDATION.md`, `local_llm/docs/RK3588_TOOLCHAIN_LOG.md`
+
+**Real validation**:
+- `bash local_llm/local_provider/start_local_provider.sh` → PASS
+- `curl -s http://127.0.0.1:18000/v1/chat/completions ...` → PASS, returned `RKLLM_OK`
+- `bash local_llm/scripts/run_agent_smoke.sh --mode rkllm` → PASS, real `nanobot agent` returned `RKLLM_OK`
 
 ---
 
