@@ -28,6 +28,8 @@ Record every local-LLM setup step executed on the Radxa Rock 5T.
 | 2026-05-01 16:02 | RKLLM native build prerequisites | `sudo apt-get install -y build-essential cmake` | PASS | Installed native compiler toolchain and CMake on the Radxa |
 | 2026-05-01 16:10 | RKLLM native demo build | `cmake ../.. -DCMAKE_BUILD_TYPE=Release && make -j4` | PASS | Built `examples/rkllm_api_demo/deploy/build/native/llm_demo` with native GCC 14 |
 | 2026-05-01 16:11 | RKLLM runtime linkage probe | `cmake --install . && LD_LIBRARY_PATH=./lib ./llm_demo /tmp/does-not-exist.rkllm 16 32` | PASS | `librkllmrt.so` loaded and reported `platform: RK3588`; init failed only because no `.rkllm` model file was provided |
+| 2026-05-03 10:05 | RKNPU kernel package check | `uname -r && dpkg -l 'linux-image*' | grep rk35xx && apt-cache search '^linux-image.*rk35xx'` | PASS | Running `6.1.115-vendor-rk35xx`; host package is `linux-image-vendor-rk35xx 26.2.1` |
+| 2026-05-03 10:06 | RKNPU runtime evidence capture | `sed -n '1,5p' local_llm/rknn-llm-src/examples/multimodal_model_demo/deploy/install/demo_Linux_aarch64/demo.log` | PASS | RKLLM demo reported `rknpu driver version: 0.9.8` on RK3588 |
 
 ## Summary
 
@@ -43,6 +45,11 @@ The RKLLM board-side toolchain is now partially installed and verified: the
 native demo compiles and the runtime library initializes on RK3588. The next
 required input is a converted `.rkllm` model file before real NPU inference can
 be exercised.
+
+For this Radxa setup, the kernel-side RKNPU driver is already supplied by the
+Armbian vendor kernel package `linux-image-vendor-rk35xx`; driver installation
+therefore means installing or upgrading that kernel package and rebooting into
+the vendor kernel.
 
 The two earlier `FAIL` entries are historical setup attempts, not current
 blockers. They were superseded by the later successful repo-local install and

@@ -18,9 +18,17 @@ Validated model:
 - LLM: `qwen3-vl-2b-instruct_w8a8_rk3588.rkllm`
 - Vision encoder: `qwen3-vl-2b_vision_rk3588.rknn`
 
+Related driver note:
+
+- See `local_llm/docs/RKNPU_DRIVER_INSTALL.md` for the kernel-side RKNPU driver path on this Radxa host.
+
 ## 1. Install native build prerequisites
 
 Use the board-native toolchain instead of the upstream cross-build helper.
+
+Before building RKLLM, make sure the board is already running the vendor RK3588
+kernel that carries the RKNPU driver. The validated install/update steps are in
+`local_llm/docs/RKNPU_DRIVER_INSTALL.md`.
 
 ```bash
 sudo apt-get update
