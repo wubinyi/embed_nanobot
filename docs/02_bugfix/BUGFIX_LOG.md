@@ -4,6 +4,12 @@
 > Each entry records the symptom, root cause, fix, and affected files
 > so future sessions can quickly understand what changed and why.
 
+## Bug ID Index
+
+- Assigned bug IDs in this file currently run from `BUG-001` through `BUG-021`.
+- Next bug ID to assign: `BUG-022`.
+- Rule: use the next unassigned bug ID, even when backfilling an older incident, and update this index in the same edit.
+
 ---
 
 ## BUG-001: `MeshChannel` attribute mismatch — `ota_manager` vs `ota`
@@ -421,30 +427,6 @@ Two separate fixes were needed:
 
 ---
 
-## BUG-019: Hybrid router rejected agent chat kwargs
-
-| Field | Value |
-|-------|-------|
-| **Date** | 2026-05-01 |
-| **Severity** | High (real `nanobot agent` hybrid mode crashes before routing) |
-| **Found by** | Radxa 5T hybrid routing validation |
-| **Phase** | Local LLM / hybrid routing validation |
-
-**Symptom**: With `agents.defaults.provider` set to `"hybrid"`, real `nanobot agent` requests failed before model inference because `HybridRouterProvider.chat()` did not accept newer chat kwargs such as `reasoning_effort`.
-
-**Root cause**: `AgentLoop` passes provider-specific chat options through the common provider interface. `HybridRouterProvider.chat()` lagged behind the current provider signature and only accepted `messages`, `tools`, `model`, `max_tokens`, and `temperature`, so hybrid mode raised `TypeError` before the router could reach either local or remote execution.
-
-**Fix**:
-- Extended `HybridRouterProvider.chat()` to accept `reasoning_effort` and `tool_choice`
-- Forwarded both kwargs through every routed path: forced-local, judged-local, API, and local fallback
-- Added a focused regression test to assert the routed provider receives those kwargs
-
-**Files changed**: `nanobot/providers/hybrid_router.py`, `tests/test_hybrid_router.py`
-
-**Files changed**: `tests/test_ota_hardware.py`
-
----
-
 ## BUG-019: OTA anti-rollback rejects offers with version_counter=0 after first install
 
 | Field | Value |
@@ -494,3 +476,25 @@ Two separate fixes were needed:
 - Added regression tests for persisted online/offline state, fresh/stale reload behavior, device-tool snapshot reload behavior, and discovery-vs-persistent-TCP liveness handling.
 
 **Files changed**: `nanobot/mesh/registry.py`, `nanobot/mesh/channel.py`, `nanobot/mesh/transport.py`, `nanobot/agent/tools/device.py`, `tests/test_device_registry.py`, `tests/test_device_control_tool.py`, `tests/test_mesh.py`
+
+---
+
+## BUG-021: Hybrid router rejected agent chat kwargs
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-05-01 |
+| **Severity** | High (real `nanobot agent` hybrid mode crashes before routing) |
+| **Found by** | Radxa 5T hybrid routing validation |
+| **Phase** | Local LLM / hybrid routing validation |
+
+**Symptom**: With `agents.defaults.provider` set to `"hybrid"`, real `nanobot agent` requests failed before model inference because `HybridRouterProvider.chat()` did not accept newer chat kwargs such as `reasoning_effort`.
+
+**Root cause**: `AgentLoop` passes provider-specific chat options through the common provider interface. `HybridRouterProvider.chat()` lagged behind the current provider signature and only accepted `messages`, `tools`, `model`, `max_tokens`, and `temperature`, so hybrid mode raised `TypeError` before the router could reach either local or remote execution.
+
+**Fix**:
+- Extended `HybridRouterProvider.chat()` to accept `reasoning_effort` and `tool_choice`
+- Forwarded both kwargs through every routed path: forced-local, judged-local, API, and local fallback
+- Added a focused regression test to assert the routed provider receives those kwargs
+
+**Files changed**: `nanobot/providers/hybrid_router.py`, `tests/test_hybrid_router.py`

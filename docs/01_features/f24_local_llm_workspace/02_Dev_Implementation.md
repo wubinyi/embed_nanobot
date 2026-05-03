@@ -98,21 +98,21 @@ Observed:
 - `nanobot.__file__` resolved to the current repository path
 - `Config.model_fields` includes `hybrid_router`
 
-### Finding 6: Live hybrid config needed the schema key, not the doc typo
+### Finding 3: Live hybrid config needed the schema key, not the doc typo
 
 The live config must use `hybrid_router` as the top-level key. Earlier docs
 still showed `hybridRouter`, which the runtime does not load as the root config
 section. The tracked docs now use the correct top-level key while keeping the
 nested field names in camelCase.
 
-### Finding 7: Hybrid provider needed to accept current chat kwargs
+### Finding 4: Hybrid provider needed to accept current chat kwargs
 
 Real `nanobot agent` hybrid runs exposed that `HybridRouterProvider.chat()` was
 behind the current provider interface and did not accept `reasoning_effort`
 and `tool_choice`. The provider now accepts and forwards both kwargs across all
 routed paths so the real agent loop can enter hybrid mode cleanly.
 
-### Finding 8: Hybrid routing is validated in two separate ways
+### Finding 5: Hybrid routing is validated in two separate ways
 
 The live Radxa config is now set to hybrid mode with:
 
@@ -124,7 +124,7 @@ That setting makes simple prompts route locally on the current small judge
 model. A second probe config with `difficultyThreshold = 0.30` was used to
 force the hard-task branch and confirm the API route in real logs.
 
-### Finding 9: RKLLM can now build natively on the Radxa
+### Finding 6: RKLLM can now build natively on the Radxa
 
 The RKLLM upstream `build-linux.sh` script assumes a cross-compiler layout, so
 the practical Radxa path is a native CMake build instead:
@@ -137,7 +137,7 @@ The runtime printed `platform: RK3588` and only failed because no converted
 `.rkllm` model file was available yet. That means the current blocker is model
 availability, not compiler setup or missing runtime linkage.
 
-### Finding 3: The installer needed current Ollama archive endpoints
+### Finding 7: The installer needed current Ollama archive endpoints
 
 The helper supports two install paths:
 
@@ -152,7 +152,7 @@ now uses the current upstream download endpoints from `ollama.com`:
 
 This kept the installer compatible with the repo-local runtime workflow.
 
-### Finding 4: The validated local model is a small alias, not the earlier 3B default
+### Finding 8: The validated local model is a small alias, not the earlier 3B default
 
 The first local validation target, `qwen2.5:3b`, was too heavy for stable CPU
 use on the Radxa. The validated path now uses:
@@ -164,7 +164,7 @@ use on the Radxa. The validated path now uses:
 `render_agent_configs.py` and `local_llm/configs/ollama.example.jsonc` now
 default to this validated local model.
 
-### Finding 5: The local smoke failure was a timeout mismatch, not a provider failure
+### Finding 9: The local smoke failure was a timeout mismatch, not a provider failure
 
 The direct local `nanobot agent` path succeeded, but the original smoke helper
 used a fixed `180s` timeout. Measured wall-clock runtime on the Radxa was about
