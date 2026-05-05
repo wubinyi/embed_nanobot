@@ -3,8 +3,8 @@
 ## Scope
 
 This guide records the validated steps for installing the RKLLM toolchain on the
-Radxa Rock 5T and running the first real NPU-backed inference with an official
-preconverted Qwen model.
+Radxa Rock 5T, validating the first real NPU-backed inference, and bridging the
+result into nanobot through the custom local provider under `local_llm/local_provider/`.
 
 Validated host:
 
@@ -114,11 +114,87 @@ The validated run reported these signals:
 The generated answer correctly described the bundled astronaut image, which is
 the first confirmed real RK3588 NPU inference in this workspace.
 
-## 7. Notes
+## 7. Bridge RKLLM into nanobot's OpenAI-compatible provider path
+
+After the raw RKLLM toolchain is working, the repo uses a thin bridge rather
+than modifying nanobot's provider registry.
+
+### Backend and adapter roles
+
+- RKLLM backend: `http://127.0.0.1:8080/rkllm_chat`
+- OpenAI-compatible adapter: `http://127.0.0.1:18000/v1/chat/completions`
+
+The adapter lives in:
+
+```text
+/home/wubinyi/workspace/embed_nanobot/local_llm/local_provider/openai_adapter.py
+```
+
+The launcher that assembles and starts both layers lives in:
+
+```text
+/home/wubinyi/workspace/embed_nanobot/local_llm/local_provider/start_local_provider.sh
+```
+
+### Start the RKLLM local provider
+
+```bash
+cd /home/wubinyi/workspace/embed_nanobot
+bash local_llm/local_provider/start_local_provider.sh
+```
+
+### Probe the bridge directly
+
+```bash
+curl http://127.0.0.1:18000/health
+
+curl -s http://127.0.0.1:18000/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "qwen3-vl-2b-rkllm",
+    "stream": false,
+    "messages": [{"role": "user", "content": "Reply with exactly RKLLM_OK and nothing else."}]
+  }'
+```
+
+### Bridge it into nanobot
+
+Use the generated runtime config:
+
+```text
+/home/wubinyi/workspace/embed_nanobot/local_llm/runtime/local_rkllm.json
+```
+
+That config points nanobot's `custom` provider to `http://127.0.0.1:18000/v1`.
+
+Smoke test:
+
+```bash
+bash local_llm/scripts/run_agent_smoke.sh --mode rkllm
+```
+
+Interactive run:
+
+```bash
+/home/wubinyi/miniforge3/envs/embed_nanobot/bin/python -m nanobot agent \
+  -c local_llm/runtime/local_rkllm.json \
+  --workspace /home/wubinyi/workspace/embed_nanobot/local_llm/runtime/workspaces/rkllm \
+  --session cli:rkllm-direct
+```
+
+### Current limitation
+
+The validated `.rkllm` artifact in this workspace has a hard runtime context
+limit of `4096`, even though upstream source-model metadata may advertise a much
+larger theoretical context. The current smoke path therefore uses a reduced
+prompt surface.
+
+## 8. Notes
 
 - Use the native CMake path on the Radxa. Do not rely on `build-linux.sh`
   unless the missing cross-toolchain assumptions are fixed.
-- This validated path is for RKLLM runtime testing, not yet nanobot provider
-  integration.
 - The current confirmed official Qwen path in this workspace is multimodal
   `Qwen3-VL-2B`, not a text-only `.rkllm` model.
+- Provider integration is now validated through `local_llm/local_provider/`,
+  but the current smoke path still uses a reduced-context agent setup because
+  the active RKLLM model hard-caps runtime context at `4096`.
