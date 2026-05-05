@@ -48,6 +48,66 @@ That helper also sets `NANOBOT_DISABLE_BUILTIN_SKILLS=1` and
 `NANOBOT_DISABLE_TOOLS=1` so the real `nanobot agent` request fits inside this
 model's `4096` token context window.
 
+## Changing to another RKLLM model
+
+The current provider defaults are only defaults. The actual model can be
+swapped without editing C/C++ code as long as the replacement is already a
+working `.rkllm` model for the same RKLLM server path.
+
+### Runtime knobs
+
+- `RKLLM_MODEL_PATH`
+	- absolute path to the `.rkllm` file the backend should load
+- `RKLLM_MODEL_NAME`
+	- logical model name exposed by the OpenAI-compatible adapter
+- `RKLLM_TARGET_PLATFORM`
+	- platform such as `rk3588`
+
+Example:
+
+```bash
+cd /home/wubinyi/workspace/embed_nanobot
+RKLLM_MODEL_PATH=/home/wubinyi/workspace/embed_nanobot/local_llm/models/rkllm/my-model/my-model.rkllm \
+RKLLM_MODEL_NAME=my-model-rkllm \
+RKLLM_TARGET_PLATFORM=rk3588 \
+bash local_llm/local_provider/start_local_provider.sh
+```
+
+Then update nanobot to send the same model name, for example in
+`local_llm/runtime/local_rkllm.json`:
+
+```json
+{
+	"agents": {
+		"defaults": {
+			"model": "my-model-rkllm",
+			"provider": "custom"
+		}
+	}
+}
+```
+
+### Validation sequence after a model swap
+
+1. Start the provider with the new `RKLLM_MODEL_PATH`
+2. Check `curl http://127.0.0.1:18000/health`
+3. Run a direct chat-completions probe using the new `RKLLM_MODEL_NAME`
+4. Update `local_llm/runtime/local_rkllm.json` to the same model name
+5. Run `bash local_llm/scripts/run_agent_smoke.sh --mode rkllm`
+
+### When code changes may be needed
+
+No local C/C++ changes are normally needed for a plain text-chat `.rkllm`
+model swap.
+
+Code changes may be needed if:
+
+- you are converting a new source model into `.rkllm`
+- you want multimodal image serving rather than the current text-chat bridge
+- the new model requires different prompt formatting or server behavior
+- the new model has a different hard context limit and the launcher patch needs
+	to be changed accordingly
+
 ## Current limitation
 
 The adapter is validated for standard chat and a real low-context `nanobot agent`

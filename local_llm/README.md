@@ -250,3 +250,91 @@ For manual testing, prefer a dedicated RKLLM session/workspace too:
 The RKLLM adapter currently targets standard chat and the low-context smoke
 path first. Treat broader tool-calling workflows as experimental until they are
 validated with a larger-context RKLLM model or a more compact agent prompt.
+
+### Change `local_provider` to a different model
+
+The current `local_provider` path is wired to a specific default model only by
+configuration and environment variables. For a normal model swap, you do not
+need to edit any C or C++ source.
+
+#### What you need to change
+
+If you replace the current model under:
+
+```text
+/home/wubinyi/workspace/embed_nanobot/local_llm/models/rkllm/qwen3-vl-2b/
+```
+
+with another `.rkllm` model, update these surfaces:
+
+1. Model file path used by the launcher
+	 - source: `local_llm/local_provider/start_local_provider.sh`
+	 - knob: `RKLLM_MODEL_PATH`
+	 - easiest option: pass the new path as an environment variable instead of editing the script
+2. Model name exposed by the OpenAI-compatible adapter
+	 - source: `local_llm/local_provider/openai_adapter.py`
+	 - knob: `RKLLM_MODEL_NAME`
+	 - this is the model name nanobot sends in chat-completions requests
+3. Nanobot runtime config
+	 - source: `local_llm/runtime/local_rkllm.json`
+	 - update `agents.defaults.model` to match the adapter model name
+4. Optional helper scripts or probes
+	 - update any hardcoded model name in helper files if you use them for testing
+
+#### Recommended workflow
+
+Example: switch to `/home/wubinyi/workspace/embed_nanobot/local_llm/models/rkllm/my-model/my-model.rkllm`
+
+1. Put the new `.rkllm` file under `local_llm/models/rkllm/<model-name>/`
+2. Start the provider with the new model path and a new exposed model name:
+
+```bash
+cd /home/wubinyi/workspace/embed_nanobot
+RKLLM_MODEL_PATH=/home/wubinyi/workspace/embed_nanobot/local_llm/models/rkllm/my-model/my-model.rkllm \
+RKLLM_MODEL_NAME=my-model-rkllm \
+bash local_llm/local_provider/start_local_provider.sh
+```
+
+3. Probe the adapter directly:
+
+```bash
+curl -s http://127.0.0.1:18000/v1/chat/completions \
+	-H 'Content-Type: application/json' \
+	-d '{
+		"model": "my-model-rkllm",
+		"stream": false,
+		"messages": [{"role": "user", "content": "Reply with exactly RKLLM_OK and nothing else."}]
+	}'
+```
+
+4. Update `local_llm/runtime/local_rkllm.json` so:
+	 - `agents.defaults.model = "my-model-rkllm"`
+	 - `providers.custom.apiBase = "http://127.0.0.1:18000/v1"` stays unchanged unless you change the port
+5. Re-run the smoke test:
+
+```bash
+bash local_llm/scripts/run_agent_smoke.sh --mode rkllm
+```
+
+#### Do you need to modify C or C++ files?
+
+Usually: no.
+
+You do not need C/C++ changes when:
+
+- the new model is already a valid `.rkllm` file for your target platform
+- the model works with the same RKLLM server demo interface
+- you only need text chat through the current OpenAI-compatible bridge
+
+You may need deeper changes when:
+
+- the new model is not yet converted to `.rkllm`
+	- then you need RKLLM export/conversion work, not nanobot C/C++ changes
+- the new model is multimodal and you want image input through the provider
+	- the current `local_provider` path is built around the text-oriented RKLLM server demo, so multimodal serving likely needs Python-side integration changes and possibly a different upstream demo path
+- the new model needs different chat-template behavior or special request formatting
+	- then the Python adapter or upstream Python server may need changes
+- the new model's runtime context limit differs from the current assumptions
+	- then the launcher's forced `4096`/`1024` patch may need to be adjusted to match the actual converted model limit
+
+So the practical answer is: for a standard `.rkllm` text-chat model swap, treat it as a launcher/config change, not a C/C++ change.

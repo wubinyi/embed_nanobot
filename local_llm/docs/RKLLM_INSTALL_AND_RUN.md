@@ -189,6 +189,32 @@ limit of `4096`, even though upstream source-model metadata may advertise a much
 larger theoretical context. The current smoke path therefore uses a reduced
 prompt surface.
 
+### Swapping to another RKLLM model
+
+If you want `local_provider` to load a different model than the current
+`qwen3-vl-2b` artifact, the normal path is:
+
+1. Place the new `.rkllm` file under `local_llm/models/rkllm/<new-model>/`
+2. Start the provider with:
+
+```bash
+RKLLM_MODEL_PATH=/absolute/path/to/new-model.rkllm \
+RKLLM_MODEL_NAME=new-model-rkllm \
+bash local_llm/local_provider/start_local_provider.sh
+```
+
+3. Probe the adapter directly using that same `model` value
+4. Update `local_llm/runtime/local_rkllm.json` so nanobot sends the same model name
+5. Re-run `bash local_llm/scripts/run_agent_smoke.sh --mode rkllm`
+
+For a normal text-chat `.rkllm` replacement, no local C or C++ source changes
+are required. The model swap is handled by the Python launcher, adapter, and
+nanobot config.
+
+You only need deeper code changes if the new model requires a different serving
+path, such as multimodal image input, different prompt formatting, or a
+different runtime-limit patch strategy.
+
 ## 8. Notes
 
 - Use the native CMake path on the Radxa. Do not rely on `build-linux.sh`
