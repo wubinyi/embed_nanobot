@@ -30,6 +30,9 @@ Repository structure:
 - **Feature branches**: `copilot/<feature-name>` (created per task)
 - **Remote `origin`**: wubinyi/embed_nanobot
 - **Remote `upstream`**: HKUDS/nanobot
+
+Operational note:
+- If `git push` fails due to network reachability in this environment, retry after running `proxy_on` in the same shell, then run `git push` again.
 </Context>
 
 <Agents>

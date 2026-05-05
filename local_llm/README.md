@@ -160,6 +160,74 @@ curl -s http://127.0.0.1:18000/v1/chat/completions \
 bash local_llm/scripts/run_agent_smoke.sh --mode rkllm
 ```
 
+### Switch the live nanobot config to `local_provider`
+
+If you want plain `nanobot agent` to use the RKLLM bridge instead of Ollama or
+hybrid routing, update your live config at:
+
+```text
+/home/wubinyi/.embed_nanobot/config.json
+```
+
+The required changes are:
+
+1. Set the default provider to `custom`
+2. Set the default model to the RKLLM adapter model name
+3. Point `providers.custom.apiBase` at the local OpenAI-compatible bridge
+4. Prefer the dedicated RKLLM workspace so the prompt stays smaller
+
+Minimal target shape:
+
+```json
+{
+	"agents": {
+		"defaults": {
+			"provider": "custom",
+			"model": "qwen3-vl-2b-rkllm",
+			"workspace": "/home/wubinyi/workspace/embed_nanobot/local_llm/runtime/workspaces/rkllm"
+		}
+	},
+	"providers": {
+		"custom": {
+			"apiKey": "no-key",
+			"apiBase": "http://127.0.0.1:18000/v1",
+			"extraHeaders": null
+		}
+	}
+}
+```
+
+After changing the live config, the startup order is:
+
+1. Start the RKLLM local provider:
+
+```bash
+cd /home/wubinyi/workspace/embed_nanobot
+bash local_llm/local_provider/start_local_provider.sh
+```
+
+2. In another terminal, start nanobot with the live config:
+
+```bash
+cd /home/wubinyi/workspace/embed_nanobot
+/home/wubinyi/miniforge3/envs/embed_nanobot/bin/python -m nanobot agent
+```
+
+If you want to avoid editing the live config, keep using the dedicated runtime
+config instead:
+
+```bash
+/home/wubinyi/miniforge3/envs/embed_nanobot/bin/python -m nanobot agent \
+	-c local_llm/runtime/local_rkllm.json \
+	--workspace /home/wubinyi/workspace/embed_nanobot/local_llm/runtime/workspaces/rkllm \
+	--session cli:rkllm-direct
+```
+
+Important: the current validated RKLLM model is still hard-limited to `4096`
+runtime context tokens. The smoke path is known-good; a fully loaded default
+agent workspace can still overflow that limit unless you keep the workspace and
+prompt surface small.
+
 The RKLLM smoke mode intentionally disables built-in skills and tool schemas so
 the real `nanobot agent` request stays within this model's hard `4096` context
 window.
