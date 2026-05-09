@@ -2,8 +2,9 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-LOCAL_INSTALL_DIR="$ROOT_DIR/local_llm/runtime/ollama-dist"
-LOCAL_BIN_DIR="$ROOT_DIR/local_llm/runtime/bin"
+OLLAMA_DIR="$ROOT_DIR/local_llm/local_provider_ollama"
+LOCAL_INSTALL_DIR="$OLLAMA_DIR/runtime/ollama-dist"
+LOCAL_BIN_DIR="$OLLAMA_DIR/runtime/bin"
 ZST_ARCHIVE_URL="https://ollama.com/download/ollama-linux-arm64.tar.zst"
 TGZ_ARCHIVE_URL="https://ollama.com/download/ollama-linux-arm64.tgz"
 

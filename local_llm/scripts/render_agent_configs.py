@@ -7,7 +7,8 @@ from pathlib import Path
 
 
 DEFAULT_SOURCE = Path.home() / ".embed_nanobot" / "config.json"
-DEFAULT_OUTPUT = Path(__file__).resolve().parents[1] / "runtime"
+DEFAULT_SHARED_OUTPUT = Path(__file__).resolve().parents[1] / "runtime"
+DEFAULT_OLLAMA_OUTPUT = Path(__file__).resolve().parents[1] / "local_provider_ollama" / "runtime"
 DEFAULT_LOCAL_MODEL = "qwen2.5:0.5b-nb"
 DEFAULT_LOCAL_BASE = "http://localhost:11434/v1"
 
@@ -50,17 +51,19 @@ def _render_remote_config(source: dict) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Render local and remote nanobot agent configs.")
     parser.add_argument("--source", type=Path, default=DEFAULT_SOURCE, help="Path to the source user config")
-    parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT, help="Directory for generated runtime configs")
+    parser.add_argument("--shared-output-dir", type=Path, default=DEFAULT_SHARED_OUTPUT, help="Directory for shared generated runtime configs")
+    parser.add_argument("--ollama-output-dir", type=Path, default=DEFAULT_OLLAMA_OUTPUT, help="Directory for generated Ollama runtime configs")
     parser.add_argument("--local-model", default=DEFAULT_LOCAL_MODEL, help="Model string for the local ollama config")
     parser.add_argument("--local-api-base", default=DEFAULT_LOCAL_BASE, help="OpenAI-compatible base URL for the local runtime")
     args = parser.parse_args()
 
     source = args.source.expanduser().resolve()
-    output_dir = args.output_dir.expanduser().resolve()
+    shared_output_dir = args.shared_output_dir.expanduser().resolve()
+    ollama_output_dir = args.ollama_output_dir.expanduser().resolve()
     data = _load_json(source)
 
-    local_path = output_dir / "local_ollama.json"
-    remote_path = output_dir / "remote_current.json"
+    local_path = ollama_output_dir / "local_ollama.json"
+    remote_path = shared_output_dir / "remote_current.json"
     _write_json(local_path, _render_local_config(data, args.local_model, args.local_api_base))
     _write_json(remote_path, _render_remote_config(data))
 

@@ -11,14 +11,14 @@ Record every local-LLM setup step executed on the Radxa Rock 5T.
 | 2026-05-01 09:18 | Baseline check | `command -v ollama` | PASS | `ollama` not installed |
 | 2026-05-01 09:18 | Platform check | `uname -m` | PASS | `aarch64` |
 | 2026-05-01 09:18 | OS check | `cat /etc/os-release | sed -n '1,8p'` | PASS | Armbian 26 / Debian 13 |
-| 2026-05-01 09:20 | Official install attempt | `bash local_llm/scripts/install_ollama.sh` | FAIL | Blocked by sudo prompt for `/usr/local` |
-| 2026-05-01 09:27 | User-local install attempt | `bash local_llm/scripts/install_ollama.sh` | FAIL | GitHub ARM64 archive download unreachable from host |
-| 2026-05-01 11:24 | Post-reboot runtime verification | `bash local_llm/scripts/install_ollama.sh` | PASS | Repo-local Ollama runtime already present at `local_llm/runtime/bin/ollama` |
+| 2026-05-01 09:20 | Official install attempt | `bash local_llm/local_provider_ollama/install_ollama.sh` | FAIL | Blocked by sudo prompt for `/usr/local` |
+| 2026-05-01 09:27 | User-local install attempt | `bash local_llm/local_provider_ollama/install_ollama.sh` | FAIL | GitHub ARM64 archive download unreachable from host |
+| 2026-05-01 11:24 | Post-reboot runtime verification | `bash local_llm/local_provider_ollama/install_ollama.sh` | PASS | Repo-local Ollama runtime already present at `local_llm/local_provider_ollama/runtime/bin/ollama` |
 | 2026-05-01 11:25 | Small-model download | `ollama pull qwen2.5:0.5b` | PASS | 397 MB model chosen for RK3588 CPU validation |
-| 2026-05-01 11:25 | Context-safe alias creation | `ollama create qwen2.5:0.5b-nb -f local_llm/runtime/Modelfile.qwen2.5-0.5b-nb` | PASS | Alias sets `num_ctx 8192` for the agent path |
+| 2026-05-01 11:25 | Context-safe alias creation | `ollama create qwen2.5:0.5b-nb -f local_llm/local_provider_ollama/runtime/Modelfile.qwen2.5-0.5b-nb` | PASS | Alias sets `num_ctx 8192` for the agent path |
 | 2026-05-01 11:26 | Config rendering | `/home/wubinyi/miniforge3/envs/embed_nanobot/bin/python local_llm/scripts/render_agent_configs.py --local-model qwen2.5:0.5b-nb` | PASS | Generated local and remote runtime configs |
 | 2026-05-01 11:32 | Direct local endpoint check | `curl -sS http://127.0.0.1:11434/v1/chat/completions ...` | PASS | Ollama returned `LOCAL_OK` directly |
-| 2026-05-01 11:40 | Direct local agent timing | `time python -m nanobot agent -c local_llm/runtime/local_ollama.json ...` | PASS | Real local agent path returned `LOCAL_OK` in about `371s` |
+| 2026-05-01 11:40 | Direct local agent timing | `time python -m nanobot agent -c local_llm/local_provider_ollama/runtime/local_ollama.json ...` | PASS | Real local agent path returned `LOCAL_OK` in about `371s` |
 | 2026-05-01 11:47 | Smoke runner revalidation | `bash local_llm/scripts/run_agent_smoke.sh --mode local` | PASS | Updated local timeout (`600s`) matches measured RK3588 latency |
 | 2026-05-01 14:21 | Live hybrid config enablement | `cp ~/.embed_nanobot/config.json ... && edit hybrid settings` | PASS | Set `agents.defaults.provider` to `hybrid`, enabled `hybrid_router`, removed duplicate disabled block |
 | 2026-05-01 14:28 | Live hybrid local-route check | `python -m nanobot agent -m 'Reply with exactly HYBRID_LOCAL_OK and nothing else.' --logs --no-markdown` | PASS | Router logged local branch and final output was `HYBRID_LOCAL_OK` |
@@ -29,8 +29,8 @@ Record every local-LLM setup step executed on the Radxa Rock 5T.
 | 2026-05-01 16:10 | RKLLM native demo build | `cmake ../.. -DCMAKE_BUILD_TYPE=Release && make -j4` | PASS | Built `examples/rkllm_api_demo/deploy/build/native/llm_demo` with native GCC 14 |
 | 2026-05-01 16:11 | RKLLM runtime linkage probe | `cmake --install . && LD_LIBRARY_PATH=./lib ./llm_demo /tmp/does-not-exist.rkllm 16 32` | PASS | `librkllmrt.so` loaded and reported `platform: RK3588`; init failed only because no `.rkllm` model file was provided |
 | 2026-05-03 10:05 | RKNPU kernel package check | `uname -r && dpkg -l 'linux-image*' | grep rk35xx && apt-cache search '^linux-image.*rk35xx'` | PASS | Running `6.1.115-vendor-rk35xx`; host package is `linux-image-vendor-rk35xx 26.2.1` |
-| 2026-05-03 10:06 | RKNPU runtime evidence capture | `sed -n '1,5p' local_llm/rknn-llm-src/examples/multimodal_model_demo/deploy/install/demo_Linux_aarch64/demo.log` | PASS | RKLLM demo reported `rknpu driver version: 0.9.8` on RK3588 |
-| 2026-05-03 09:40 | RKLLM local-provider launcher fix | `bash local_llm/local_provider/start_local_provider.sh` | PASS | Launcher now normalizes the copied RKLLM demo server to the model-safe `4096` context and starts both backend `:8080` and adapter `:18000` |
+| 2026-05-03 10:06 | RKNPU runtime evidence capture | `sed -n '1,5p' local_llm/local_provider_rkllm/rknn-llm-src/examples/multimodal_model_demo/deploy/install/demo_Linux_aarch64/demo.log` | PASS | RKLLM demo reported `rknpu driver version: 0.9.8` on RK3588 |
+| 2026-05-03 09:40 | RKLLM local-provider launcher fix | `bash local_llm/local_provider_rkllm/start_local_provider.sh` | PASS | Launcher now normalizes the copied RKLLM demo server to the model-safe `4096` context and starts both backend `:8080` and adapter `:18000` |
 | 2026-05-03 09:42 | RKLLM adapter direct probe | `curl -s http://127.0.0.1:18000/v1/chat/completions ...` | PASS | OpenAI-compatible adapter returned `RKLLM_OK` after flattening OpenAI chat history into a single backend prompt |
 | 2026-05-03 09:45 | RKLLM agent smoke | `bash local_llm/scripts/run_agent_smoke.sh --mode rkllm` | PASS | Real `nanobot agent` returned `RKLLM_OK` when built-in skills and tool schemas were disabled for the low-context smoke path |
 

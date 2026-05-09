@@ -4,7 +4,7 @@
 
 This guide records the validated steps for installing the RKLLM toolchain on the
 Radxa Rock 5T, validating the first real NPU-backed inference, and bridging the
-result into nanobot through the custom local provider under `local_llm/local_provider/`.
+result into nanobot through the custom local provider under `local_llm/local_provider_rkllm/`.
 
 Validated host:
 
@@ -47,7 +47,7 @@ git clone https://github.com/airockchip/rknn-llm.git rknn-llm-src
 If the directory already exists, update it instead:
 
 ```bash
-cd /home/wubinyi/workspace/embed_nanobot/local_llm/rknn-llm-src
+cd /home/wubinyi/workspace/embed_nanobot/local_llm/local_provider_rkllm/rknn-llm-src
 git pull --ff-only
 ```
 
@@ -57,7 +57,7 @@ The upstream `build-linux.sh` path assumes a cross-toolchain layout that is not
 present on the Radxa. Build with the system compiler instead.
 
 ```bash
-cd /home/wubinyi/workspace/embed_nanobot/local_llm/rknn-llm-src/examples/multimodal_model_demo/deploy
+cd /home/wubinyi/workspace/embed_nanobot/local_llm/local_provider_rkllm/rknn-llm-src/examples/multimodal_model_demo/deploy
 rm -rf build/native
 mkdir -p build/native
 cd build/native
@@ -69,7 +69,7 @@ cmake --install .
 The installed demo bundle ends up here:
 
 ```text
-/home/wubinyi/workspace/embed_nanobot/local_llm/rknn-llm-src/examples/multimodal_model_demo/deploy/install/demo_Linux_aarch64
+/home/wubinyi/workspace/embed_nanobot/local_llm/local_provider_rkllm/rknn-llm-src/examples/multimodal_model_demo/deploy/install/demo_Linux_aarch64
 ```
 
 ## 4. Prepare the model directory
@@ -92,7 +92,7 @@ Expected files:
 Run the official multimodal demo against the bundled sample image:
 
 ```bash
-cd /home/wubinyi/workspace/embed_nanobot/local_llm/rknn-llm-src/examples/multimodal_model_demo/deploy/install/demo_Linux_aarch64
+cd /home/wubinyi/workspace/embed_nanobot/local_llm/local_provider_rkllm/rknn-llm-src/examples/multimodal_model_demo/deploy/install/demo_Linux_aarch64
 export LD_LIBRARY_PATH="$PWD/lib"
 printf '0\nexit\n' | ./demo ./demo.jpg \
   /home/wubinyi/workspace/embed_nanobot/local_llm/models/rkllm/qwen3-vl-2b/qwen3-vl-2b_vision_rk3588.rknn \
@@ -127,20 +127,20 @@ than modifying nanobot's provider registry.
 The adapter lives in:
 
 ```text
-/home/wubinyi/workspace/embed_nanobot/local_llm/local_provider/openai_adapter.py
+/home/wubinyi/workspace/embed_nanobot/local_llm/local_provider_rkllm/openai_adapter.py
 ```
 
 The launcher that assembles and starts both layers lives in:
 
 ```text
-/home/wubinyi/workspace/embed_nanobot/local_llm/local_provider/start_local_provider.sh
+/home/wubinyi/workspace/embed_nanobot/local_llm/local_provider_rkllm/start_local_provider.sh
 ```
 
 ### Start the RKLLM local provider
 
 ```bash
 cd /home/wubinyi/workspace/embed_nanobot
-bash local_llm/local_provider/start_local_provider.sh
+bash local_llm/local_provider_rkllm/start_local_provider.sh
 ```
 
 ### Probe the bridge directly
@@ -162,7 +162,7 @@ curl -s http://127.0.0.1:18000/v1/chat/completions \
 Use the generated runtime config:
 
 ```text
-/home/wubinyi/workspace/embed_nanobot/local_llm/runtime/local_rkllm.json
+/home/wubinyi/workspace/embed_nanobot/local_llm/local_provider_rkllm/runtime/local_rkllm.json
 ```
 
 That config points nanobot's `custom` provider to `http://127.0.0.1:18000/v1`.
@@ -177,8 +177,8 @@ Interactive run:
 
 ```bash
 /home/wubinyi/miniforge3/envs/embed_nanobot/bin/python -m nanobot agent \
-  -c local_llm/runtime/local_rkllm.json \
-  --workspace /home/wubinyi/workspace/embed_nanobot/local_llm/runtime/workspaces/rkllm \
+  -c local_llm/local_provider_rkllm/runtime/local_rkllm.json \
+  --workspace /home/wubinyi/workspace/embed_nanobot/local_llm/local_provider_rkllm/runtime/workspaces/rkllm \
   --session cli:rkllm-direct
 ```
 
@@ -191,7 +191,7 @@ prompt surface.
 
 ### Swapping to another RKLLM model
 
-If you want `local_provider` to load a different model than the current
+If you want `local_provider_rkllm` to load a different model than the current
 `qwen3-vl-2b` artifact, the normal path is:
 
 1. Place the new `.rkllm` file under `local_llm/models/rkllm/<new-model>/`
@@ -200,11 +200,11 @@ If you want `local_provider` to load a different model than the current
 ```bash
 RKLLM_MODEL_PATH=/absolute/path/to/new-model.rkllm \
 RKLLM_MODEL_NAME=new-model-rkllm \
-bash local_llm/local_provider/start_local_provider.sh
+bash local_llm/local_provider_rkllm/start_local_provider.sh
 ```
 
 3. Probe the adapter directly using that same `model` value
-4. Update `local_llm/runtime/local_rkllm.json` so nanobot sends the same model name
+4. Update `local_llm/local_provider_rkllm/runtime/local_rkllm.json` so nanobot sends the same model name
 5. Re-run `bash local_llm/scripts/run_agent_smoke.sh --mode rkllm`
 
 For a normal text-chat `.rkllm` replacement, no local C or C++ source changes
@@ -221,6 +221,6 @@ different runtime-limit patch strategy.
   unless the missing cross-toolchain assumptions are fixed.
 - The current confirmed official Qwen path in this workspace is multimodal
   `Qwen3-VL-2B`, not a text-only `.rkllm` model.
-- Provider integration is now validated through `local_llm/local_provider/`,
+- Provider integration is now validated through `local_llm/local_provider_rkllm/`,
   but the current smoke path still uses a reduced-context agent setup because
   the active RKLLM model hard-caps runtime context at `4096`.

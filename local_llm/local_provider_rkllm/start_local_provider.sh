@@ -7,10 +7,10 @@ set -euo pipefail
 # 3. /../.. 向上两级目录
 # 4. cd ... && pwd 获取该目录的绝对路径
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-PROVIDER_DIR="$ROOT_DIR/local_llm/local_provider"
+PROVIDER_DIR="$ROOT_DIR/local_llm/local_provider_rkllm"
 BACKEND_RUNTIME_DIR="$PROVIDER_DIR/runtime_backend"
-UPSTREAM_SERVER_PY="$ROOT_DIR/local_llm/rknn-llm-src/examples/rkllm_server_demo/rkllm_server/flask_server.py"
-RKLLM_LIB_SRC="$ROOT_DIR/local_llm/rknn-llm-src/rkllm-runtime/Linux/librkllm_api/aarch64/librkllmrt.so"
+UPSTREAM_SERVER_PY="$PROVIDER_DIR/rknn-llm-src/examples/rkllm_server_demo/rkllm_server/flask_server.py"
+RKLLM_LIB_SRC="$PROVIDER_DIR/rknn-llm-src/rkllm-runtime/Linux/librkllm_api/aarch64/librkllmrt.so"
 EMBED_ENV_PY="/home/wubinyi/miniforge3/envs/embed_nanobot/bin/python"
 # 如果 EMBED_ENV_PY 不可执行，则使用 ROOT_DIR/.conda/bin/python 作为 Python 解释器
 if [[ ! -x "$EMBED_ENV_PY" ]]; then

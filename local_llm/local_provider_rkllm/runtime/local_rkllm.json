@@ -1,0 +1,21 @@
+{
+  "agents": {
+    "defaults": {
+      "workspace": "/home/wubinyi/workspace/embed_nanobot/local_llm/local_provider_rkllm/runtime/workspaces/rkllm",
+      "model": "qwen3-vl-2b-rkllm",
+      "provider": "custom",
+      "maxTokens": 512,
+      "temperature": 0.1,
+      "maxToolIterations": 40,
+      "memoryWindow": 100,
+      "reasoningEffort": null
+    }
+  },
+  "providers": {
+    "custom": {
+      "apiKey": "no-key",
+      "apiBase": "http://127.0.0.1:18000/v1",
+      "extraHeaders": null
+    }
+  }
+}

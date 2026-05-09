@@ -7,56 +7,62 @@ It mirrors the role of `esp32/` for device work, but for on-device inference:
 
 - `configs/` contains stable example config templates checked into git
 - `docs/` records install, validation, and RKLLM toolchain notes
-- `scripts/` contains Ollama setup helpers plus shared smoke-test and config-rendering helpers
-- `local_provider/` contains the RKLLM-backed custom provider and its OpenAI-compatible bridge
+- `scripts/` now contains only shared helpers such as the smoke runner and config renderer
+- `local_provider_ollama/` owns the Ollama-specific install scripts, runtime, and local config
+- `local_provider_rkllm/` owns the RKLLM bridge, its dedicated runtime, and the upstream `rknn-llm-src` tree
 - `logs/` stores captured agent and runtime logs
 - `models/` is a placeholder for model-related assets tracked outside git
-- `runtime/` holds generated configs, repo-local runtime binaries, and dedicated test workspaces derived from the live user config
+- `runtime/` is now the shared generated-config area for non-provider-specific runtime artifacts such as remote and hybrid probe configs
 
 ## Provider layout
 
-`local_llm` currently supports two local-provider paths:
+`local_llm` now exposes two provider-owned local-provider paths plus a small shared layer:
 
 1. `ollama`
 	 - direct local provider at `http://127.0.0.1:11434/v1`
-	 - uses the repo-local Ollama binary under `local_llm/runtime/bin/ollama`
-	 - validated via `local_llm/runtime/local_ollama.json`
+	 - uses the repo-local Ollama binary under `local_llm/local_provider_ollama/runtime/bin/ollama`
+	 - validated via `local_llm/local_provider_ollama/runtime/local_ollama.json`
 2. `custom`
-	 - RKLLM-backed provider exposed through `local_llm/local_provider/`
+	 - RKLLM-backed provider exposed through `local_llm/local_provider_rkllm/`
 	 - nanobot talks to it through the OpenAI-compatible bridge at `http://127.0.0.1:18000/v1`
-	 - validated via `local_llm/runtime/local_rkllm.json`
+	 - validated via `local_llm/local_provider_rkllm/runtime/local_rkllm.json`
+3. `shared`
+	 - `local_llm/scripts/run_agent_smoke.sh` and `local_llm/scripts/render_agent_configs.py`
+	 - `local_llm/runtime/remote_current.json` and hybrid probe configs
 
-In practice, `local_llm/scripts/` is mostly the Ollama setup surface. The RKLLM
-provider itself lives in `local_llm/local_provider/`, while the smoke runner and
-config renderer in `scripts/` are shared by both provider paths.
+The intent is to keep provider-specific operational surfaces inside each
+provider directory, leaving only cross-provider helpers at the top level.
 
 ## `configs/` vs `runtime/`
 
-There are two config locations on purpose:
+There are now three config layers on purpose:
 
 - `local_llm/configs/`
 	- human-maintained examples and templates
 	- safe to read, diff, and copy from
 	- should stay stable and generic
+- `local_llm/local_provider_ollama/runtime/` and `local_llm/local_provider_rkllm/runtime/`
+	- provider-owned local configs and runtime assets
+	- contain the exact binaries, model bridge state, and dedicated workspaces needed by that provider path
 - `local_llm/runtime/`
-	- generated configs for the current machine and current live nanobot setup
-	- contains concrete paths, local ports, and probe variants used during testing
-	- also stores local runtime assets such as the repo-local Ollama binary and the dedicated RKLLM workspace
+	- shared generated configs for the current machine and current live nanobot setup
+	- contains concrete paths, remote targets, and hybrid probe variants used during testing
 
-Rule of thumb: `configs/` is the source/template layer; `runtime/` is the
-machine-specific generated layer actually used for validation.
+Rule of thumb: `configs/` is the source/template layer, each `local_provider_*`
+runtime directory owns provider-local runtime state, and top-level `runtime/`
+holds only shared generated artifacts.
 
 ## Quick start
 
 ```bash
-bash local_llm/scripts/install_ollama.sh
-export PATH=/home/wubinyi/workspace/embed_nanobot/local_llm/runtime/bin:$PATH
+bash local_llm/local_provider_ollama/install_ollama.sh
+export PATH=/home/wubinyi/workspace/embed_nanobot/local_llm/local_provider_ollama/runtime/bin:$PATH
 ollama pull qwen2.5:0.5b
-cat > local_llm/runtime/Modelfile.qwen2.5-0.5b-nb <<'EOF'
+cat > local_llm/local_provider_ollama/runtime/Modelfile.qwen2.5-0.5b-nb <<'EOF'
 FROM qwen2.5:0.5b
 PARAMETER num_ctx 8192
 EOF
-ollama create qwen2.5:0.5b-nb -f local_llm/runtime/Modelfile.qwen2.5-0.5b-nb
+ollama create qwen2.5:0.5b-nb -f local_llm/local_provider_ollama/runtime/Modelfile.qwen2.5-0.5b-nb
 /home/wubinyi/miniforge3/envs/embed_nanobot/bin/python local_llm/scripts/render_agent_configs.py
 bash local_llm/scripts/run_agent_smoke.sh --mode local
 bash local_llm/scripts/run_agent_smoke.sh --mode remote
@@ -76,7 +82,7 @@ The validated Ollama path is the simpler local-provider route.
 1. Start Ollama:
 
 ```bash
-export PATH=/home/wubinyi/workspace/embed_nanobot/local_llm/runtime/bin:$PATH
+export PATH=/home/wubinyi/workspace/embed_nanobot/local_llm/local_provider_ollama/runtime/bin:$PATH
 ollama serve
 ```
 
@@ -101,17 +107,17 @@ bash local_llm/scripts/run_agent_smoke.sh --mode local
 ## RKLLM local provider quick start
 
 The validated RKLLM path uses a custom local provider under
-`local_llm/local_provider/`. It is not Ollama-based.
+`local_llm/local_provider_rkllm/`. It is not Ollama-based.
 
 ### What gets bridged
 
 The bridge has two layers:
 
 1. upstream RKLLM backend
-	 - source: `local_llm/rknn-llm-src/examples/rkllm_server_demo/rkllm_server/flask_server.py`
+	 - source: `local_llm/local_provider_rkllm/rknn-llm-src/examples/rkllm_server_demo/rkllm_server/flask_server.py`
 	 - native endpoint: `http://127.0.0.1:8080/rkllm_chat`
 2. OpenAI-compatible adapter
-	 - source: `local_llm/local_provider/openai_adapter.py`
+	 - source: `local_llm/local_provider_rkllm/openai_adapter.py`
 	 - exposed endpoint: `http://127.0.0.1:18000/v1/chat/completions`
 
 nanobot then uses its existing `custom` provider support to talk to the adapter
@@ -119,10 +125,10 @@ as if it were a standard OpenAI-compatible API.
 
 ### How the local provider is created
 
-`bash local_llm/local_provider/start_local_provider.sh` does all of the
+`bash local_llm/local_provider_rkllm/start_local_provider.sh` does all of the
 provider assembly work:
 
-- creates `local_llm/local_provider/runtime_backend/`
+- creates `local_llm/local_provider_rkllm/runtime_backend/`
 - copies the upstream RKLLM Flask demo into that runtime directory
 - normalizes the copied server to the model-safe runtime settings (`4096` context, `1024` max new tokens)
 - links `librkllmrt.so` into the runtime directory
@@ -138,7 +144,7 @@ RKLLM demo components plus the adapter layer.
 2. Start the provider bridge:
 
 ```bash
-bash local_llm/local_provider/start_local_provider.sh
+bash local_llm/local_provider_rkllm/start_local_provider.sh
 ```
 
 3. In another terminal, verify the adapter:
@@ -184,7 +190,7 @@ Minimal target shape:
 		"defaults": {
 			"provider": "custom",
 			"model": "qwen3-vl-2b-rkllm",
-			"workspace": "/home/wubinyi/workspace/embed_nanobot/local_llm/runtime/workspaces/rkllm"
+			"workspace": "/home/wubinyi/workspace/embed_nanobot/local_llm/local_provider_rkllm/runtime/workspaces/rkllm"
 		}
 	},
 	"providers": {
@@ -203,7 +209,7 @@ After changing the live config, the startup order is:
 
 ```bash
 cd /home/wubinyi/workspace/embed_nanobot
-bash local_llm/local_provider/start_local_provider.sh
+bash local_llm/local_provider_rkllm/start_local_provider.sh
 ```
 
 2. In another terminal, start nanobot with the live config:
@@ -218,8 +224,8 @@ config instead:
 
 ```bash
 /home/wubinyi/miniforge3/envs/embed_nanobot/bin/python -m nanobot agent \
-	-c local_llm/runtime/local_rkllm.json \
-	--workspace /home/wubinyi/workspace/embed_nanobot/local_llm/runtime/workspaces/rkllm \
+	-c local_llm/local_provider_rkllm/runtime/local_rkllm.json \
+	--workspace /home/wubinyi/workspace/embed_nanobot/local_llm/local_provider_rkllm/runtime/workspaces/rkllm \
 	--session cli:rkllm-direct
 ```
 
@@ -235,15 +241,15 @@ window.
 5. Start an interactive session:
 
 ```bash
-/home/wubinyi/miniforge3/envs/embed_nanobot/bin/python -m nanobot agent -c local_llm/runtime/local_rkllm.json
+/home/wubinyi/miniforge3/envs/embed_nanobot/bin/python -m nanobot agent -c local_llm/local_provider_rkllm/runtime/local_rkllm.json
 ```
 
 For manual testing, prefer a dedicated RKLLM session/workspace too:
 
 ```bash
 /home/wubinyi/miniforge3/envs/embed_nanobot/bin/python -m nanobot agent \
-	-c local_llm/runtime/local_rkllm.json \
-	--workspace /home/wubinyi/workspace/embed_nanobot/local_llm/runtime/workspaces/rkllm \
+	-c local_llm/local_provider_rkllm/runtime/local_rkllm.json \
+	--workspace /home/wubinyi/workspace/embed_nanobot/local_llm/local_provider_rkllm/runtime/workspaces/rkllm \
 	--session cli:rkllm-direct
 ```
 
@@ -251,9 +257,9 @@ The RKLLM adapter currently targets standard chat and the low-context smoke
 path first. Treat broader tool-calling workflows as experimental until they are
 validated with a larger-context RKLLM model or a more compact agent prompt.
 
-### Change `local_provider` to a different model
+### Change `local_provider_rkllm` to a different model
 
-The current `local_provider` path is wired to a specific default model only by
+The current `local_provider_rkllm` path is wired to a specific default model only by
 configuration and environment variables. For a normal model swap, you do not
 need to edit any C or C++ source.
 
@@ -268,15 +274,15 @@ If you replace the current model under:
 with another `.rkllm` model, update these surfaces:
 
 1. Model file path used by the launcher
-	 - source: `local_llm/local_provider/start_local_provider.sh`
+	 - source: `local_llm/local_provider_rkllm/start_local_provider.sh`
 	 - knob: `RKLLM_MODEL_PATH`
 	 - easiest option: pass the new path as an environment variable instead of editing the script
 2. Model name exposed by the OpenAI-compatible adapter
-	 - source: `local_llm/local_provider/openai_adapter.py`
+	 - source: `local_llm/local_provider_rkllm/openai_adapter.py`
 	 - knob: `RKLLM_MODEL_NAME`
 	 - this is the model name nanobot sends in chat-completions requests
 3. Nanobot runtime config
-	 - source: `local_llm/runtime/local_rkllm.json`
+	 - source: `local_llm/local_provider_rkllm/runtime/local_rkllm.json`
 	 - update `agents.defaults.model` to match the adapter model name
 4. Optional helper scripts or probes
 	 - update any hardcoded model name in helper files if you use them for testing
@@ -292,7 +298,7 @@ Example: switch to `/home/wubinyi/workspace/embed_nanobot/local_llm/models/rkllm
 cd /home/wubinyi/workspace/embed_nanobot
 RKLLM_MODEL_PATH=/home/wubinyi/workspace/embed_nanobot/local_llm/models/rkllm/my-model/my-model.rkllm \
 RKLLM_MODEL_NAME=my-model-rkllm \
-bash local_llm/local_provider/start_local_provider.sh
+bash local_llm/local_provider_rkllm/start_local_provider.sh
 ```
 
 3. Probe the adapter directly:
@@ -307,7 +313,7 @@ curl -s http://127.0.0.1:18000/v1/chat/completions \
 	}'
 ```
 
-4. Update `local_llm/runtime/local_rkllm.json` so:
+4. Update `local_llm/local_provider_rkllm/runtime/local_rkllm.json` so:
 	 - `agents.defaults.model = "my-model-rkllm"`
 	 - `providers.custom.apiBase = "http://127.0.0.1:18000/v1"` stays unchanged unless you change the port
 5. Re-run the smoke test:

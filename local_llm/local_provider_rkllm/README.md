@@ -13,7 +13,7 @@ RKLLM runtime on the Radxa into a nanobot-compatible local provider.
 ## Start the provider
 
 ```bash
-bash local_llm/local_provider/start_local_provider.sh
+bash local_llm/local_provider_rkllm/start_local_provider.sh
 ```
 
 Optional environment overrides:
@@ -22,7 +22,7 @@ Optional environment overrides:
 RKLLM_MODEL_PATH=/absolute/path/to/model.rkllm \
 RKLLM_TARGET_PLATFORM=rk3588 \
 RKLLM_OPENAI_PORT=18000 \
-bash local_llm/local_provider/start_local_provider.sh
+bash local_llm/local_provider_rkllm/start_local_provider.sh
 ```
 
 ## Health check
@@ -34,7 +34,7 @@ curl http://127.0.0.1:18000/v1/models
 
 ## Nanobot config
 
-Use `local_llm/runtime/local_rkllm.json` for the validated local-provider test.
+Use `local_llm/local_provider_rkllm/runtime/local_rkllm.json` for the validated local-provider test.
 That config points nanobot at a dedicated RKLLM workspace so old `cli:direct`
 history does not blow past the RKLLM context limit.
 
@@ -70,11 +70,11 @@ cd /home/wubinyi/workspace/embed_nanobot
 RKLLM_MODEL_PATH=/home/wubinyi/workspace/embed_nanobot/local_llm/models/rkllm/my-model/my-model.rkllm \
 RKLLM_MODEL_NAME=my-model-rkllm \
 RKLLM_TARGET_PLATFORM=rk3588 \
-bash local_llm/local_provider/start_local_provider.sh
+bash local_llm/local_provider_rkllm/start_local_provider.sh
 ```
 
 Then update nanobot to send the same model name, for example in
-`local_llm/runtime/local_rkllm.json`:
+`local_llm/local_provider_rkllm/runtime/local_rkllm.json`:
 
 ```json
 {
@@ -92,7 +92,7 @@ Then update nanobot to send the same model name, for example in
 1. Start the provider with the new `RKLLM_MODEL_PATH`
 2. Check `curl http://127.0.0.1:18000/health`
 3. Run a direct chat-completions probe using the new `RKLLM_MODEL_NAME`
-4. Update `local_llm/runtime/local_rkllm.json` to the same model name
+4. Update `local_llm/local_provider_rkllm/runtime/local_rkllm.json` to the same model name
 5. Run `bash local_llm/scripts/run_agent_smoke.sh --mode rkllm`
 
 ### When code changes may be needed

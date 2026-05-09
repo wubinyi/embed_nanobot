@@ -40,7 +40,7 @@ Record real `nanobot agent` validation runs for both local and remote providers.
 
 ### RKLLM local-provider validation
 
-- Provider start command: `bash local_llm/local_provider/start_local_provider.sh`
+- Provider start command: `bash local_llm/local_provider_rkllm/start_local_provider.sh`
 - Adapter probe: `curl -s http://127.0.0.1:18000/v1/chat/completions ...`
 - Agent smoke command: `bash local_llm/scripts/run_agent_smoke.sh --mode rkllm`
 - Result: PASS

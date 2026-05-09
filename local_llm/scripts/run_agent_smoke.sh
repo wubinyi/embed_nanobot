@@ -3,6 +3,10 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RUNTIME_DIR="$ROOT_DIR/local_llm/runtime"
+OLLAMA_PROVIDER_DIR="$ROOT_DIR/local_llm/local_provider_ollama"
+OLLAMA_RUNTIME_DIR="$OLLAMA_PROVIDER_DIR/runtime"
+RKLLM_PROVIDER_DIR="$ROOT_DIR/local_llm/local_provider_rkllm"
+RKLLM_RUNTIME_DIR="$RKLLM_PROVIDER_DIR/runtime"
 LOG_DIR="$ROOT_DIR/local_llm/logs"
 EMBED_ENV_BIN="/home/wubinyi/miniforge3/envs/embed_nanobot/bin"
 if [[ -x "$EMBED_ENV_BIN/python" ]]; then
@@ -57,7 +61,7 @@ log_path="$LOG_DIR/agent_${mode}_${timestamp}.log"
 
 case "$mode" in
     local)
-        config_path="${config_path:-$RUNTIME_DIR/local_ollama.json}"
+        config_path="${config_path:-$OLLAMA_RUNTIME_DIR/local_ollama.json}"
         prompt="${prompt:-Reply with exactly LOCAL_OK and nothing else.}"
         expect="${expect:-LOCAL_OK}"
         timeout_seconds="${timeout_seconds:-600}"
@@ -69,7 +73,7 @@ case "$mode" in
         timeout_seconds="${timeout_seconds:-180}"
         ;;
     rkllm)
-        config_path="${config_path:-$RUNTIME_DIR/local_rkllm.json}"
+        config_path="${config_path:-$RKLLM_RUNTIME_DIR/local_rkllm.json}"
         prompt="${prompt:-Reply with exactly RKLLM_OK and nothing else.}"
         expect="${expect:-RKLLM_OK}"
         timeout_seconds="${timeout_seconds:-180}"
@@ -89,7 +93,7 @@ fi
 cmd=("$PYTHON_BIN" -m nanobot agent -c "$config_path" -m "$prompt" --no-logs)
 env_prefix=()
 if [[ "$mode" == "rkllm" ]]; then
-    rkllm_workspace="$RUNTIME_DIR/workspaces/rkllm"
+    rkllm_workspace="$RKLLM_RUNTIME_DIR/workspaces/rkllm"
     mkdir -p "$rkllm_workspace"
     cat > "$rkllm_workspace/AGENTS.md" <<'EOF'
 # Agent Instructions

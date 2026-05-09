@@ -84,7 +84,7 @@ If that requires elevated access you do not want to grant immediately, a second
 verified probe is to inspect the RKLLM demo log after a successful run:
 
 ```bash
-sed -n '1,5p' /home/wubinyi/workspace/embed_nanobot/local_llm/rknn-llm-src/examples/multimodal_model_demo/deploy/install/demo_Linux_aarch64/demo.log
+sed -n '1,5p' /home/wubinyi/workspace/embed_nanobot/local_llm/local_provider_rkllm/rknn-llm-src/examples/multimodal_model_demo/deploy/install/demo_Linux_aarch64/demo.log
 ```
 
 Validated output from this workspace:
