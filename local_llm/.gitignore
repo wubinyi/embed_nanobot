@@ -4,3 +4,8 @@ models/*
 !models/.gitkeep
 runtime/*
 !runtime/.gitkeep
+local_provider_rkllm/runtime/workspaces/rkllm/*
+local_provider_ollama/runtime/bin/*
+local_provider_ollama/runtime/ollama-dist/*
+local_provider_ollama/runtime/Modelfile.qwen2.5-0.5b-nb
+
