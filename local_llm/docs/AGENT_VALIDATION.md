@@ -9,6 +9,7 @@ Record real `nanobot agent` validation runs for both local and remote providers.
 | Mode | Command | Expected signal |
 |------|---------|-----------------|
 | Local | `bash local_llm/scripts/run_agent_smoke.sh --mode local` | Output contains `LOCAL_OK` |
+| llama.cpp local provider | `bash local_llm/scripts/run_agent_smoke.sh --mode llamacpp` | Output contains `LLAMACPP_OK` |
 | Remote | `bash local_llm/scripts/run_agent_smoke.sh --mode remote` | Output contains `REMOTE_OK` |
 | RKLLM local provider | `bash local_llm/scripts/run_agent_smoke.sh --mode rkllm` | Output contains `RKLLM_OK` |
 | Hybrid local route | real `nanobot agent` with live `~/.embed_nanobot/config.json` | Output contains `HYBRID_LOCAL_OK` and router log shows `routing to LOCAL model` |
@@ -37,6 +38,24 @@ Record real `nanobot agent` validation runs for both local and remote providers.
 - Result: PASS
 - Evidence: Ollama returned `LOCAL_OK` directly for the same model
 - Purpose: separate provider/runtime health from CLI wrapper behavior
+
+### llama.cpp local-provider validation
+
+- Provider build command: `proxy_on && bash local_llm/local_provider_llamacpp/build_llamacpp.sh`
+- Provider start command: `bash local_llm/local_provider_llamacpp/start_local_provider.sh`
+- Adapter probes:
+	- `curl -sS http://127.0.0.1:19000/health`
+	- `curl -sS http://127.0.0.1:19000/v1/models`
+	- `curl -sS http://127.0.0.1:19000/v1/chat/completions ...`
+- Agent smoke command: `bash local_llm/scripts/run_agent_smoke.sh --mode llamacpp`
+- Result: PASS
+- Evidence:
+	- `llama-server` built successfully from `ggml-org/llama.cpp`
+	- direct adapter probe returned `LLAMACPP_OK`
+	- real `nanobot agent` smoke returned `LLAMACPP_OK`
+- Runtime notes:
+	- the adapter returned `503 Loading model` during initial GGUF load, then became healthy once backend warmup finished
+	- the first raw agent smoke exceeded the local `4096` token context window; the validated smoke path now uses a dedicated llama.cpp workspace and disables built-in skills plus tool schemas
 
 ### RKLLM local-provider validation
 
@@ -78,4 +97,5 @@ API route is also verified up to the remote provider boundary; the current
 blocker is the remote provider's region policy, not hybrid-router control flow.
 The validated local workflows now include both the repo-local Ollama runtime
 plus the small-model alias `qwen2.5:0.5b-nb`, and the RKLLM adapter bridge on
-port `18000`.
+port `18000`. They now also include the source-built llama.cpp provider on
+port `19000` backed by `Qwen3.5-9B-Q4_K_M.gguf`.

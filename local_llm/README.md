@@ -9,6 +9,7 @@ It mirrors the role of `esp32/` for device work, but for on-device inference:
 - `docs/` records install, validation, and RKLLM toolchain notes
 - `scripts/` now contains only shared helpers such as the smoke runner and config renderer
 - `local_provider_ollama/` owns the Ollama-specific install scripts, runtime, and local config
+- `local_provider_llamacpp/` owns the source-built `llama.cpp` backend, adapter, and local config
 - `local_provider_rkllm/` owns the RKLLM bridge, its dedicated runtime, and the upstream `rknn-llm-src` tree
 - `logs/` stores captured agent and runtime logs
 - `models/` is a placeholder for model-related assets tracked outside git
@@ -16,17 +17,22 @@ It mirrors the role of `esp32/` for device work, but for on-device inference:
 
 ## Provider layout
 
-`local_llm` now exposes two provider-owned local-provider paths plus a small shared layer:
+`local_llm` now exposes three provider-owned local-provider paths plus a small shared layer:
 
 1. `ollama`
 	 - direct local provider at `http://127.0.0.1:11434/v1`
 	 - uses the repo-local Ollama binary under `local_llm/local_provider_ollama/runtime/bin/ollama`
 	 - validated via `local_llm/local_provider_ollama/runtime/local_ollama.json`
 2. `custom`
+	 - llama.cpp-backed provider exposed through `local_llm/local_provider_llamacpp/`
+	 - source-builds `llama-server` from `ggml-org/llama.cpp`
+	 - nanobot talks to it through the OpenAI-compatible adapter at `http://127.0.0.1:19000/v1`
+	 - validated via `local_llm/local_provider_llamacpp/runtime/local_llamacpp.json`
+3. `custom`
 	 - RKLLM-backed provider exposed through `local_llm/local_provider_rkllm/`
 	 - nanobot talks to it through the OpenAI-compatible bridge at `http://127.0.0.1:18000/v1`
 	 - validated via `local_llm/local_provider_rkllm/runtime/local_rkllm.json`
-3. `shared`
+4. `shared`
 	 - `local_llm/scripts/run_agent_smoke.sh` and `local_llm/scripts/render_agent_configs.py`
 	 - `local_llm/runtime/remote_current.json` and hybrid probe configs
 
@@ -41,7 +47,7 @@ There are now three config layers on purpose:
 	- human-maintained examples and templates
 	- safe to read, diff, and copy from
 	- should stay stable and generic
-- `local_llm/local_provider_ollama/runtime/` and `local_llm/local_provider_rkllm/runtime/`
+- `local_llm/local_provider_ollama/runtime/`, `local_llm/local_provider_llamacpp/runtime/`, and `local_llm/local_provider_rkllm/runtime/`
 	- provider-owned local configs and runtime assets
 	- contain the exact binaries, model bridge state, and dedicated workspaces needed by that provider path
 - `local_llm/runtime/`
@@ -51,6 +57,61 @@ There are now three config layers on purpose:
 Rule of thumb: `configs/` is the source/template layer, each `local_provider_*`
 runtime directory owns provider-local runtime state, and top-level `runtime/`
 holds only shared generated artifacts.
+
+## llama.cpp path
+
+The llama.cpp local-provider path is the current source-built GGUF route.
+
+1. Build `llama-server` from GitHub source:
+
+```bash
+proxy_on && bash local_llm/local_provider_llamacpp/build_llamacpp.sh
+```
+
+If GitHub access is already working on the host, `proxy_on &&` is optional.
+
+2. Start the provider-owned backend plus adapter:
+
+```bash
+bash local_llm/local_provider_llamacpp/start_local_provider.sh
+```
+
+3. Probe the provider directly:
+
+```bash
+curl -sS http://127.0.0.1:19000/health
+curl -sS http://127.0.0.1:19000/v1/models
+curl -sS http://127.0.0.1:19000/v1/chat/completions \
+	-H 'Content-Type: application/json' \
+	-d '{
+		"model": "qwen3.5-9b-llamacpp",
+		"stream": false,
+		"temperature": 0,
+		"messages": [{"role": "user", "content": "Reply with exactly LLAMACPP_OK and nothing else."}]
+	}'
+```
+
+4. Render the nanobot runtime configs:
+
+```bash
+/home/wubinyi/miniforge3/envs/embed_nanobot/bin/python local_llm/scripts/render_agent_configs.py
+```
+
+5. Validate the real `nanobot agent` path:
+
+```bash
+bash local_llm/scripts/run_agent_smoke.sh --mode llamacpp
+```
+
+The validated model is:
+
+```text
+/home/wubinyi/workspace/embed_nanobot/local_llm/models/gguf/Qwen3.5-9B-Q4_K_M.gguf
+```
+
+The smoke path uses a dedicated llama.cpp workspace and disables built-in
+skills plus tool schemas so the request stays within the current `4096` token
+server context configured for the local GGUF runtime.
 
 ## Quick start
 
