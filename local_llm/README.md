@@ -1,3 +1,38 @@
+# System Setting
+1. 解除 Linux 的内存锁定限制 
+在 Linux 中，普通用户默认只能锁定极少量的内存（通常只有 64KB 或几兆），以防止恶意程序把物理内存占满导致系统崩溃。当`llama-server`使用`--mlock`参数时，llama.cpp 试图把几个 G 的模型权重强制锁定在物理内存中，直接被操作系统拦截了。
+要解决这个问题，你需要调整系统的`ulimit`限制。同时，从你的运行日志中，发现了一个严重影响 RK3588 运行的配置隐患，需要一并解决。
+	- 编辑 limits 配置文件
+		```Bash
+		sudo nano /etc/security/limits.conf
+		```
+	- 在文件最末尾（在 # End of file 之前），添加以下两行配置。这会专门赋予所有或者`wubinyi`用户无限锁定内存的权限。(保存并退出：在 `nano` 中按 `Ctrl+O` -> `Enter` -> `Ctrl+X`)
+		```Bash
+		* soft memlock unlimited
+		* hard memlock unlimited
+		或者
+		wubinyi soft memlock unlimited
+		wubinyi hard memlock unlimited
+		```
+	- 重新登陆，确保配置生效。下面命令应该返回`ulimited`。
+		```Bash
+		ulimit -l
+		```
+2. 查看大小核
+	```
+	# 查看所有核心的最高频率（最简单直观），最上面对应`core 0`频率
+	cat /sys/devices/system/cpu/cpu*/cpufreq/cpuinfo_max_freq
+	# 查看 CPU 集群策略 (Cluster Topology)
+	cat /sys/devices/system/cpu/cpufreq/policy*/related_cpus
+	# 使用 lscpu 综合查看
+	lscpu
+	```
+3. 启用`Vulkan`支持进行编译，安装依赖包
+	```
+	sudo apt update
+	sudo apt install libvulkan-dev vulkan-tools glslang-tools glslc
+	```
+
 # Local LLM Workspace
 
 This directory is the Radxa 5T operational workspace for local language-model

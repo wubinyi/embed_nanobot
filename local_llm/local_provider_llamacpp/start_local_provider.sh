@@ -16,9 +16,10 @@ MODEL_PATH="${LLAMACPP_MODEL_PATH:-$ROOT_DIR/local_llm/models/gguf/Qwen3.5-9B-Q4
 MODEL_NAME="${LLAMACPP_MODEL_NAME:-qwen3.5-9b-llamacpp}"
 BACKEND_PORT="${LLAMACPP_BACKEND_PORT:-19080}"
 ADAPTER_PORT="${LLAMACPP_OPENAI_PORT:-19000}"
-CTX_SIZE="${LLAMACPP_CTX_SIZE:-4096}"
-N_PREDICT="${LLAMACPP_N_PREDICT:-512}"
-THREADS="${LLAMACPP_THREADS:-$(nproc)}"
+CTX_SIZE="${LLAMACPP_CTX_SIZE:-65536}"
+N_PREDICT="${LLAMACPP_N_PREDICT:-65536}"
+# THREADS="${LLAMACPP_THREADS:-$(nproc)}"
+THREADS="${LLAMACPP_THREADS:-4}"
 
 if [[ ! -f "$MODEL_PATH" ]]; then
     echo "llama.cpp model not found: $MODEL_PATH" >&2
@@ -44,7 +45,14 @@ trap cleanup EXIT INT TERM
 
 mkdir -p "$RUNTIME_DIR/logs"
 
-"$BIN_PATH" \
+ulimit -l
+echo ">>> 当前脚本的真实 mlock 限制为: $(ulimit -l) <<<"
+# sudo cpupower frequency-set -g performance
+
+# 1. 声明插件所在的绝对路径（这是动态加载的核心）
+export GGML_BACKEND_PATH="/home/wubinyi/workspace/embed_nanobot/local_llm/local_provider_llamacpp/runtime/build/bin"
+# 2. 绑核 + GPU 卸载 + 内存锁定 启动！
+taskset -c 4-7 "$BIN_PATH" \
     --model "$MODEL_PATH" \
     --alias "$MODEL_NAME" \
     --host 127.0.0.1 \
@@ -53,6 +61,9 @@ mkdir -p "$RUNTIME_DIR/logs"
     --threads "$THREADS" \
     --n-predict "$N_PREDICT" \
     --api-key no-key \
+    --mlock \
+    --no-mmap \
+    --flash-attn on \
     --no-webui \
     >"$RUNTIME_DIR/logs/llama_server.log" 2>&1 &
 BACKEND_PID=$!
