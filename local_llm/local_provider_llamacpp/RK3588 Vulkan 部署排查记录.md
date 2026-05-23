@@ -1,7 +1,7 @@
 # RK3588 (Rock-5T) Llama.cpp Vulkan 部署排查记录
 
-**最终状态**: **已证实 Vulkan 路径不可用。**\
-**核心结论**: 在当前 `6.1.115-vendor-rk35xx` 内核环境下，Mali-G610 闭源驱动因缺失标准 ICD 接口及阉割了动态符号表，导致与 `llama.cpp` 的 Vulkan 后端陷入死结（Catch-22）。\
+**最终状态**: ✅ **Vulkan 已成功启用（Mali-G610，g24p0 驱动，2025-05-23）**\
+**核心结论（已修正）**: 阶段一至四的所有失败，根因只有一个——**驱动 ABI 版本错误**。内核运行的是 `g25p0-00eac0` DDK，而之前所有尝试均使用了低 12 个版本的 `g13p0` 用户态驱动，导致不可避免的 `ERROR_INCOMPATIBLE_DRIVER`。正确方案是从 ginkage 的社区 fork 安装 `g24p0-gbm` 版本驱动（与 g25p0 内核 ABI 兼容），无需任何 Hack，一次安装成功。\
 **系统环境**: Armbian (Debian Trixie, aarch64) / 内核版本 `6.1.115-vendor-rk35xx`\
 **GPU**: Mali-G610
 
@@ -138,21 +138,88 @@
   * **路线 A (走正门，受制于 Loader)**：当 `ldconfig` 自动还原了系统的 `libvulkan.so.1` 后，`llama-server` 启动加载了官方 Loader。但 Loader 判定 Mali 驱动不符合 ICD 规范拒绝加载，程序静默回退至纯 CPU，抛出 `no usable GPU found`。
   * **路线 B (走后门，受制于符号表)**：通过 `LD_LIBRARY_PATH` 局部沙盒技术完美绕过系统 Loader，强制加载 43MB 的满血 Mali 驱动。但由于瑞芯微在编译时 `strip` 了动态导出符号表，未暴露 `vkGetInstanceProcAddr` 函数入口。Linux 动态链接器 (`ld.so`) 在拉起 `libggml-vulkan.so` 插件时无法找到该符号，引发核心转储报错 `symbol lookup error`。
 
-**最终判决**：无论如何规避加载器限制，闭源驱动缺失动态导出符号这一物理障碍无法逾越，Vulkan 路线宣告失败。
+**事后分析（2025-05-23 修订）**：此"最终判决"结论有误。g13p0 驱动的符号表被 strip 是事实，但这不是根本原因——根本原因是版本 ABI 不匹配。g24p0 驱动（ginkage fork）拥有完整的 `vk_icdGetInstanceProcAddr` 符号，且与 g25p0 内核完全兼容，无需任何 Hack。详见阶段五。
 
-## 🛠️ 后续执行方案与建议
-鉴于 Vulkan 通道不可用，建议立即执行以下步骤止损：
-1. **清理战场 (恢复系统标准状态):**
-    ```bash
-    # 恢复系统原始 Vulkan Loader 并刷新
-    sudo mv /usr/lib/aarch64-linux-gnu/libvulkan.so.1.bak /usr/lib/aarch64-linux-gnu/libvulkan.so.1
-    sudo ldconfig
+---
 
-    # 删除为局部沙盒劫持创建的假目录
-    rm -rf ~/workspace/embed_nanobot/local_llm/fake_vulkan
+## 阶段五：正确方案——g24p0 驱动（ginkage fork）✅ 已验证成功，2025-05-23
 
-    # 建议卸载非标准 libmali deb 包
-    sudo apt purge libmali-valhall-g610-g13p0-x11-wayland-gbm
-    ```
+* **根因（最终版）**: 内核 DDK 版本为 `g25p0-00eac0`（通过 `dmesg | grep -i mali` 确认）。之前所有尝试使用的 `g13p0` 驱动与内核相差 12 个版本，ABI 完全不兼容。正确的用户态驱动应为 `g24p0`（与 g25p0 内核向后兼容，已由社区在 Orange Pi 5 + 相同内核版本上验证）。
 
-2. **核心战略转移 (NPU 部署)**: 全面停止在 RK3588 上的 GPU/Vulkan 尝试。这块芯片的真正价值在于 6 TOPS 算力的 NPU。重点应转向基于 Rockchip 官方 `RKLLM` 框架的开发，或寻找针对 RK3588 的 NPU 社区分支，打通 RKNPU2 推理栈。
+* **关键诊断命令**:
+  ```bash
+  # 确认内核 DDK 版本——这是选择驱动版本的唯一依据
+  dmesg | grep -i mali
+  # 输出: mali fb000000.gpu: Kernel DDK version g25p0-00eac0
+  ```
+
+* **驱动来源**: [ginkage/libmali-rockchip](https://github.com/ginkage/libmali-rockchip/releases/tag/v1.9-1-4b399ed)（注意：tsukumijima / JeffyCN 源均无 g24p0 包）
+
+* **🛠️ 安装命令**:
+  ```bash
+  # 1. 下载 g24p0-gbm 包（GBM 变体，无需显示器，适合 headless 推理服务器）
+  wget https://github.com/ginkage/libmali-rockchip/releases/download/v1.9-1-4b399ed/libmali-valhall-g610-g24p0-gbm_1.9-1_arm64.deb
+
+  # 2. 安装（deb 包自动配置 ICD JSON 和 ldconfig，无需额外 hack）
+  sudo dpkg -i libmali-valhall-g610-g24p0-gbm_1.9-1_arm64.deb
+  sudo ldconfig
+
+  # 3. 验证：应显示 Mali-G610，而非 llvmpipe
+  vulkaninfo | grep -E 'deviceName|driverVersion'
+  ```
+
+* **安装后系统状态**:
+  - ICD JSON: `/usr/share/vulkan/icd.d/mali.json` → `"library_path": "libMaliVulkan.so.1"`, `api_version: 1.4.305`
+  - 主库: `/usr/lib/aarch64-linux-gnu/libmali.so.1.9.0`（**55MB 完整版，含全部 Vulkan 符号**）
+  - Vulkan stub: `/usr/lib/aarch64-linux-gnu/mali/libMaliVulkan.so.1`（5.9KB，dlopen 加载 libmali.so.1）
+  - ldconfig 路径: `/etc/ld.so.conf.d/00-aarch64-mali.conf` → `/usr/lib/aarch64-linux-gnu/mali`
+  - 已导出符号: `vk_icdGetInstanceProcAddr` + `vk_icdGetPhysicalDeviceProcAddr` ✅
+  - 驱动版本字符串: `arm_release_ver: g24p0-00eac0, rk_so_ver: 10`
+
+* **llama.cpp 推理命令**:
+  ```bash
+  BIN=/home/wubinyi/workspace/embed_nanobot/local_llm/local_provider_llamacpp/runtime/build/bin
+  export MALI_SCHED_RT_THREAD_PRIORITY=95  # 来自 /etc/profile.d/mali-priority.sh
+
+  # 使用 llama-bench 验证 Vulkan 后端（-ngl 99 全层 offload 到 GPU）
+  GGML_BACKEND_PATH="$BIN" GGML_VULKAN_DEBUG=1 \
+  taskset -c 4-7 "$BIN/llama-bench" \
+      --model /home/wubinyi/workspace/embed_nanobot/local_llm/models/gguf/Qwen3.5-9B-Q4_K_M.gguf \
+      -ngl 99 -n 32 -p 0
+
+  # 启动推理服务器
+  GGML_BACKEND_PATH="$BIN" GGML_VULKAN_DEBUG=1 \
+  taskset -c 4-7 "$BIN/llama-server" \
+      --model /home/wubinyi/workspace/embed_nanobot/local_llm/models/gguf/Qwen3.5-9B-Q4_K_M.gguf \
+      --threads 4 -ngl 99 --host 0.0.0.0 --port 8080
+  ```
+  > 注意：`GGML_BACKEND_PATH` 指向目录时，会出现一条 `load_backend: failed to load ... Is a directory` 的良性警告，是 llama.cpp 遍历目录时的已知 bug，不影响 Vulkan 后端加载。
+
+* **实测结果 (2025-05-23)**:
+  ```
+  ggml_vulkan: Found 1 Vulkan devices:
+  ggml_vulkan: 0 = Mali-G610 (Mali-G610) | uma: 1 | fp16: 1 | bf16: 0 | warp size: 16 | shared memory: 32768 | int dot: 1 | matrix cores: none
+
+  | model                   |    size |  params | backend | ngl | test |           t/s |
+  | qwen35 9B Q4_K - Medium | 5.28 GiB| 8.95 B  | Vulkan  |  99 | tg32 | 2.37 ± 0.00   |
+  ```
+  Mali-G610 Vulkan 推理验证成功。UMA 架构（CPU/GPU 共享物理内存）下速度与纯 CPU 接近，但 GPU 全层 offloading 已生效（`backend = Vulkan, ngl = 99`）。
+
+## 📋 正确的驱动版本选择流程
+
+1. `dmesg | grep -i mali` → 获取内核 DDK 版本（如 `g25p0-00eac0`）
+2. 在 [ginkage/libmali-rockchip releases](https://github.com/ginkage/libmali-rockchip/releases) 查找**相同或低一个大版本**的 `gbm` 包
+3. `sudo dpkg -i` 安装，`vulkaninfo` 验证，完成
+
+## 🛠️ 历史脏数据清理（如仍存在 g13p0 残留）
+
+```bash
+# 卸载错误版本的驱动
+sudo apt purge libmali-valhall-g610-g13p0-x11-wayland-gbm 2>/dev/null
+
+# 清理之前的手工 hack
+sudo rm -f /usr/lib/aarch64-linux-gnu/libvulkan.so.1.bak
+rm -rf ~/workspace/embed_nanobot/local_llm/fake_vulkan
+
+sudo ldconfig
+```
