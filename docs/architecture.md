@@ -252,6 +252,50 @@ User Message
 
 ---
 
+### Local LLM Providers (`local_llm/`)
+
+The `local_llm/` directory contains embed_nanobot's self-hosted inference stack
+for running LLMs on the Radxa Rock 5T hardware without cloud API dependency.
+All providers expose an OpenAI-compatible HTTP endpoint that nanobot targets via
+the `custom` provider configuration.
+
+| Directory | Backend | Adapter Port | Notes |
+|-----------|---------|-------------|-------|
+| `local_provider_llamacpp/` | llama.cpp (plain cmake) | **19000** | Baseline. ~3.58 t/s on Qwen3.5-9B Q4_K_M. Untouched upstream reference build. |
+| `local_provider_llamacpp_kleidiai/` | llama.cpp + KleidiAI | **19100** | Phase 1 of f26. ARM-optimized Q4 kernels via `-DGGML_USE_KLEIDIAI=ON`. Expected ~5–7 t/s. |
+| `local_provider_ollama/` | Ollama | varies | Optional Ollama backend for easy model management. |
+| `local_provider_rkllm/` | RKLLM (NPU) | varies | RK3588 NPU inference via RKLLM API. 6 TOPS, limited context. |
+
+Each provider directory follows a consistent structure:
+
+```
+local_provider_<name>/
+├── build_<name>.sh           # cmake / install build script
+├── start_local_provider.sh   # Launch backend + OpenAI adapter
+├── openai_adapter.py         # Thin HTTP proxy (stdlib only)
+├── README.md                 # Setup, ports, benchmark results
+└── runtime/
+    ├── local_<name>.json     # Pre-rendered nanobot config
+    ├── build/                # gitignored — compiled binary
+    └── logs/                 # gitignored — server logs
+```
+
+**Port allocation summary:**
+
+| Service | Port |
+|---------|------|
+| llama.cpp baseline backend | 19080 |
+| llama.cpp baseline adapter | 19000 |
+| KleidiAI backend | 19180 |
+| KleidiAI adapter | 19100 |
+| nanobot mesh TCP | 18800 |
+| nanobot mesh UDP | 18799 |
+| nanobot mesh dashboard | 18880 |
+
+The `local_llm/scripts/run_agent_smoke.sh` script smoke-tests each provider end-to-end via `nanobot agent`.  The `render_agent_configs.py` script regenerates runtime config JSON files from a user's `~/.embed_nanobot/config.json`.
+
+---
+
 ### Channels (`nanobot/channels/`)
 
 Each channel implements a `BaseChannel` interface:

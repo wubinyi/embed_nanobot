@@ -8,6 +8,9 @@ OLLAMA_RUNTIME_DIR="$OLLAMA_PROVIDER_DIR/runtime"
 LLAMACPP_PROVIDER_DIR="$ROOT_DIR/local_llm/local_provider_llamacpp"
 LLAMACPP_RUNTIME_DIR="$LLAMACPP_PROVIDER_DIR/runtime"
 LLAMACPP_WORKSPACE_DIR="$LLAMACPP_RUNTIME_DIR/workspaces"
+KLEIDIAI_PROVIDER_DIR="$ROOT_DIR/local_llm/local_provider_llamacpp_kleidiai"
+KLEIDIAI_RUNTIME_DIR="$KLEIDIAI_PROVIDER_DIR/runtime"
+KLEIDIAI_WORKSPACE_DIR="$KLEIDIAI_RUNTIME_DIR/workspaces"
 RKLLM_PROVIDER_DIR="$ROOT_DIR/local_llm/local_provider_rkllm"
 RKLLM_RUNTIME_DIR="$RKLLM_PROVIDER_DIR/runtime"
 RKLLM_WORKSPACE_DIR="$RKLLM_RUNTIME_DIR/workspaces"
@@ -55,7 +58,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$mode" ]]; then
-    echo "Usage: $0 --mode <local|remote|llamacpp|rkllm> [--config PATH] [--prompt TEXT] [--expect TOKEN]" >&2
+    echo "Usage: $0 --mode <local|remote|llamacpp|llamacpp_kleidiai|rkllm> [--config PATH] [--prompt TEXT] [--expect TOKEN]" >&2
     exit 2
 fi
 
@@ -88,6 +91,12 @@ case "$mode" in
         expect="${expect:-RKLLM_OK}"
         timeout_seconds="${timeout_seconds:-180}"
         ;;
+    llamacpp_kleidiai)
+        config_path="${config_path:-$KLEIDIAI_RUNTIME_DIR/local_llamacpp_kleidiai.json}"
+        prompt="${prompt:-Reply with exactly KLEIDIAI_OK and nothing else.}"
+        expect="${expect:-KLEIDIAI_OK}"
+        timeout_seconds="${timeout_seconds:-600}"
+        ;;
     *)
         echo "Unsupported mode: $mode" >&2
         exit 2
@@ -102,9 +111,11 @@ fi
 
 cmd=("$PYTHON_BIN" -m nanobot agent -c "$config_path" -m "$prompt" --no-logs)
 env_prefix=()
-if [[ "$mode" == "rkllm" || "$mode" == "llamacpp" ]]; then
+if [[ "$mode" == "rkllm" || "$mode" == "llamacpp" || "$mode" == "llamacpp_kleidiai" ]]; then
     if [[ "$mode" == "llamacpp" ]]; then
         smoke_workspace="$LLAMACPP_WORKSPACE_DIR/$mode"
+    elif [[ "$mode" == "llamacpp_kleidiai" ]]; then
+        smoke_workspace="$KLEIDIAI_WORKSPACE_DIR/$mode"
     else
         smoke_workspace="$RKLLM_WORKSPACE_DIR/$mode"
     fi

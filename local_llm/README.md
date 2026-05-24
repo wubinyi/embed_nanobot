@@ -45,6 +45,7 @@ It mirrors the role of `esp32/` for device work, but for on-device inference:
 - `scripts/` now contains only shared helpers such as the smoke runner and config renderer
 - `local_provider_ollama/` owns the Ollama-specific install scripts, runtime, and local config
 - `local_provider_llamacpp/` owns the source-built `llama.cpp` backend, adapter, and local config
+- `local_provider_llamacpp_kleidiai/` owns the KleidiAI-optimized `llama.cpp` build (f26 Phase 1) — port 19100
 - `local_provider_rkllm/` owns the RKLLM bridge, its dedicated runtime, and the upstream `rknn-llm-src` tree
 - `logs/` stores captured agent and runtime logs
 - `models/` is a placeholder for model-related assets tracked outside git
@@ -52,22 +53,28 @@ It mirrors the role of `esp32/` for device work, but for on-device inference:
 
 ## Provider layout
 
-`local_llm` now exposes three provider-owned local-provider paths plus a small shared layer:
+`local_llm` now exposes four provider-owned local-provider paths plus a small shared layer:
 
 1. `ollama`
 	 - direct local provider at `http://127.0.0.1:11434/v1`
 	 - uses the repo-local Ollama binary under `local_llm/local_provider_ollama/runtime/bin/ollama`
 	 - validated via `local_llm/local_provider_ollama/runtime/local_ollama.json`
-2. `custom`
+2. `custom` (baseline llama.cpp)
 	 - llama.cpp-backed provider exposed through `local_llm/local_provider_llamacpp/`
 	 - source-builds `llama-server` from `ggml-org/llama.cpp`
 	 - nanobot talks to it through the OpenAI-compatible adapter at `http://127.0.0.1:19000/v1`
 	 - validated via `local_llm/local_provider_llamacpp/runtime/local_llamacpp.json`
-3. `custom`
+3. `custom` (KleidiAI llama.cpp — ARM-optimized, f26 Phase 1)
+	 - same llama.cpp source, but built with `-DGGML_USE_KLEIDIAI=ON` and `+dotprod+fp16`
+	 - exposed through `local_llm/local_provider_llamacpp_kleidiai/`
+	 - nanobot talks to it through the adapter at `http://127.0.0.1:19100/v1`
+	 - validated via `local_llm/local_provider_llamacpp_kleidiai/runtime/local_llamacpp_kleidiai.json`
+	 - expected ~1.5–2× token generation speedup on Cortex-A76 (RK3588) vs baseline
+4. `custom` (RKLLM)
 	 - RKLLM-backed provider exposed through `local_llm/local_provider_rkllm/`
 	 - nanobot talks to it through the OpenAI-compatible bridge at `http://127.0.0.1:18000/v1`
 	 - validated via `local_llm/local_provider_rkllm/runtime/local_rkllm.json`
-4. `shared`
+5. `shared`
 	 - `local_llm/scripts/run_agent_smoke.sh` and `local_llm/scripts/render_agent_configs.py`
 	 - `local_llm/runtime/remote_current.json` and hybrid probe configs
 
@@ -82,7 +89,7 @@ There are now three config layers on purpose:
 	- human-maintained examples and templates
 	- safe to read, diff, and copy from
 	- should stay stable and generic
-- `local_llm/local_provider_ollama/runtime/`, `local_llm/local_provider_llamacpp/runtime/`, and `local_llm/local_provider_rkllm/runtime/`
+- `local_llm/local_provider_ollama/runtime/`, `local_llm/local_provider_llamacpp/runtime/`, `local_llm/local_provider_llamacpp_kleidiai/runtime/`, and `local_llm/local_provider_rkllm/runtime/`
 	- provider-owned local configs and runtime assets
 	- contain the exact binaries, model bridge state, and dedicated workspaces needed by that provider path
 - `local_llm/runtime/`

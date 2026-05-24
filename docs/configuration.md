@@ -960,7 +960,65 @@ Use either `command`+`args` (stdio) or `url` (HTTP), not both.
 }
 ```
 
-### Full-Featured Setup
+### Local LLM — llama.cpp (baseline, port 19000)
+
+Targets the `local_provider_llamacpp` self-hosted backend on Radxa Rock 5T.
+The pre-rendered config lives at `local_llm/local_provider_llamacpp/runtime/local_llamacpp.json`.
+
+```json
+{
+  "providers": {
+    "custom": {
+      "apiKey": "no-key",
+      "apiBase": "http://127.0.0.1:19000/v1",
+      "extraHeaders": null
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": "qwen3.5-9b-llamacpp",
+      "provider": "custom",
+      "maxTokens": 8192,
+      "contextWindowTokens": 65536
+    }
+  }
+}
+```
+
+Start the provider first: `bash local_llm/local_provider_llamacpp/start_local_provider.sh`
+
+### Local LLM — KleidiAI llama.cpp (ARM-optimized, port 19100)
+
+Targets the `local_provider_llamacpp_kleidiai` backend built with
+`-DGGML_USE_KLEIDIAI=ON` for 1.5–2× inference speedup on Cortex-A76
+(Radxa Rock 5T, RK3588). The pre-rendered config lives at
+`local_llm/local_provider_llamacpp_kleidiai/runtime/local_llamacpp_kleidiai.json`.
+
+```json
+{
+  "providers": {
+    "custom": {
+      "apiKey": "no-key",
+      "apiBase": "http://127.0.0.1:19100/v1",
+      "extraHeaders": null
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": "qwen3.5-9b-kleidiai",
+      "provider": "custom",
+      "maxTokens": 8192,
+      "contextWindowTokens": 65536
+    }
+  }
+}
+```
+
+Start the provider first: `bash local_llm/local_provider_llamacpp_kleidiai/start_local_provider.sh`
+
+Build first (one-time): `bash local_llm/local_provider_llamacpp_kleidiai/build_llamacpp_kleidiai.sh`
+
+
 
 ```json
 {

@@ -1,4 +1,5 @@
-# scope<TAB>feature_folder_slug<TAB>optional comma-separated aliases
+# scope	feature_folder_slug	optional comma-separated aliases
 # Example:
 # esp32	esp32_led	led,device_led
 esp32	esp32_led	led,device_led
+f26	hybrid_npu_inference	kleidiai,hybrid_npu

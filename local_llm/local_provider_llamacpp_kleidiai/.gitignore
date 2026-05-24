@@ -1,0 +1,9 @@
+# Build output — the compiled llama-server binary lives here after build
+runtime/build/
+
+# Per-run logs and llama-server workspace files
+runtime/logs/
+runtime/workspaces/
+
+# llama.cpp source is a symlink to the sibling provider's clone, not owned here
+llama.cpp-src
