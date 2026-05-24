@@ -23,3 +23,7 @@ botpy.log
 nano.*.save
 .DS_Store
 uv.lock
+cache.db
+config.yaml
+.vscode/
+libmali-full.so

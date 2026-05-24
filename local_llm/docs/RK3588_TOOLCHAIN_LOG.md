@@ -33,6 +33,12 @@ Record every local-LLM setup step executed on the Radxa Rock 5T.
 | 2026-05-03 09:40 | RKLLM local-provider launcher fix | `bash local_llm/local_provider_rkllm/start_local_provider.sh` | PASS | Launcher now normalizes the copied RKLLM demo server to the model-safe `4096` context and starts both backend `:8080` and adapter `:18000` |
 | 2026-05-03 09:42 | RKLLM adapter direct probe | `curl -s http://127.0.0.1:18000/v1/chat/completions ...` | PASS | OpenAI-compatible adapter returned `RKLLM_OK` after flattening OpenAI chat history into a single backend prompt |
 | 2026-05-03 09:45 | RKLLM agent smoke | `bash local_llm/scripts/run_agent_smoke.sh --mode rkllm` | PASS | Real `nanobot agent` returned `RKLLM_OK` when built-in skills and tool schemas were disabled for the low-context smoke path |
+| 2026-05-10 02:49 | llama.cpp source build | `proxy_on && bash local_llm/local_provider_llamacpp/build_llamacpp.sh` | PASS | Cloned `ggml-org/llama.cpp`, configured CMake on aarch64, and built `llama-server`; only warning was missing OpenSSL so HTTPS support stayed disabled |
+| 2026-05-10 02:56 | llama.cpp provider start | `bash local_llm/local_provider_llamacpp/start_local_provider.sh` | PASS | Started raw backend on `:19080` and adapter on `:19000`; adapter returned `503 Loading model` until GGUF load + warmup finished |
+| 2026-05-10 02:57 | llama.cpp adapter probe | `curl -sS http://127.0.0.1:19000/health && curl -sS http://127.0.0.1:19000/v1/models` | PASS | Adapter became healthy after warmup and advertised alias `qwen3.5-9b-llamacpp` |
+| 2026-05-10 02:58 | llama.cpp direct completion | `curl -sS http://127.0.0.1:19000/v1/chat/completions ...` | PASS | Direct OpenAI-compatible completion returned `LLAMACPP_OK` using `Qwen3.5-9B-Q4_K_M.gguf` |
+| 2026-05-10 02:58 | llama.cpp initial agent smoke | `bash local_llm/scripts/run_agent_smoke.sh --mode llamacpp` | FAIL | First real agent request exceeded local `4096` token context due to built-in prompt/tool payload |
+| 2026-05-10 03:03 | llama.cpp low-context smoke | `bash local_llm/scripts/run_agent_smoke.sh --mode llamacpp` | PASS | Smoke runner now uses a provider-owned workspace and disables built-in skills plus tool schemas; real `nanobot agent` returned `LLAMACPP_OK` |
 
 ## Summary
 
@@ -48,6 +54,11 @@ The RKLLM board-side toolchain is now installed and validated far enough for a
 real `nanobot agent` smoke path on RK3588. The current model is still limited
 to a hard `4096` context window, so the validated RKLLM smoke path uses a
 reduced-context agent configuration.
+
+The Radxa host now also has a validated source-built llama.cpp path for GGUF
+models. The current working route is `Qwen3.5-9B-Q4_K_M.gguf` through the
+provider-owned adapter on `:19000`, with the same reduced-context smoke pattern
+used for RKLLM when validating the real `nanobot agent` path.
 
 For this Radxa setup, the kernel-side RKNPU driver is already supplied by the
 Armbian vendor kernel package `linux-image-vendor-rk35xx`; driver installation

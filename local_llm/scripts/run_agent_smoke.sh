@@ -5,8 +5,12 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RUNTIME_DIR="$ROOT_DIR/local_llm/runtime"
 OLLAMA_PROVIDER_DIR="$ROOT_DIR/local_llm/local_provider_ollama"
 OLLAMA_RUNTIME_DIR="$OLLAMA_PROVIDER_DIR/runtime"
+LLAMACPP_PROVIDER_DIR="$ROOT_DIR/local_llm/local_provider_llamacpp"
+LLAMACPP_RUNTIME_DIR="$LLAMACPP_PROVIDER_DIR/runtime"
+LLAMACPP_WORKSPACE_DIR="$LLAMACPP_RUNTIME_DIR/workspaces"
 RKLLM_PROVIDER_DIR="$ROOT_DIR/local_llm/local_provider_rkllm"
 RKLLM_RUNTIME_DIR="$RKLLM_PROVIDER_DIR/runtime"
+RKLLM_WORKSPACE_DIR="$RKLLM_RUNTIME_DIR/workspaces"
 LOG_DIR="$ROOT_DIR/local_llm/logs"
 EMBED_ENV_BIN="/home/wubinyi/miniforge3/envs/embed_nanobot/bin"
 if [[ -x "$EMBED_ENV_BIN/python" ]]; then
@@ -51,7 +55,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$mode" ]]; then
-    echo "Usage: $0 --mode <local|remote|rkllm> [--config PATH] [--prompt TEXT] [--expect TOKEN]" >&2
+    echo "Usage: $0 --mode <local|remote|llamacpp|rkllm> [--config PATH] [--prompt TEXT] [--expect TOKEN]" >&2
     exit 2
 fi
 
@@ -71,6 +75,12 @@ case "$mode" in
         prompt="${prompt:-Reply with exactly REMOTE_OK and nothing else.}"
         expect="${expect:-REMOTE_OK}"
         timeout_seconds="${timeout_seconds:-180}"
+        ;;
+    llamacpp)
+        config_path="${config_path:-$LLAMACPP_RUNTIME_DIR/local_llamacpp.json}"
+        prompt="${prompt:-Reply with exactly LLAMACPP_OK and nothing else.}"
+        expect="${expect:-LLAMACPP_OK}"
+        timeout_seconds="${timeout_seconds:-600}"
         ;;
     rkllm)
         config_path="${config_path:-$RKLLM_RUNTIME_DIR/local_rkllm.json}"
@@ -92,39 +102,43 @@ fi
 
 cmd=("$PYTHON_BIN" -m nanobot agent -c "$config_path" -m "$prompt" --no-logs)
 env_prefix=()
-if [[ "$mode" == "rkllm" ]]; then
-    rkllm_workspace="$RKLLM_RUNTIME_DIR/workspaces/rkllm"
-    mkdir -p "$rkllm_workspace"
-    cat > "$rkllm_workspace/AGENTS.md" <<'EOF'
+if [[ "$mode" == "rkllm" || "$mode" == "llamacpp" ]]; then
+    if [[ "$mode" == "llamacpp" ]]; then
+        smoke_workspace="$LLAMACPP_WORKSPACE_DIR/$mode"
+    else
+        smoke_workspace="$RKLLM_WORKSPACE_DIR/$mode"
+    fi
+    mkdir -p "$smoke_workspace"
+    cat > "$smoke_workspace/AGENTS.md" <<'EOF'
 # Agent Instructions
 
 Be concise. Reply directly. Avoid tool use unless strictly required.
 EOF
-    cat > "$rkllm_workspace/HEARTBEAT.md" <<'EOF'
+    cat > "$smoke_workspace/HEARTBEAT.md" <<'EOF'
 # Heartbeat
 EOF
-    cat > "$rkllm_workspace/SOUL.md" <<'EOF'
+    cat > "$smoke_workspace/SOUL.md" <<'EOF'
 # Soul
 
 I am nanobot.
 EOF
-    cat > "$rkllm_workspace/TOOLS.md" <<'EOF'
+    cat > "$smoke_workspace/TOOLS.md" <<'EOF'
 # Tool Notes
 
 Use tools only when needed.
 EOF
-    cat > "$rkllm_workspace/USER.md" <<'EOF'
+    cat > "$smoke_workspace/USER.md" <<'EOF'
 # User
 
 Technical user.
 EOF
-    mkdir -p "$rkllm_workspace/memory"
-    cat > "$rkllm_workspace/memory/MEMORY.md" <<'EOF'
+    mkdir -p "$smoke_workspace/memory"
+    cat > "$smoke_workspace/memory/MEMORY.md" <<'EOF'
 # Memory
 EOF
-    : > "$rkllm_workspace/memory/HISTORY.md"
+    : > "$smoke_workspace/memory/HISTORY.md"
     env_prefix=(NANOBOT_DISABLE_BUILTIN_SKILLS=1 NANOBOT_DISABLE_TOOLS=1)
-    cmd+=(--workspace "$rkllm_workspace" --session "cli:rkllm-smoke-$timestamp")
+    cmd+=(--workspace "$smoke_workspace" --session "cli:${mode}-smoke-$timestamp")
 fi
 
 printf 'Running %s smoke test\n' "$mode" | tee "$log_path"

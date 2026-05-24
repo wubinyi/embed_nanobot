@@ -2,7 +2,7 @@
 
 > Single source of truth for project progress. Updated after each feature completion.
 
-**Last updated**: 2026-05-01 (activity log refactor, chronology cleanup, and validated local LLM update)
+**Last updated**: 2026-05-10 (llama.cpp local provider validated on Radxa 5T)
 
 ### Status Legend
 
@@ -221,6 +221,7 @@ Chronological project notes, audits, sync milestones, and hardware validation re
 
 | Date | Area | Summary |
 |------|------|---------|
+| 2026-05-10 | Local LLM | llama.cpp local provider validated on Radxa 5T |
 | 2026-05-01 | Local LLM | Local LLM workspace validated on Radxa 5T |
 | 2026-04-26 | ESP32 UX | Onboard status LED patterns documented |
 | 2026-04-21 | Hardware Validation | Task 5.4.1 complete: E2E OTA WiFi test suite |
@@ -257,7 +258,17 @@ Chronological project notes, audits, sync milestones, and hardware validation re
 
 ### Entries
 
+### 2026-05-10 — llama.cpp Local Provider Validated on Radxa 5T
+
+- **Third provider-owned path added**: `local_llm/local_provider_llamacpp/` now owns the source-build helper, backend launcher, OpenAI-compatible adapter, and provider-local runtime assets.
+- **Source build validated**: `llama-server` was built successfully from `ggml-org/llama.cpp` on the Radxa aarch64 host.
+- **Direct model path validated**: the local GGUF model `Qwen3.5-9B-Q4_K_M.gguf` loaded successfully and direct `curl` to the nanobot-facing adapter returned `LLAMACPP_OK`.
+- **Real agent path validated**: `bash local_llm/scripts/run_agent_smoke.sh --mode llamacpp` now returns `LLAMACPP_OK` through the real `nanobot agent` CLI path.
+- **Operational finding**: initial adapter probes returned `503 Loading model` during backend warmup; this was a normal load state, not a launcher failure.
+- **Prompt-surface finding**: the first raw agent smoke exceeded the local `4096` token context window. The validated llama.cpp smoke path now uses a provider-owned low-context workspace and disables built-in skills plus tool schemas.
+
 ### 2026-05-01 — Local LLM Workspace Validated on Radxa 5T
+
 
 - **New operational workspace**: `local_llm/` added for local-model scripts, docs, generated configs, and validation logs.
 - **Real agent validation added**: `local_llm/scripts/run_agent_smoke.sh` now exercises `nanobot agent` in both remote and local modes using generated runtime configs.

@@ -876,3 +876,59 @@ Operational note:
   - Remove agent roles (only add/adjust).
 
 </Self_Reflection_Protocol>
+
+<QA_Logging_Protocol>
+
+  ## Q&A Logging Protocol
+
+  When the user asks a question that reveals a **knowledge gap, recurring confusion,
+  or non-obvious design decision** about the project, the agent must:
+
+  1. **Answer the question** in the chat response.
+  2. **Log the answer to a `FAQ.md`** in the appropriate project subfolder.
+  3. **Do NOT create a new markdown file** — append to the existing `FAQ.md` in
+     the relevant directory, or create one if it doesn't exist yet.
+
+  ### Location Rule
+
+  | Question domain | FAQ file location |
+  |-----------------|-------------------|
+  | llama.cpp backend, Vulkan, GPU drivers, Mali | `local_llm/local_provider_llamacpp/FAQ.md` |
+  | RKLLM / NPU inference | `local_llm/<provider>/FAQ.md` |
+  | ESP32 / mesh client / MicroPython | `esp32/FAQ.md` |
+  | nanobot gateway / mesh channel | `docs/TESTING_FAQ.md` (existing) |
+  | General setup, config, deployment | `docs/TESTING_FAQ.md` (existing) |
+  | Upstream sync / branching / workflow | `docs/00_system/FAQ.md` |
+
+  If no clear subfolder match exists, default to `docs/TESTING_FAQ.md`.
+
+  ### Format
+
+  Each FAQ entry follows this structure:
+
+  ```markdown
+  ## Q: <question as asked or paraphrased>
+
+  <answer paragraphs>
+
+  ### Supporting data / commands (optional)
+  \```bash
+  <relevant commands or log excerpts>
+  \```
+  ```
+
+  ### When to trigger
+
+  - User explicitly asks "why", "how", "what does X mean", or "what is the
+    difference between X and Y"
+  - The answer required non-trivial investigation (dmesg, log reading, benchmarks)
+  - The question is likely to recur in future sessions (hardware quirks,
+    performance trade-offs, driver versioning)
+
+  ### When NOT to trigger
+
+  - Purely ephemeral task questions ("did the build succeed?")
+  - Questions already fully documented in an existing file
+  - One-liner answers with no investigation needed
+
+</QA_Logging_Protocol>

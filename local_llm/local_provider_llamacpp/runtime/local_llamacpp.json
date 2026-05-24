@@ -2,8 +2,8 @@
   "agents": {
     "defaults": {
       "workspace": "~/.nanobot/workspace",
-      "model": "qwen2.5:0.5b-nb",
-      "provider": "ollama",
+      "model": "qwen3.5-9b-llamacpp",
+      "provider": "custom",
       "maxTokens": 8192,
       "contextWindowTokens": 65536,
       "temperature": 0.1,
@@ -208,9 +208,10 @@
     }
   },
   "providers": {
-    "ollama": {
-      "apiKey": "dummy",
-      "apiBase": "http://localhost:11434/v1"
+    "custom": {
+      "apiKey": "no-key",
+      "apiBase": "http://127.0.0.1:19000/v1",
+      "extraHeaders": null
     }
   },
   "gateway": {
