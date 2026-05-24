@@ -71,7 +71,7 @@ sys.path.insert(0, str(_PROJECT_ROOT))
 # ---------------------------------------------------------------------------
 # Constants (matching copilot-instructions.md environment table)
 # ---------------------------------------------------------------------------
-DEFAULT_HUB_NODE_ID = "hub"
+DEFAULT_HUB_NODE_ID = "hub-01"
 DEFAULT_ESP32_NODE_ID = "esp32-01"
 DEFAULT_TCP_PORT = 18800
 DEFAULT_UDP_PORT = 18799
@@ -156,44 +156,54 @@ class OTATestRunner:
         """Import nanobot modules and start mesh channel."""
         log.info("Setting up mesh channel (port %d)…", self.tcp_port)
         try:
-            from nanobot.mesh.ota import FirmwareStore
             from nanobot.mesh.channel import MeshChannel
-            from unittest.mock import MagicMock
+            from nanobot.bus.queue import MessageBus
+            from types import SimpleNamespace
 
-            # Minimal config object
-            config = MagicMock()
-            config.node_id = DEFAULT_HUB_NODE_ID
-            config.tcp_port = self.tcp_port
-            config.udp_port = self.udp_port
-            config.roles = ["nanobot"]
-            config.psk_auth_enabled = True
-            config.allow_unauthenticated = False
-            config.nonce_window = 60
-            config.key_store_path = self.key_store_path
-            config.encryption_enabled = False
-            config.registry_path = self.registry_path
-            config.automation_rules_path = ""
-            config.mtls_enabled = False
-            config.ca_dir = ""
-            config.device_cert_validity_days = 365
-            config.firmware_dir = self.fw_dir
-            config.ota_chunk_size = 4096
-            config.ota_chunk_timeout = 30
-            config.enrollment_pin_length = 6
-            config.enrollment_pin_timeout = 300
-            config.enrollment_max_attempts = 3
-            config._workspace_path = str(
-                Path.home() / ".nanobot" / "workspace"
+            # Config namespace — mirrors MeshConfig field names (snake_case)
+            config = SimpleNamespace(
+                node_id=DEFAULT_HUB_NODE_ID,
+                tcp_port=self.tcp_port,
+                udp_port=self.udp_port,
+                roles=["nanobot"],
+                allow_from=["*"],
+                psk_auth_enabled=True,
+                allow_unauthenticated=False,
+                nonce_window=2_000_000_000,  # wide: ESP32 NTP may not sync immediately
+                key_store_path=self.key_store_path,
+                encryption_enabled=True,
+                registry_path=self.registry_path,
+                automation_rules_path="",
+                mtls_enabled=False,
+                ca_dir="",
+                device_cert_validity_days=365,
+                firmware_dir=self.fw_dir,
+                ota_chunk_size=4096,
+                ota_chunk_timeout=30,
+                enrollment_pin_length=6,
+                enrollment_pin_timeout=300,
+                enrollment_max_attempts=3,
+                groups_path="",
+                scenes_path="",
+                dashboard_port=0,
+                industrial_config_path="",
+                federation_config_path="",
+                pipeline_enabled=False,
+                pipeline_path="",
+                pipeline_max_points=10000,
+                pipeline_flush_interval=60,
+                ble_config_path="",
+                codegen_templates_path="",
+                _workspace_path=str(Path.home() / ".nanobot" / "workspace"),
             )
 
-            bus = MagicMock()
-            bus.inbound = MagicMock()
-            bus.inbound.put = MagicMock(return_value=None)
+            # Use a real MessageBus (two asyncio queues) — no async issues
+            bus = MessageBus()
 
             self._channel = MeshChannel(config, bus)
             return True
         except Exception as exc:
-            log.error("Setup failed: %s", exc)
+            log.error("Setup failed: %s", exc, exc_info=True)
             return False
 
     # -- firmware preparation ------------------------------------------------
@@ -343,7 +353,7 @@ class OTATestRunner:
         if self._channel and not self.no_teardown:
             log.info("Stopping mesh channel…")
             try:
-                await self._channel.close()
+                await self._channel.stop()
             except Exception:
                 pass
 
@@ -371,10 +381,10 @@ class OTATestRunner:
             log.info("PASS (dry run)")
             return 0
 
-        # Start the mesh channel's receive loop
+        # Start the mesh channel (transport + discovery)
         log.info("Starting mesh TCP listener on port %d…", self.tcp_port)
-        listen_task = asyncio.create_task(self._channel._start_transport())
-        await asyncio.sleep(1)  # let listener bind
+        await self._channel.start()
+        await asyncio.sleep(1)  # give transport a moment to bind
 
         try:
             device_found = await self.wait_for_device()
@@ -400,7 +410,6 @@ class OTATestRunner:
             return 0
 
         finally:
-            listen_task.cancel()
             await self.teardown()
 
 
