@@ -150,15 +150,24 @@ taskset -c 4-7 "$BASE_BIN/llama-bench" \
 
 ### Measured results (2026-05-24, Radxa Rock 5T / RK3588)
 
-Command: `taskset -c 4-7 llama-bench -m Qwen3.5-9B-Q4_K_M.gguf -t 4 -p 0 -n 128 -r 3`
+Commands:
+```bash
+# Baseline — Vulkan binary with Vulkan disabled (GGML_VK_VISIBLE_DEVICES="") → pure CPU
+GGML_VK_VISIBLE_DEVICES="" taskset -c 4-7 llama-bench -m Qwen3.5-9B-Q4_K_M.gguf -t 4 -p 512 -n 128 -r 3
+# KleidiAI — CPU-only build
+taskset -c 4-7 llama-bench -m Qwen3.5-9B-Q4_K_M.gguf -t 4 -p 512 -n 128 -r 3
+```
 
-| Metric | Baseline (Vulkan ngl=99) | KleidiAI (CPU) | Actual gain |
-|--------|--------------------------|----------------|-------------|
-| Token generation tg128 (t/s) | 2.34 ± 0.00 | **3.35 ± 0.02** | **1.43×** |
+| Metric | Baseline (CPU, standard GGML) | KleidiAI (CPU) | Speedup |
+|--------|-------------------------------|----------------|---------|
+| Token generation tg128 (t/s) | 3.46 ± 0.04 | **3.43 ± 0.02** | **~1×** (within noise) |
+| Prompt processing pp512 (t/s) | 9.34 ± 0.02 | **9.21 ± 0.04** | **~1×** (within noise) |
+| vs Vulkan/Mali-G610 (2.34 t/s) | — | **1.47×** faster | — |
 
-> KleidiAI CPU with ARM dotprod (`sdot`) kernels outperforms Vulkan/Mali-G610 GPU
-> offload for Q4_K_M inference at this model scale. The `kai_matmul_clamp_f32_qai8dxp_qsi4cxp`
-> kernel is active at runtime on Cortex-A76 cores 4-7.
+> KleidiAI ARM dotprod (`sdot`) kernels match standard GGML CPU performance for
+> Q4_K_M on Cortex-A76 (no measurable difference). However, **both CPU paths are
+> 1.47× faster than the Vulkan/Mali-G610 path** (2.34 t/s tg128), confirming
+> Mali-G610 Vulkan shaders are not optimized for Q4_K workloads at this scale.
 > See full test report: `docs/01_features/f26_hybrid_npu_inference/03_Test_Report.md`
 
 ## Runtime environment variables

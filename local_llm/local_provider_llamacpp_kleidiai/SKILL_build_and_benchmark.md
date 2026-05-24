@@ -2,7 +2,7 @@
 
 **Platform**: Radxa Rock 5T (RK3588 / Cortex-A76×4 big cores)
 **Last validated**: 2026-05-24
-**Outcome**: KleidiAI CPU 3.35 t/s vs Vulkan baseline 2.34 t/s (**1.43×** speedup on Q4_K_M)
+**Outcome**: KleidiAI CPU 3.43 t/s ≈ CPU baseline 3.46 t/s (**~1×** on Q4_K_M); both CPU paths **1.47×** faster than Vulkan/Mali-G610 (2.34 t/s)
 
 ---
 
@@ -96,19 +96,24 @@ MODEL="$PWD/local_llm/models/gguf/Qwen3.5-9B-Q4_K_M.gguf"
 BASE_BIN="$PWD/local_llm/local_provider_llamacpp/runtime/build/bin"
 KLEIDIAI_BIN="$PWD/local_llm/local_provider_llamacpp_kleidiai/runtime/build/bin"
 
-echo "=== BASELINE (no KleidiAI) ==="
-taskset -c 4-7 "$BASE_BIN/llama-bench" \
-  -m "$MODEL" -t 4 -p 0 -n 128 -r 3 2>&1
+# Baseline: disable Vulkan via env var so both runs use pure CPU
+echo "=== BASELINE (CPU, Vulkan disabled) ==="
+GGML_VK_VISIBLE_DEVICES="" taskset -c 4-7 "$BASE_BIN/llama-bench" \
+  -m "$MODEL" -t 4 -p 512 -n 128 -r 3 2>&1
 
 echo ""
 echo "=== KLEIDIAI ==="
 taskset -c 4-7 "$KLEIDIAI_BIN/llama-bench" \
-  -m "$MODEL" -t 4 -p 0 -n 128 -r 3 2>&1
+  -m "$MODEL" -t 4 -p 512 -n 128 -r 3 2>&1
 ```
+
+> **Important**: Use `GGML_VK_VISIBLE_DEVICES=""` for the baseline to disable
+> Vulkan at runtime. Do NOT use `-ngl 0` — on this llama.cpp rev, ngl=0 with a
+> Vulkan-compiled binary triggers a Vulkan assert and aborts.
 
 **Flags explained**:
 - `-t 4` — 4 threads (Cortex-A76 big cores 4-7, pinned via `taskset -c 4-7`)
-- `-p 0` — skip prompt-processing bench (use `-p 512` to measure prefill too)
+- `-p 512` — measure prompt-processing (prefill) with 512 tokens
 - `-n 128` — generate 128 tokens per run
 - `-r 3` — 3 repetitions (averages out variance)
 - `taskset -c 4-7` — pin to the 4 big Cortex-A76 cores; avoids the slow A55 cores
@@ -141,21 +146,23 @@ FEAT_DOTPROD is detected.
 
 | Condition | Meaning |
 |-----------|---------|
-| KleidiAI t/s ≥ 1.25× baseline | ✅ KleidiAI kernels are active and beneficial |
-| KleidiAI t/s ≈ baseline (±5%) | KleidiAI may not have found a suitable kernel path; check cmake log |
+| KleidiAI t/s ≥ 1.25× CPU baseline | ✅ KleidiAI kernels are active and beneficial |
+| KleidiAI t/s ≈ CPU baseline (±5%) | Normal for Q4_K_M on Cortex-A76 — KleidiAI matches but doesn't beat standard GGML |
+| KleidiAI t/s > 1.47× when compared to Vulkan run | Expected — both CPU paths beat Mali-G610 Vulkan |
 | `SIGILL` during KleidiAI run | Wrong `-march` flag — remove `+i8mm` if present |
-| Baseline uses Vulkan backend | Normal on this machine; KleidiAI beats Vulkan for Q4_K at 9B scale |
 
 **Measured on Radxa Rock 5T (RK3588), 2026-05-24**:
 ```
-Baseline (Vulkan ngl=99): 2.34 ± 0.00 t/s  (tg128, Qwen3.5-9B-Q4_K_M, -t 4)
-KleidiAI (CPU):           3.35 ± 0.02 t/s
-Speedup:                  1.43×
+Baseline CPU (GGML_VK_VISIBLE_DEVICES=""):  tg128=3.46±0.04  pp512=9.34±0.02 t/s
+KleidiAI CPU:                               tg128=3.43±0.02  pp512=9.21±0.04 t/s
+Speedup (KleidiAI / CPU baseline):          ~1× (within noise)
+Speedup (KleidiAI / Vulkan 2.34 t/s):       1.47×
 ```
 
-The KleidiAI CPU build outperforms Vulkan/Mali-G610 GPU offload because the
-Mali-G610 Vulkan shader implementation is not optimized for GGML's Q4_K sparse
-format at this model scale. KleidiAI's `sdot`-based dense kernels are faster.
+KleidiAI ARM dotprod (`sdot`) kernels match standard GGML CPU performance for
+Q4_K_M on Cortex-A76 — no measurable speedup. Both CPU paths are however
+**1.47× faster** than the Vulkan/Mali-G610 path (2.34 t/s tg128). The value
+of KleidiAI here is a stable, Vulkan-free CPU path without driver dependencies.
 
 ---
 
@@ -207,14 +214,19 @@ Re-run the build without `+i8mm`:
 
 ### KleidiAI t/s is same as baseline
 
-Check the cmake configure log for `GGML_USE_KLEIDIAI: OFF`.
-If OFF, look for the cmake error about why KleidiAI was disabled.
+This is expected for Q4_K_M on Cortex-A76. KleidiAI's `sdot` kernels match
+(but don't beat) standard GGML for this quantization type on this CPU.
+For a measurable speedup, try Q4_0 quantization which KleidiAI targets more
+specifically.
+
+If KleidiAI t/s is WORSE than baseline by >10%, check cmake for `GGML_USE_KLEIDIAI: OFF`.
 
 ### Benchmark shows Vulkan in baseline but CPU in KleidiAI
 
-This is expected. The KleidiAI build does not compile Vulkan support.
-The comparison is: Vulkan-capable baseline vs CPU-only KleidiAI.
-KleidiAI CPU should still win for Q4_K models at this scale on Mali-G610.
+This happens when `GGML_VK_VISIBLE_DEVICES=""` is not set, allowing the baseline
+binary to auto-detect the Mali-G610. The Vulkan path is ~2.34 t/s tg128 (slower
+than CPU). Always use `GGML_VK_VISIBLE_DEVICES=""` for the baseline to ensure
+a fair CPU-vs-CPU comparison.
 
 ### Build time >15 minutes
 
@@ -230,7 +242,7 @@ After collecting results, commit with:
 git add docs/01_features/f26_hybrid_npu_inference/03_Test_Report.md
 git add local_llm/local_provider_llamacpp_kleidiai/README.md
 git add local_llm/local_provider_llamacpp_kleidiai/SKILL_build_and_benchmark.md
-git commit -m "docs(f26): fill benchmark results — KleidiAI 3.35 t/s vs baseline 2.34 t/s (1.43x)"
+git commit -m "docs(f26): fill benchmark results — CPU baseline 3.46 t/s, KleidiAI 3.43 t/s (~1x vs CPU, 1.47x vs Vulkan)"
 proxy_on && git push
 ```
 
