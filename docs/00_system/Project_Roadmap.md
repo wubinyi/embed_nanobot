@@ -2,7 +2,7 @@
 
 > Single source of truth for project progress. Updated after each feature completion.
 
-**Last updated**: 2026-05-10 (llama.cpp local provider validated on Radxa 5T)
+**Last updated**: 2026-05-24 (Mali-G610 Vulkan g24p0 enablement + RKLLM provider documented)
 
 ### Status Legend
 
@@ -21,7 +21,8 @@
 | 3 | Production Hardening | 6 | 6 | 0 |
 | 4 | Smart Factory Extension | 5 | 5 | 0 |
 | 5 | Autonomous Intelligence & Secure Device Mgmt | 12 | 12 | 0 |
-| **Total** | | **41** | **41** | **0** |
+| 5.5 | Local Inference on RK3588 | 3 | 3 | 0 |
+| **Total** | | **44** | **44** | **0** |
 
 ---
 
@@ -187,6 +188,26 @@ and the other is remotely updatable by the Hub.
 | 5.4.1 | **End-to-end OTA WiFi test on Radxa 5T** | P1 | S | 5.3.2, 3.3 | **Done** 2026-04-21 |
 | | Both hub (`nanobot/mesh/ota.py`) and ESP32 (`esp32/mesh_client/main.py` OTA handlers) are implemented. Needs live end-to-end test: enroll ESP32 → push app.py via OTA over WiFi → verify ESP32 resets and runs new code. No USB needed after initial deploy. | | | | |
 
+### 5.5 — Local Inference on RK3588
+
+**Goal**: Run LLM inference locally on the Radxa Rock 5T using all available compute: NPU (RKLLM), CPU (llama.cpp), and GPU (Mali-G610 via Vulkan). Provides fully offline AI capability with no cloud dependency.
+
+| # | Task | Priority | Complexity | Dependencies | Status |
+|---|------|----------|------------|--------------|--------|
+| 5.5.1 | **RKLLM/NPU inference provider** | P2 | M | RKNN-LLM runtime | **Done** (2026-05-03) |
+| | Flask bridge to `rknn-llm-src` at port 18000. OpenAI-compatible adapter. `local_llm/local_provider_rkllm/`. | | | | |
+| | Setup: `local_llm/docs/RKLLM_INSTALL_AND_RUN.md`, `RKNPU_DRIVER_INSTALL.md`. | | | | |
+| | `fix(local-llm): stabilize rkllm provider smoke path` — validated with real `nanobot agent`. | | | | |
+| 5.5.2 | **llama.cpp CPU inference provider** | P2 | M | None | **Done** (2026-05-10) |
+| | Source-built `llama-server` from `ggml-org/llama.cpp` (aarch64, A76×4 + DOTPROD). | | | | |
+| | OpenAI-compatible adapter at port 19000. `local_llm/local_provider_llamacpp/`. | | | | |
+| | Model: `Qwen3.5-9B-Q4_K_M.gguf`. Bench: 3.58 t/s generation (A76×4, DOTPROD). | | | | |
+| 5.5.3 | **Mali-G610 Vulkan GPU acceleration** | P3 | L | 5.5.2 | **Done** (2026-05-23) |
+| | Root cause of prior failures: g13p0 userspace driver against g25p0 kernel DDK → ABI mismatch. | | | | |
+| | Fix: install `libmali-valhall-g610-g24p0-gbm_1.9-1_arm64.deb` from ginkage/libmali-rockchip fork. | | | | |
+| | Vulkan bench: Mali-G610, ngl=99, 2.37 t/s (CPU 3.58 t/s faster for batch=1 due to UMA + DOTPROD). | | | | |
+| | Docs: `local_llm/local_provider_llamacpp/RK3588 Vulkan 部署排查记录.md` (Phase 5 success). | | | | |
+
 ---
 
 ## Upstream Sync Status
@@ -221,7 +242,10 @@ Chronological project notes, audits, sync milestones, and hardware validation re
 
 | Date | Area | Summary |
 |------|------|---------|
+| 2026-05-24 | Local LLM | QA logging skill + FAQ framework; feature branch merged |
+| 2026-05-23 | Local LLM | Mali-G610 Vulkan GPU acceleration enabled (g24p0 driver) |
 | 2026-05-10 | Local LLM | llama.cpp local provider validated on Radxa 5T |
+| 2026-05-03 | Local LLM | RKLLM/NPU inference provider validated on Radxa 5T |
 | 2026-05-01 | Local LLM | Local LLM workspace validated on Radxa 5T |
 | 2026-04-26 | ESP32 UX | Onboard status LED patterns documented |
 | 2026-04-21 | Hardware Validation | Task 5.4.1 complete: E2E OTA WiFi test suite |
@@ -257,6 +281,28 @@ Chronological project notes, audits, sync milestones, and hardware validation re
 | 2026-02-12 | Setup | Project setup complete |
 
 ### Entries
+
+### 2026-05-24 — QA Logging Skill + llamacpp Feature Branch Merged
+
+- **QA_Logging_Protocol skill added**: `.github/copilot-instructions.md` now includes a domain-routing protocol for logging Q&A from testing sessions to the correct project subdirectory FAQ files.
+- **FAQ created**: `local_llm/local_provider_llamacpp/FAQ.md` with 3 entries: Mali DDK version string format (g13p0/g24p0/g25p0), how to disable Vulkan, and why CPU beats Vulkan on RK3588 (UMA + DOTPROD + no matrix cores + batch=1 dispatch overhead).
+- **Feature branch merged**: `copilot/llamacpp-local-provider` → `main_embed` (7 commits: llama.cpp provider, Vulkan log, FAQ, gitignore, OTA test update).
+- **Gitignore cleaned**: Added `cache.db`, `config.yaml`, `.vscode/`, `libmali-full.so`, `local_llm/driver/`, `local_llm/fake_vulkan/`, `local_provider_rkllm/rknn-llm-src/`, `local_provider_llamacpp/*.log`.
+
+### 2026-05-23 — Mali-G610 Vulkan GPU Acceleration Enabled
+
+- **Root cause identified**: All prior Vulkan failures stemmed from ABI mismatch — g13p0 userspace driver used against g25p0-00eac0 kernel DDK (12 versions apart → `ERROR_INCOMPATIBLE_DRIVER`). Phases 1-4 hacks (symlinks, LD_LIBRARY_PATH, fake_vulkan) were workarounds for a fundamentally wrong driver version.
+- **Fix**: Installed `libmali-valhall-g610-g24p0-gbm_1.9-1_arm64.deb` from `ginkage/libmali-rockchip` fork (v1.9-1-4b399ed). Package sets up ICD JSON + ldconfig + exports `vk_icdGetInstanceProcAddr` correctly.
+- **Validation**: `vulkaninfo | grep deviceName` → `Mali-G610`, `driverVersion = 24.0.0`. `llama-bench`: backend=Vulkan, ngl=99, `tg32 = 2.37 t/s`.
+- **Performance finding**: CPU (A76×4, DOTPROD) = 3.58 t/s generation; Vulkan = 2.37 t/s. CPU is ~51% faster for single-token-at-a-time inference due to UMA (no copy overhead), DOTPROD instruction, and no matrix cores on Mali-G610. Vulkan may win for batch prefill in future benchmarks.
+- **Docs updated**: `local_llm/local_provider_llamacpp/RK3588 Vulkan 部署排查记录.md` — added Phase 5 success section with full install steps. Old "失败" conclusion annotated with post-hoc root cause analysis.
+
+### 2026-05-03 — RKLLM/NPU Inference Provider Validated on Radxa 5T
+
+- **New provider path**: `local_llm/local_provider_rkllm/` — Flask bridge to `rknn-llm-src` runtime at port 18000. OpenAI-compatible adapter.
+- **Setup documented**: `local_llm/docs/RKLLM_INSTALL_AND_RUN.md` (build from source, model conversion, service start), `local_llm/docs/RKNPU_DRIVER_INSTALL.md` (NPU kernel driver setup on Radxa 5T).
+- **Smoke test validated**: `fix(local-llm): stabilize rkllm provider smoke path` — real `nanobot agent` path returned `RKLLM_OK`.
+- **Provider surface split**: `df57b50 refactor(local-llm): split provider surfaces` — each provider now owns its own runtime, config, and launch scripts. Avoids cross-contamination between Ollama, RKLLM, and llama.cpp environments.
 
 ### 2026-05-10 — llama.cpp Local Provider Validated on Radxa 5T
 

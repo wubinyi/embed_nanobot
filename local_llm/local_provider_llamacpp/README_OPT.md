@@ -84,3 +84,28 @@ RK3588使用llama.cpp部署模型的性能提升点如下：
     vulkaninfo | grep -i deviceName
     ```
     正确的结果：你应该能看到类似 deviceName = Mali-G610 或者 deviceName = Panfrost 的字样。这说明 Vulkan 驱动正确挂载了 GPU。
+
+    **⚠️ 重要：RK3588 Mali-G610 需要使用正确版本的 Mali 用户空间驱动**
+
+    如果 `vulkaninfo` 显示 `deviceName = llvmpipe` 或者返回 `ERROR_INCOMPATIBLE_DRIVER`，根本原因是用户空间驱动版本（如 g13p0）与内核 DDK 版本（g25p0）不匹配，单纯安装 `apt install libvulkan-dev` 是无效的。
+
+    **正确的解决方案（2025-05-23 验证有效）**：
+
+    首先确认你的内核 DDK 版本：
+    ```Bash
+    ls /sys/module/mali0/parameters/ 2>/dev/null && cat /sys/module/mali0/parameters/version 2>/dev/null || dmesg | grep -i "mali" | grep -i "g[0-9]*p[0-9]*" | tail -3
+    ```
+
+    然后从 ginkage/libmali-rockchip 安装匹配的 g24p0-gbm 驱动：
+    ```Bash
+    # 下载 g24p0-gbm 版本（与 g25p0 内核 DDK 兼容）
+    wget https://github.com/ginkage/libmali-rockchip/releases/download/v1.9-1-4b399ed/libmali-valhall-g610-g24p0-gbm_1.9-1_arm64.deb
+    sudo dpkg -i libmali-valhall-g610-g24p0-gbm_1.9-1_arm64.deb
+    sudo ldconfig
+    ```
+
+    安装后运行 `vulkaninfo | grep deviceName` 应返回 `Mali-G610`，`driverVersion = 24.0.0`。
+
+    **性能预期**：Mali-G610 Vulkan 实测约 2.37 t/s（ngl=99），CPU A76×4+DOTPROD 约 3.58 t/s。对于 batch=1 推理，CPU 更快，因为 UMA 架构下 CPU 读模型无需额外复制，且 A76 有 DOTPROD 指令而 Mali-G610 无矩阵乘专用单元。
+
+    完整排查记录见：`RK3588 Vulkan 部署排查记录.md`（同目录）
