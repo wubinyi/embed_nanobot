@@ -217,20 +217,40 @@ If `ggml_backend` C integration cost is too high for initial prototype: Python t
 | **2.4 Full integration** | All 32 layers running, token loop operational, end-to-end t/s measured | t/s > Phase 1 baseline |
 | **2.5 Provider** | `local_provider_rknn_hybrid` operational as nanobot provider | `run_agent_smoke.sh --mode rknn_hybrid` passes |
 
+### New directory structure (Phase 2)
+
+```
+local_llm/
+└── local_provider_rknn_hybrid/       ← NEW (Phase 2)
+    ├── README.md                         # Architecture, setup, benchmark results
+    ├── convert_weights.py                # GGUF → ONNX → .rknn pipeline (per model)
+    ├── benchmark_roundtrip.py            # Milestone 2.1 overhead measurement tool
+    ├── rknn_backend/
+    │   ├── ggml_backend_rknn.c           # Option A: ggml_backend C implementation
+    │   └── rknn_kernel.py                # Option B fallback: Python RKNN bindings
+    ├── inference/
+    │   └── hybrid_loop.py                # Option B: custom Python token loop
+    ├── start_local_provider.sh           # starts OpenAI-compatible adapter on port 19200
+    ├── openai_adapter.py
+    └── runtime/
+        ├── local_rknn_hybrid.json        # nanobot config (port 19200)
+        └── kernels/                      # compiled .rknn files per model (gitignored)
+```
+
 ### Files created (Phase 2, iterative)
 
 | File | Purpose |
 |---|---|
-| `local_llm/local_provider_rknn_hybrid/README.md` | Architecture, setup, benchmark results |
-| `local_llm/local_provider_rknn_hybrid/convert_weights.py` | GGUF → ONNX → `.rknn` per-layer pipeline |
-| `local_llm/local_provider_rknn_hybrid/benchmark_roundtrip.py` | Milestone 2.1 overhead measurement tool |
-| `local_llm/local_provider_rknn_hybrid/rknn_backend/ggml_backend_rknn.c` | Option A: `ggml_backend` C implementation |
-| `local_llm/local_provider_rknn_hybrid/rknn_backend/rknn_kernel.py` | Option B: Python RKNN bindings wrapper |
-| `local_llm/local_provider_rknn_hybrid/inference/hybrid_loop.py` | Option B: custom Python token loop |
-| `local_llm/local_provider_rknn_hybrid/start_local_provider.sh` | Starts OpenAI-compatible adapter on port 19200 |
-| `local_llm/local_provider_rknn_hybrid/openai_adapter.py` | Thin proxy adapter |
-| `local_llm/local_provider_rknn_hybrid/runtime/local_rknn_hybrid.json` | nanobot config (port 19200) |
-| `local_llm/local_provider_rknn_hybrid/runtime/kernels/` | Compiled `.rknn` files (gitignored) |
+| `README.md` | Architecture, setup, benchmark results |
+| `convert_weights.py` | GGUF → ONNX → `.rknn` per-layer pipeline |
+| `benchmark_roundtrip.py` | Milestone 2.1 overhead measurement tool |
+| `rknn_backend/ggml_backend_rknn.c` | Option A: `ggml_backend` C implementation |
+| `rknn_backend/rknn_kernel.py` | Option B: Python RKNN bindings wrapper |
+| `inference/hybrid_loop.py` | Option B: custom Python token loop |
+| `start_local_provider.sh` | Starts OpenAI-compatible adapter on port 19200 |
+| `openai_adapter.py` | Thin proxy adapter |
+| `runtime/local_rknn_hybrid.json` | nanobot config (port 19200) |
+| `runtime/kernels/` | Compiled `.rknn` files (gitignored) |
 
 ### Known unknowns (resolved in milestone 2.1)
 
@@ -245,38 +265,80 @@ If `ggml_backend` C integration cost is too high for initial prototype: Python t
 
 ## Integration & Testing
 
-### Validation (all phases: real-hardware required)
+### How nanobot selects the provider
 
-Performance benchmarks and NPU inference only run on physical RK3588. No simulation path exists for either phase.
+No changes to nanobot core. Each provider is a separate JSON config the user points nanobot at. The three new and existing providers coexist:
 
-**Phase 1 test commands:**
+```
+~/.embed_nanobot/config.json
+        │
+        └── "provider": "custom"
+            "apiBase": "http://127.0.0.1:XXXX/v1"
+
+  19000 → local_provider_llamacpp          (raw llama.cpp, stable reference)
+  19100 → local_provider_llamacpp_kleidiai (Phase 1, optimized CPU)
+  19200 → local_provider_rknn_hybrid       (Phase 2, NPU hybrid)
+```
+
+Switch between them by changing one line in the config. No code changes to nanobot.
+
+### Validation classification
+
+| Phase | Classification | Rationale |
+|---|---|---|
+| Phase 1 (KleidiAI rebuild) | `real-hardware required` | Performance measurement only meaningful on physical RK3588; Vulkan/DOTPROD paths don't exist in simulation |
+| Phase 2.1–2.2 (research / weight pipeline) | `real-hardware required` | RKNN Toolkit2 compiles for RK3588 NPU target; benchmark requires real NPU |
+| Phase 2.3–2.5 (full integration) | `real-hardware required` | NPU inference only runs on RK3588 |
+
+### Testing strategy
+
+**Phase 1 gate (must pass before merging):**
 ```bash
 # 1. Build benchmark
 bash local_llm/local_provider_llamacpp_kleidiai/build_llamacpp_kleidiai.sh
 
-# 2. Speed comparison (record both in 03_Test_Report.md)
+# 2. Speed comparison: new build vs existing build (record both in 03_Test_Report.md)
 ./local_provider_llamacpp/runtime/build/llama-bench \
   -m local_llm/models/gguf/Qwen3.5-9B-Q4_K_M.gguf -t 4 -p 512 -n 128 -r 3
 
 ./local_provider_llamacpp_kleidiai/runtime/build/llama-bench \
   -m local_llm/models/gguf/Qwen3.5-9B-Q4_K_M.gguf -t 4 -p 512 -n 128 -r 3
+# Expected: tg t/s > 3.58 (baseline from FAQ)
 
-# 3. Smoke test (end-to-end nanobot agent)
+# 3. Smoke test: nanobot agent works end-to-end
 bash local_llm/scripts/run_agent_smoke.sh --mode llamacpp_kleidiai
+
+# 4. Correctness: response quality spot-check (same question, both providers)
 ```
 
-**Phase 2 test commands (per milestone):**
+**Phase 2 gate per milestone:**
 ```bash
-# Milestone 2.1
+# Milestone 2.1 — overhead benchmark
 python local_llm/local_provider_rknn_hybrid/benchmark_roundtrip.py
+# Expected: overhead < 1ms/call (224 calls/token → < 224ms overhead)
 
-# Milestone 2.3 correctness
+# Milestone 2.3 — correctness
 python local_llm/local_provider_rknn_hybrid/inference/hybrid_loop.py \
   --prompt "What is 2+2?" --verify-against-llamacpp
+# Expected: token output matches (within sampling variance)
 
-# Milestone 2.5
+# Milestone 2.5 — full provider smoke
 bash local_llm/scripts/run_agent_smoke.sh --mode rknn_hybrid
 ```
+
+### Phasing and dependencies
+
+```
+Week 1-2        Week 3-4        Month 2         Month 3-4+
+    │               │               │               │
+Phase 1         Phase 1         Phase 2.1-2.2   Phase 2.3-2.5
+Build+benchmark Merge+document  Research        Prototype→Provider
+    │               │               │               │
+    └───────────────┘               └───────────────┘
+    Can use now                     Research track (parallel OK)
+```
+
+Phase 2 does not block on Phase 1 — they can run in parallel. Phase 1 establishes the benchmark baseline that Phase 2 must beat.
 
 ### Error handling / pivot conditions
 
@@ -287,6 +349,15 @@ bash local_llm/scripts/run_agent_smoke.sh --mode rknn_hybrid
 | Phase 2.1: `rknn_run()` overhead > 5ms/call | Pivot to Option B; batch 7 projections per layer into one RKNN model (1 call/layer) |
 | Phase 2.2: RKNN Toolkit2 rejects ONNX subgraph | Try FP16 export; try TFLite path; document in FAQ |
 | Phase 2 result slower than Phase 1 | Keep Phase 1 as production; continue Phase 2 as research |
+
+### Summary of deliverables
+
+| Deliverable | Phase | New/Modified |
+|---|---|---|
+| `local_llm/local_provider_llamacpp_kleidiai/` (5 files) | 1 | New |
+| `local_llm/local_provider_rknn_hybrid/` (~10 files, iterative) | 2 | New |
+| `docs/01_features/f26_hybrid_npu_inference/` | Both | New |
+| `local_llm/local_provider_llamacpp/` | — | **Untouched** |
 
 ---
 
