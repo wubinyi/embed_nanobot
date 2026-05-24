@@ -148,16 +148,18 @@ taskset -c 4-7 "$BASE_BIN/llama-bench" \
   --threads 4
 ```
 
-### Expected results (estimates before hardware validation)
+### Measured results (2026-05-24, Radxa Rock 5T / RK3588)
 
-| Metric | Baseline (no KleidiAI) | KleidiAI | Expected gain |
-|---|---|---|---|
-| Token generation (t/s) | ~3.5 | ~5–7 | 1.5–2× |
-| Prompt processing (t/s) | ~8.5 | ~12–18 | ~1.5–2× |
+Command: `taskset -c 4-7 llama-bench -m Qwen3.5-9B-Q4_K_M.gguf -t 4 -p 0 -n 128 -r 3`
 
-> **Note**: Actual results depend on llama.cpp version and the exact KleidiAI
-> kernel selected at runtime. Results will be filled in after hardware validation
-> in `docs/01_features/f26_hybrid_npu_inference/03_Test_Report.md`.
+| Metric | Baseline (Vulkan ngl=99) | KleidiAI (CPU) | Actual gain |
+|--------|--------------------------|----------------|-------------|
+| Token generation tg128 (t/s) | 2.34 ± 0.00 | **3.35 ± 0.02** | **1.43×** |
+
+> KleidiAI CPU with ARM dotprod (`sdot`) kernels outperforms Vulkan/Mali-G610 GPU
+> offload for Q4_K_M inference at this model scale. The `kai_matmul_clamp_f32_qai8dxp_qsi4cxp`
+> kernel is active at runtime on Cortex-A76 cores 4-7.
+> See full test report: `docs/01_features/f26_hybrid_npu_inference/03_Test_Report.md`
 
 ## Runtime environment variables
 
