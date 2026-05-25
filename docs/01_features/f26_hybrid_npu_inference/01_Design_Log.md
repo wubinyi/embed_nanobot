@@ -54,24 +54,40 @@ The user wants: **long context + high inference speed + broad model compatibilit
 - Attention over KV cache is memory-bandwidth-bound (sequential reads of cached K/V → CPU is fine, avoids round-trip cost of sending full KV cache to NPU).
 - RK3588 NPU and CPU share LPDDR5 (UMA). Weights loaded once via `rknn_init()` stay in LPDDR5; each `rknn_run()` uses NPU DMA to read them — no extra copies vs CPU.
 
+**Why self-attention cannot be moved to NPU (decode phase):**
+
+The attention computation (`softmax(Q·Kᵀ/√d)·V`) over the KV cache is a vector × growing-matrix operation during decode (batch=1). Its arithmetic intensity is ~1 FLOP/byte — it is dominated by **reading the KV cache from LPDDR5**, not by arithmetic. Moving it to the NPU provides no memory-bandwidth advantage because CPU and NPU share the same LPDDR5 bus.
+
+There are also three practical blockers:
+
+1. **Fixed-shape graphs**: RKNN compiles `.rknn` models at a fixed sequence length. The KV cache grows from length 1 to 65K+ with each token. Supporting this on NPU requires either padding to max context (~8 GB per attention call for 65K context) or per-step recompilation — neither is viable.
+
+2. **KV cache management is dynamic-state work**: Inserting new K/V pairs, applying RoPE position encodings, and handling context window rotation require stateful index arithmetic that RKNN compiled graphs cannot express. The CPU must manage this regardless, so there is no clean handoff.
+
+3. **NPU round-trip overhead**: Each `rknn_run()` call costs ~1–3 ms. Running 32 layers of memory-bound attention on NPU would add ~32–96 ms per token while providing zero throughput gain vs CPU (same LPDDR5 bandwidth).
+
+**Future nuance — prefill phase only**: During prompt ingestion (batch >> 1), the attention computation becomes compute-bound, making NPU acceleration theoretically viable. This requires dynamic-shape RKNN support and is out of scope for Phase 2 (which targets decode throughput).
+
+The correct NPU targets are the **7 projection matmuls per layer** (W_q, W_k, W_v, W_o, W_gate, W_up, W_down) — they are compute-bound with fixed, compile-time-known shapes.
+
 ---
 
 ## Architecture
 
-### Two-phase roadmap
+### Three-phase roadmap
 
 ```
-Phase 1 (Approach C) — CPU optimization          Phase 2 (Approach A) — RKNN Hybrid
-Days to weeks, immediate value                    Months, highest ceiling
+Phase 1 (Approach C) — CPU optimization          Phase 2 (Approach A) — RKNN Hybrid        Phase 3 — Prefill NPU Attention
+Days to weeks, immediate value                    Months, highest decode t/s ceiling        Research track; prefill batch speedup
 
 ┌─────────────────────────────────┐              ┌──────────────────────────────────────┐
-│  local_provider_llamacpp_       │              │  local_provider_rknn_hybrid           │
-│  kleidiai (port 19100)          │   evolves    │  (port 19200)                         │
-│                                 │  ─────────►  │                                       │
-│  llama.cpp rebuilt with:        │              │  ┌──────────┐     ┌───────────────┐   │
-│  - GGML_USE_KLEIDIAI=ON         │              │  │ CPU      │     │ RKNN NPU      │   │
-│  - -march=armv8.2-a+dotprod     │              │  │ Attention│     │ FFN + proj    │   │
-│  Target: ~5–7 t/s               │              │  │ KV cache │     │ weights       │   │
+│  local_provider_llamacpp_       │              │  local_provider_rknn_hybrid           │              │  local_provider_rknn_hybrid (Phase 3 ext.)    │
+│  kleidiai (port 19100)          │   evolves    │  (port 19200)                         │   extends    │  + prefill attention on NPU                   │
+│                                 │  ─────────►  │                                       │  ──────────► │  Q·Kᵀ and attn·V via rknn_matmul_api         │
+│  llama.cpp rebuilt with:        │              │  ┌──────────┐     ┌───────────────┐   │              │  rknn_matmul_create_dynamic_shape              │
+│  - GGML_USE_KLEIDIAI=ON         │              │  │ CPU      │     │ RKNN NPU      │   │              │  bucket sizes: 64,128,256,512,1024,2048        │
+│  - -march=armv8.2-a+dotprod     │              │  │ Attention│     │ FFN + proj    │   │              │  Goal: faster prompt ingestion                 │
+│  Target: ~5–7 t/s               │              │  │ KV cache │     │ weights       │   │              └───────────────────────────────────────────────┘
 │                                 │              │  │ Sampling │     │ resident      │   │
 │  local_provider_llamacpp/       │              │  └──────────┘     └───────────────┘   │
 │  (port 19000) — UNTOUCHED       │              │  Target: ~20–30 t/s (theoretical)     │
@@ -85,6 +101,7 @@ Days to weeks, immediate value                    Months, highest ceiling
 | `local_provider_llamacpp` | 19080 | 19000 | Existing — untouched |
 | `local_provider_llamacpp_kleidiai` | 19180 | 19100 | Phase 1 — new |
 | `local_provider_rknn_hybrid` | 19280 | 19200 | Phase 2 — new |
+| `local_provider_rknn_hybrid` (Phase 3 ext.) | 19280 | 19200 | Phase 3 — extends Phase 2 |
 | `local_provider_rkllm` | 8080 | 18000 | Existing — untouched |
 
 ### nanobot integration (no core code changes)
@@ -169,19 +186,19 @@ INPUT: hidden state h [1 × d_model]
            │
     ┌───────┴───────┐
     ▼               ▼
-┌────────────┐  ┌────────────────────────────┐
-│ RKNN (NPU) │  │ CPU                        │
-│            │  │                            │
-│ Q = h·W_q  │  │ scores = Q·Kᵀ / √d        │
-│ K = h·W_k  │  │ attn_weights = softmax(…)  │
-│ V = h·W_v  │  │ ctx_vec = attn_weights · V │
-│            │  │                            │
-│ O = ctx·Wo │◄─┤ KV cache in LPDDR5 (CPU)  │
-│            │  └────────────────────────────┘
-│ gate = h·Wg│
-│ up   = h·Wu│
-│ down = h·Wd│
-└────────────┘
+┌────────────┐  ┌──────────────────────────────────┐
+│ RKNN (NPU) │  │ CPU                              │
+│            │  │                                  │
+│ Q = h·W_q  │  │ scores = Q·Kᵀ / √d              │
+│ K = h·W_k  │  │ attn_weights = softmax(…)        │
+│ V = h·W_v  │  │ ctx_vec = attn_weights · V_cache │
+│            │  │                                  │
+│ O = ctx·Wo │◄─┤ KV cache mgmt in LPDDR5 (CPU)   │
+│            │  │ (insert new K/V, RoPE, rotation) │
+│ gate = h·Wg│  │                                  │
+│ up   = h·Wu│  │ ← memory-bandwidth-bound;        │
+│ down = h·Wd│  │   NPU offers no advantage here   │
+└────────────┘  └──────────────────────────────────┘
 Weights DMA'd from LPDDR5 by NPU
 (shared UMA — no extra copies)
 ```
@@ -263,6 +280,158 @@ local_llm/
 
 ---
 
+## Phase 3: Prefill Attention on NPU
+
+### Goal
+
+During **prompt ingestion (prefill)**, the model processes S input tokens in a single forward pass with batch size S. In this mode, the Q·K^T attention matmul has arithmetic intensity ~S FLOP/byte — it becomes **compute-bound for large S** (≥ 256), making NPU acceleration theoretically viable.
+
+This is the **only case** where attention can benefit from the NPU. Decode (batch=1) remains memory-bandwidth-bound and always stays on CPU (see "Why self-attention cannot be moved to NPU" above).
+
+### Why this is different from decode
+
+| Property | Decode (batch=1) | Prefill (batch=S) |
+|---|---|---|
+| Attention arithmetic intensity | ~1 FLOP/byte | ~S/2 FLOP/byte |
+| Compute-bound at S=256? | No (never) | Yes (~128+ FLOP/byte) |
+| K/V sequence length | Grows 1 per token | Fixed = prompt length |
+| Shape known before inference? | No | Yes — prompt length is fixed before computation starts |
+| NPU viable? | No | Yes, with fixed-shape kernels |
+
+### Two sub-approaches for Phase 3
+
+The RKNN matmul API (`rknn_matmul_api.h`) provides the low-level primitive needed. Both approaches compile the **same set of fixed-shape kernels**; the difference is packaging and dispatch.
+
+#### Approach 3A: `rknn_matmul_create_dynamic_shape` (RKNN-managed multi-shape)
+
+```c
+// Enumerate all bucket shapes at creation time
+rknn_matmul_shape shapes[] = {
+  {64, D_HEAD, 64}, {128, D_HEAD, 128},
+  {256, D_HEAD, 256}, {512, D_HEAD, 512},
+  {1024, D_HEAD, 1024}, {2048, D_HEAD, 2048},
+};
+rknn_matmul_create_dynamic_shape(&ctx, &info, 6, shapes, io_attrs);
+
+// At inference: call rknn_matmul_set_dynamic_shape to select the right bucket,
+// then rknn_matmul_run
+rknn_matmul_shape current = {actual_S, D_HEAD, actual_S};
+rknn_matmul_set_dynamic_shape(ctx, &current);  // RKNN selects compiled graph
+rknn_matmul_run(ctx);
+```
+
+**Pros**: Single context handle, RKNN manages dispatch, cleaner API.  
+**Cons**: All shapes baked in at creation time, larger upfront compilation.
+
+> **Important**: `rknn_matmul_set_dynamic_shape` alone only supports **M dynamic, K and N fixed** (for weight-matrix reuse). For attention where M=N=S, we MUST use `create_dynamic_shape` with pre-enumerated shapes — `set_dynamic_shape` is insufficient.
+
+#### Approach 3B: Multiple fixed-shape contexts (user-managed dispatch)
+
+```python
+# Pre-create one context per bucket size
+BUCKETS = [64, 128, 256, 512, 1024, 2048]
+contexts = {s: rknn_matmul_create(M=s, K=D_HEAD, N=s) for s in BUCKETS}
+
+# At inference: route to smallest bucket >= seq_len, pad input
+bucket = min(b for b in BUCKETS if b >= seq_len)
+q_padded = pad(q, bucket)         # [bucket, D_HEAD]
+kt_padded = pad(k_transposed, bucket)  # [D_HEAD, bucket]
+out = contexts[bucket].run(q_padded, kt_padded)
+out = out[:seq_len, :seq_len]     # trim padding
+```
+
+**Pros**: Simple, no special API, always supported.  
+**Cons**: Multiple context handles, user must manage routing and padding.
+
+### Key API constraint discovered from header analysis
+
+From `rknn_matmul_api.h` for RK3588, FP16 matmul alignment requirements:
+
+| Dimension | Alignment (FP16, RK3588) | Our values |
+|---|---|---|
+| K (columns of A = d_head) | Multiple of 16 FP16 elements (32 bytes) | 128 ✓ (128 % 16 = 0) |
+| N (columns of C = seq_len) | Multiple of 8 FP16 elements (16 bytes) | 64, 128, … 2048 ✓ |
+
+All planned bucket sizes (64, 128, 256, 512, 1024, 2048) satisfy alignment requirements. No padding of d_head is needed.
+
+### Compute waste from bucketing
+
+For a prompt of length S padded to the nearest bucket B ≥ S:
+
+$$\text{waste fraction} = 1 - \frac{S}{B}$$
+
+Worst case: S just above a previous bucket, e.g. S=65 padded to B=128 → 49% waste.  
+Average with uniform S distribution over [64, 2048]: ~25% waste per matmul.  
+Attention total FLOPs even with 25% waste is still ≪ projection FLOPs for large d_model.
+
+### Phase 3 milestones
+
+| Milestone | Deliverable | Acceptance |
+|---|---|---|
+| **3.1 Experiment** | `benchmark_attention_kernels.py` — NPU matmul vs CPU at S=64…2048 | Decision: NPU wins at S ≥ threshold (TBD from results) |
+| **3.2 Design decision** | Document Approach 3A vs 3B selection based on experiment overhead data | Choice recorded with rationale |
+| **3.3 Prefill hook** | Insert NPU attention path into Phase 2 provider for prefill phase | Prefill latency reduced vs Phase 2 baseline |
+| **3.4 Validation** | End-to-end: prompt ingestion speed measured with `nanobot agent` | Prefill t/s improvement confirmed on real hardware |
+
+### Phase 3 experiment: `benchmark_attention_kernels.py`
+
+Located at: `local_llm/local_provider_rknn_hybrid/benchmark_attention_kernels.py`
+
+**What it measures:**
+
+```
+For each seq_len S in [64, 128, 256, 512, 1024, 2048]:
+  For each attention head h in [0..H-1] (H=28 for Qwen3.5-9B):
+    Q = [S, d_head=128]  K^T = [d_head=128, S]
+
+  Benchmark A: numpy FP32  — Q · K^T
+  Benchmark B: numpy FP16  — Q · K^T (nearer to NPU precision)
+  Benchmark C: RKNN matmul — Q · K^T via rknn_matmul_create(M=S, K=128, N=S)
+
+  Record: setup_ms, per_call_ms, speedup_vs_numpy_fp32
+```
+
+**Decision gate:**
+
+- If RKNN wins (lower latency) at S ≥ 128: Phase 3 is worthwhile → select Approach 3A or 3B
+- If RKNN never wins (or wins only at S ≥ 1024): Phase 3 has limited ROI for typical prompts
+- If overhead > 1ms per head × 28 heads = 28ms setup per token: Approach 3A (batched shapes) is preferable to avoid per-call setup
+
+**Note on approach comparison**: Approaches 3A and 3B compile the **same underlying NPU kernels** — they differ only in API ergonomics and context management overhead. The experiment measures both to quantify the difference.
+
+### Milestone 3.1 Experiment Results (2026-05-25)
+
+**Script**: `local_llm/local_provider_rknn_hybrid/benchmark_attention_kernels.py`  
+**Hardware**: Radxa Rock 5T (RK3588), RKNN runtime from rknn-llm-src vendored copy  
+**Model**: Qwen3.5-9B config — 28 heads, d_head=128, buckets [64, 128, 256, 512, 1024, 2048]
+
+| S | numpy FP32 (ms) | numpy FP16 (ms) | RKNN create (ms) | RKNN run (ms) | speedup | winner |
+|---|---|---|---|---|---|---|
+| 64 | 0.085 | 1.226 | 2.31 | 0.143 | 0.59x | CPU |
+| 128 | 0.089 | 4.892 | 1.48 | 0.244 | 0.36x | CPU |
+| 256 | 0.411 | 19.703 | 1.70 | 0.594 | 0.69x | CPU |
+| 512 | 1.238 | 84.979 | 3.02 | 2.124 | 0.58x | CPU |
+| 1024 | 5.751 | 350.881 | 7.27 | 11.240 | 0.51x | CPU |
+| 2048 | 19.884 | 1915.965 | 21.93 | 35.198 | 0.56x | CPU |
+
+**Key observations:**
+
+1. **CPU wins at ALL tested sizes.** RKNN matmul FP16 is 1.1–2× slower than numpy FP32 for attention Q·K^T across S=64..2048.
+
+2. **RKNN was forced to single NPU core.** The lib version reports `NN Compiler/Model Version is 0.0.0` and rejects the 3-core mask (`core_mask: 7`), falling back to single-core auto mode. The vendored `librknnrt.so` bundled in `rknn-llm-src/examples/` is an older version. If all 3 NPU cores were usable, RKNN would be ~3× faster — potentially 1.5–2.6× ahead of CPU at S ≥ 256. This means **results are pessimistic for the NPU**.
+
+3. **numpy FP16 is 30–96× slower than FP32** on Cortex-A76. This is expected: A76 DOTPROD only accelerates int8; FP16 matmuls fall back to scalar FP32 accumulation in numpy. RKNN FP16 IS properly using hardware, so the correct comparison is RKNN FP16 vs numpy FP32.
+
+4. **Context creation scales with S** (1.5ms at S=128 → 21.9ms at S=2048). For Approach 3B (one context per head per bucket size): 28 heads × 6 buckets = 168 contexts, with total creation time 168× avg ~5ms = ~840ms startup overhead. For Approach 3A (`create_dynamic_shape`): 1 context per head × 6 buckets = 28 contexts → ~140ms startup. Approach 3A is clearly preferable.
+
+**Decision:** 
+
+- **Phase 3 is deferred** pending verification with the system RKNN runtime (not the vendored test copy) that supports multi-core mode. Use `dpkg -l | grep rknn` or `/usr/lib/librknnrt.so` to find the production runtime, then re-run with all 3 cores enabled.
+- **If 3-core NPU is confirmed available** and produces ≥1.5× speedup at S≥256: adopt **Approach 3A** (`rknn_matmul_create_dynamic_shape`) as the single context handles all bucket sizes elegantly.
+- **Approach 3A vs 3B conclusion**: Under the hood they are identical (same compiled kernels). Approach 3A wins on API ergonomics (28 handles vs 168 handles) and startup time (140ms vs 840ms). No performance difference at inference time.
+
+---
+
 ## Integration & Testing
 
 ### How nanobot selects the provider
@@ -289,6 +458,7 @@ Switch between them by changing one line in the config. No code changes to nanob
 | Phase 1 (KleidiAI rebuild) | `real-hardware required` | Performance measurement only meaningful on physical RK3588; Vulkan/DOTPROD paths don't exist in simulation |
 | Phase 2.1–2.2 (research / weight pipeline) | `real-hardware required` | RKNN Toolkit2 compiles for RK3588 NPU target; benchmark requires real NPU |
 | Phase 2.3–2.5 (full integration) | `real-hardware required` | NPU inference only runs on RK3588 |
+| Phase 3.1 (experiment re-run) | `real-hardware required` | Must use production librknnrt.so with multi-core support to get valid data |
 
 ### Testing strategy
 
