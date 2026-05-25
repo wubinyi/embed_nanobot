@@ -212,10 +212,17 @@ and the other is remotely updatable by the Hub.
 | | Port 19100 (adapter), 19180 (backend). Model alias `qwen3.5-9b-kleidiai`. | | | | |
 | | Expected: ~5–7 t/s (1.5–2× vs 3.58 t/s baseline). Validation: `real-hardware required`. | | | | |
 | | Implementation complete. Pending hardware benchmark run to fill in actual t/s values. | | | | |
-| 5.5.5 | **RKNN hybrid subgraph inference (f26 Phase 2)** | P2 | XL | 5.5.4 | Planned |
+| 5.5.5 | **RKNN hybrid subgraph inference (f26 Phase 2)** | P2 | XL | 5.5.4 | **Planned** |
 | | Offload MLP/FFN layers to RK3588 NPU via RKNN API (lower-level than RKLLM). | | | | |
 | | CPU handles attention + KV cache; NPU handles compute-heavy subgraphs. | | | | |
 | | Design: `docs/01_features/f26_hybrid_npu_inference/01_Design_Log.md` §5 (Phase 2). | | | | |
+| | **⚠ Phase 2 has not started. This is the immediate next task after Phase 1 benchmark.** | | | | |
+| 5.5.6 | **f26 Phase 3 (research track): prefill attention on NPU** | P3 | M | 5.5.5 | **Blocked** |
+| | Q·K^T and attn·V via `rknn_matmul_create_dynamic_shape` (Approach 3A). Bucket sizes [256,512,1024,2048]. | | | | |
+| | Blocked on: production `librknnrt.so` with 3-core NPU support not installed. | | | | |
+| | Experiment run (2026-05-25): CPU wins at all S with single-core RKNN (0.36–0.88× speedup). | | | | |
+| | **DO NOT START until Phase 2 is complete AND multi-core librknnrt.so is installed.** | | | | |
+| | Unblock step: install system RKNN runtime → re-run `benchmark_attention_kernels.py` → if ≥1.5× at S≥256: proceed. | | | | |
 
 ---
 

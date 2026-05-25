@@ -282,6 +282,11 @@ local_llm/
 
 ## Phase 3: Prefill Attention on NPU
 
+> **Status: BLOCKED — do not start until Phase 2 is complete.**  
+> Pre-work (experiment design + initial benchmark) was done while the Phase 2 design was being elaborated.  
+> Phase 3 is also blocked on a hard prerequisite: the system RKNN runtime with 3-core NPU support is not installed.  
+> (`/usr/lib/librknnrt.so` does not exist; only the vendored single-core copy in rknn-llm-src is available.)
+
 ### Goal
 
 During **prompt ingestion (prefill)**, the model processes S input tokens in a single forward pass with batch size S. In this mode, the Q·K^T attention matmul has arithmetic intensity ~S FLOP/byte — it becomes **compute-bound for large S** (≥ 256), making NPU acceleration theoretically viable.
