@@ -207,11 +207,11 @@ and the other is remotely updatable by the Hub.
 | | Fix: install `libmali-valhall-g610-g24p0-gbm_1.9-1_arm64.deb` from ginkage/libmali-rockchip fork. | | | | |
 | | Vulkan bench: Mali-G610, ngl=99, 2.37 t/s (CPU 3.58 t/s faster for batch=1 due to UMA + DOTPROD). | | | | |
 | | Docs: `local_llm/local_provider_llamacpp/RK3588 Vulkan 部署排查记录.md` (Phase 5 success). | | | | |
-| 5.5.4 | **KleidiAI-optimized llama.cpp provider (f26 Phase 1)** | P1 | M | 5.5.2 | **In Progress** (2025-01-28) |
+| 5.5.4 | **KleidiAI-optimized llama.cpp provider (f26 Phase 1)** | P1 | M | 5.5.2 | **Done** (2026-05-30) |
 | | New provider at `local_llm/local_provider_llamacpp_kleidiai/`. `-DGGML_USE_KLEIDIAI=ON`, `+dotprod+fp16`. | | | | |
 | | Port 19100 (adapter), 19180 (backend). Model alias `qwen3.5-9b-kleidiai`. | | | | |
 | | Expected: ~5–7 t/s (1.5–2× vs 3.58 t/s baseline). Validation: `real-hardware required`. | | | | |
-| | Implementation complete. Pending hardware benchmark run to fill in actual t/s values. | | | | |
+| | Hardware benchmark validated on Radxa Rock 5T: tg128 3.43 t/s (KleidiAI) vs 3.46 t/s (CPU baseline), ~1x; both 1.47x faster than Vulkan 2.34 t/s. | | | | |
 | 5.5.5 | **RKNN hybrid subgraph inference (f26 Phase 2)** | P2 | XL | 5.5.4 | **Planned** |
 | | Offload MLP/FFN layers to RK3588 NPU via RKNN API (lower-level than RKLLM). | | | | |
 | | CPU handles attention + KV cache; NPU handles compute-heavy subgraphs. | | | | |
@@ -258,6 +258,7 @@ Chronological project notes, audits, sync milestones, and hardware validation re
 
 | Date | Area | Summary |
 |------|------|---------|
+| 2026-05-30 | Local LLM | f26 Phase 1 marked Done after hardware benchmark validation; Phase 2 is now the immediate next task |
 | 2025-01-28 | Local LLM | f26 Phase 1: KleidiAI-optimized provider implemented, pending hardware benchmark |
 | 2026-05-24 | Local LLM | QA logging skill + FAQ framework; feature branch merged |
 | 2026-05-23 | Local LLM | Mali-G610 Vulkan GPU acceleration enabled (g24p0 driver) |

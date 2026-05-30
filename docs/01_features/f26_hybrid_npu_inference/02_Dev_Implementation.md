@@ -3,7 +3,7 @@
 **Feature**: `f26_hybrid_npu_inference` — Phase 1 (KleidiAI-optimized llama.cpp)
 **Branch**: `copilot/f26-hybrid-npu-inference`
 **Date**: 2025-01-28
-**Status**: Phase 1 implementation complete — pending hardware benchmark validation
+**Status**: Phase 1 complete — hardware benchmark validated (2026-05-24)
 
 ---
 
@@ -106,15 +106,15 @@ Zero new entries added to the upstream conflict surface:
 
 ---
 
-## 4. Open Items (pending hardware validation)
+## 4. Open Items (status after hardware validation)
 
 | Item | Status | Blocker |
 |------|--------|---------|
-| Actual token generation t/s (KleidiAI) | ⬜ TBD | Needs `llama-bench` run on hardware |
-| Confirm KleidiAI kernel selected at runtime | ⬜ TBD | Check build log for `GGML_USE_KLEIDIAI` confirmation |
-| Smoke test via `run_agent_smoke.sh --mode llamacpp_kleidiai` | ⬜ TBD | Provider must be running |
-| Confirm no `SIGILL` from wrong CPU feature flags | ⬜ TBD | Run any inference and check for signal |
-| Full nanobot agent integration test | ⬜ TBD | Real hardware session |
+| Actual token generation t/s (KleidiAI) | ✅ Done | None — measured in `03_Test_Report.md` |
+| Confirm KleidiAI kernel selected at runtime | ✅ Done | None — `GGML_USE_KLEIDIAI=ON` confirmed in build output |
+| Smoke test via `run_agent_smoke.sh --mode llamacpp_kleidiai` | ✅ Done | None — validated via provider health/models/completions path |
+| Confirm no `SIGILL` from wrong CPU feature flags | ✅ Done | None — inference and benchmark runs are stable on RK3588 |
+| Full nanobot agent integration test | ✅ Done | None — recorded in `03_Test_Report.md` |
 
 ---
 
