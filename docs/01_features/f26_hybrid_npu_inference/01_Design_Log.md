@@ -224,6 +224,12 @@ If `ggml_backend` C integration cost is too high for initial prototype: Python t
 
 **Decision gate:** Milestone 2.1 overhead benchmark. If `rknn_run()` overhead per call is < 1ms, Option A is viable. If overhead is 2–5ms and 32 layers × 7 calls = 224 calls/token, Option A becomes latency-dominated and Option B (fewer, batched calls per layer) is preferred.
 
+**Route selected (2026-05-30): Hybrid implementation route**
+
+- Step 1 (now): Implement Milestone 2.1 in Python first (`benchmark_roundtrip.py`) to de-risk RKNN call overhead on real RK3588 quickly.
+- Step 2 (next): Start Option A C path (`ggml_backend_rknn.c`) immediately after 2.1, using measured overhead data to choose batching and dispatch strategy.
+- Rule: do not proceed to Phase 3 work until Phase 2 milestones are completed.
+
 ### Phase 2 milestones
 
 | Milestone | Deliverable | Acceptance |
