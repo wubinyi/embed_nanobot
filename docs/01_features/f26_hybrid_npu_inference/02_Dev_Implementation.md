@@ -246,11 +246,12 @@ Compile the exported ONNX projection models to `.rknn` (same block) and benchmar
   - clamp symmetry in both hybrid and CPU reference paths.
 - Rerun result is fully finite:
   - `layers_executed=32`
-  - `hidden_max_abs_diff_vs_cpu_ref=16384.0`
-  - `hidden_mean_abs_diff_vs_cpu_ref=4464.086426`
-  - `hidden_checksum_hybrid=528305.75`
-  - `hidden_checksum_cpu=-305371.34375`
+  - `hidden_max_abs_diff_vs_cpu_ref=0.760761`
+  - `hidden_mean_abs_diff_vs_cpu_ref=0.108222`
+  - `hidden_checksum_hybrid=503.927185`
+  - `hidden_checksum_cpu=507.076752`
+  - tuned defaults: `act=1024`, `state=4096`, `fp16=60000`, `silu=16`, `attn_out=0.25`, `ffn=0.25`, `ssm=0.05`
 
 ### 9.4 Follow-up action
 
-Milestone 2.3 quality gating is now unblocked (finite metrics available). Next optimization task is to tighten the clip/scale envelope to reduce hybrid-vs-CPU diff magnitude while preserving stability.
+Milestone 2.3 quality gating is now unblocked and tightened (finite metrics with sub-1.0 max diff). Next step is the deeper Phase 2.4 integration milestone, carrying forward this envelope as the baseline policy.

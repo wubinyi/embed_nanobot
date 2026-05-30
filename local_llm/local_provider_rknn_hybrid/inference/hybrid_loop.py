@@ -35,8 +35,14 @@ RKNN_NPU_CORE_0_1_2 = 7
 
 # Numeric guardrails for the simplified milestone-2.3 graph.
 FP16_CLIP = 60000.0
-ACT_CLIP = 2048.0
-STATE_CLIP = 8192.0
+ACT_CLIP = 1024.0
+STATE_CLIP = 4096.0
+SILU_INPUT_CLIP = 16.0
+
+ATTN_QKV_SCALE = 0.1
+ATTN_OUT_SCALE = 0.25
+FFN_SCALE = 0.25
+SSM_SCALE = 0.05
 
 SCRIPT_DIR = Path(__file__).parent
 REPO_ROOT = SCRIPT_DIR.parent.parent.parent
@@ -251,7 +257,7 @@ def normalize_shape(arr, logical_shape):
 
 
 def silu(x):
-    x = np.clip(np.nan_to_num(x, nan=0.0, posinf=ACT_CLIP, neginf=-ACT_CLIP), -ACT_CLIP, ACT_CLIP)
+    x = np.clip(np.nan_to_num(x, nan=0.0, posinf=SILU_INPUT_CLIP, neginf=-SILU_INPUT_CLIP), -SILU_INPUT_CLIP, SILU_INPUT_CLIP)
     return x / (1.0 + np.exp(-x))
 
 
@@ -295,7 +301,7 @@ def run_layer_hybrid(lib, blk, x, weights):
 
     if weights.get("attn_qkv") is not None:
         y, core_ret = npu_linear(lib, x, weights["attn_qkv"])
-        x = clamp_state(x + 0.1 * np.tanh(clamp_act(y[:, : x.shape[1]])))
+        x = clamp_state(x + ATTN_QKV_SCALE * np.tanh(clamp_act(y[:, : x.shape[1]])))
     elif all(weights.get(k) is not None for k in ["attn_q", "attn_k", "attn_v", "attn_out"]):
         q, r1 = npu_linear(lib, x, weights["attn_q"])
         k, r2 = npu_linear(lib, x, weights["attn_k"])
@@ -312,7 +318,7 @@ def run_layer_hybrid(lib, blk, x, weights):
         o, r4 = npu_linear(lib, attn_cpu, weights["attn_out"])
         if core_ret is None:
             core_ret = r4
-        x = clamp_state(x + o)
+        x = clamp_state(x + ATTN_OUT_SCALE * o)
 
     if all(weights.get(k) is not None for k in ["ffn_gate", "ffn_up", "ffn_down"]):
         gate, rg = npu_linear(lib, x, weights["ffn_gate"])
@@ -323,13 +329,13 @@ def run_layer_hybrid(lib, blk, x, weights):
         down, rd = npu_linear(lib, act, weights["ffn_down"])
         if core_ret is None:
             core_ret = rd
-        x = clamp_state(x + down)
+        x = clamp_state(x + FFN_SCALE * down)
 
     if weights.get("ssm_out") is not None:
         ssm, rs = npu_linear(lib, x, weights["ssm_out"])
         if core_ret is None:
             core_ret = rs
-        x = clamp_state(x + 0.1 * clamp_act(ssm))
+        x = clamp_state(x + SSM_SCALE * clamp_act(ssm))
 
     return x.astype(np.float32), core_ret
 
@@ -337,7 +343,7 @@ def run_layer_hybrid(lib, blk, x, weights):
 def run_layer_cpu(blk, x, weights):
     if weights.get("attn_qkv") is not None:
         y = cpu_linear(x, weights["attn_qkv"])
-        x = clamp_state(x + 0.1 * np.tanh(clamp_act(y[:, : x.shape[1]])))
+        x = clamp_state(x + ATTN_QKV_SCALE * np.tanh(clamp_act(y[:, : x.shape[1]])))
     elif all(weights.get(k) is not None for k in ["attn_q", "attn_k", "attn_v", "attn_out"]):
         q = cpu_linear(x, weights["attn_q"])
         k = cpu_linear(x, weights["attn_k"])
@@ -348,28 +354,48 @@ def run_layer_cpu(blk, x, weights):
         v_h = np.tile(v, (1, rep))
         attn_cpu = clamp_act((q_h + k_h + v_h) / 3.0)
         o = cpu_linear(attn_cpu, weights["attn_out"])
-        x = clamp_state(x + o)
+        x = clamp_state(x + ATTN_OUT_SCALE * o)
 
     if all(weights.get(k) is not None for k in ["ffn_gate", "ffn_up", "ffn_down"]):
         gate = cpu_linear(x, weights["ffn_gate"])
         up = cpu_linear(x, weights["ffn_up"])
         act = clamp_act(silu(gate) * clamp_act(up))
         down = cpu_linear(act, weights["ffn_down"])
-        x = clamp_state(x + down)
+        x = clamp_state(x + FFN_SCALE * down)
 
     if weights.get("ssm_out") is not None:
         ssm = cpu_linear(x, weights["ssm_out"])
-        x = clamp_state(x + 0.1 * clamp_act(ssm))
+        x = clamp_state(x + SSM_SCALE * clamp_act(ssm))
 
     return x.astype(np.float32)
 
 
 def main():
+    global ACT_CLIP, STATE_CLIP, FP16_CLIP, SILU_INPUT_CLIP
+    global ATTN_QKV_SCALE, ATTN_OUT_SCALE, FFN_SCALE, SSM_SCALE
+
     ap = argparse.ArgumentParser(description="Phase 2.3 one-token 32-layer hybrid prototype")
     ap.add_argument("--gguf", type=Path, default=DEFAULT_GGUF)
     ap.add_argument("--max-layers", type=int, default=32)
     ap.add_argument("--seed", type=int, default=123)
+    ap.add_argument("--act-clip", type=float, default=ACT_CLIP)
+    ap.add_argument("--state-clip", type=float, default=STATE_CLIP)
+    ap.add_argument("--fp16-clip", type=float, default=FP16_CLIP)
+    ap.add_argument("--silu-clip", type=float, default=SILU_INPUT_CLIP)
+    ap.add_argument("--attn-qkv-scale", type=float, default=ATTN_QKV_SCALE)
+    ap.add_argument("--attn-out-scale", type=float, default=ATTN_OUT_SCALE)
+    ap.add_argument("--ffn-scale", type=float, default=FFN_SCALE)
+    ap.add_argument("--ssm-scale", type=float, default=SSM_SCALE)
     args = ap.parse_args()
+
+    ACT_CLIP = float(args.act_clip)
+    STATE_CLIP = float(args.state_clip)
+    FP16_CLIP = float(args.fp16_clip)
+    SILU_INPUT_CLIP = float(args.silu_clip)
+    ATTN_QKV_SCALE = float(args.attn_qkv_scale)
+    ATTN_OUT_SCALE = float(args.attn_out_scale)
+    FFN_SCALE = float(args.ffn_scale)
+    SSM_SCALE = float(args.ssm_scale)
 
     GGUFReader, dequantize = load_gguf_modules()
     lib, lib_path = load_rknn_lib()
@@ -379,6 +405,15 @@ def main():
 
     print(f"rknn_runtime: {lib_path}")
     print(f"gguf: {args.gguf}")
+    print(
+        "clip_policy: "
+        f"act={ACT_CLIP}, state={STATE_CLIP}, fp16={FP16_CLIP}, silu={SILU_INPUT_CLIP}"
+    )
+    print(
+        "residual_scales: "
+        f"attn_qkv={ATTN_QKV_SCALE}, attn_out={ATTN_OUT_SCALE}, "
+        f"ffn={FFN_SCALE}, ssm={SSM_SCALE}"
+    )
 
     reader = GGUFReader(str(args.gguf), "r")
     tensor_map = {t.name: t for t in reader.tensors}
@@ -426,11 +461,13 @@ def main():
     diff = np.abs(x_h - x_c)
     max_abs = float(diff.max())
     mean_abs = float(diff.mean())
+    finite = bool(np.isfinite(x_h).all() and np.isfinite(x_c).all() and np.isfinite(diff).all())
 
     print("\n=== Phase 2.3 prototype result ===")
     print(f"layers_executed: {len(block_ids)}")
     print(f"elapsed_ms: {elapsed:.3f}")
     print(f"core_mask_nonzero_count: {fallback_count}")
+    print(f"finite_metrics: {finite}")
     print(f"hidden_max_abs_diff_vs_cpu_ref: {max_abs:.6f}")
     print(f"hidden_mean_abs_diff_vs_cpu_ref: {mean_abs:.6f}")
     print(f"hidden_checksum_hybrid: {float(x_h.sum()):.6f}")
