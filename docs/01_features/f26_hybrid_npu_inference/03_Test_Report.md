@@ -289,3 +289,40 @@ Notes        : KleidiAI ARM dotprod kernels match (not beat) standard GGML kerne
 | Quantization sweep not yet run | Low | Run when Q4_0/Q5_K_M models available |
 | Long-context performance (≥32K tokens) | Medium | Run once basic bench is complete |
 | Phase 2 (RKNN hybrid) validation | Future | Separate roadmap task |
+
+---
+
+## 8. Phase 2.1 — RKNN Round-Trip Overhead Benchmark (Hybrid Route Kickoff)
+
+**Date**: 2026-05-30  
+**Classification**: `real-hardware required`  
+**Script**: `local_llm/local_provider_rknn_hybrid/benchmark_roundtrip.py`
+
+### 8.1 Command
+
+```bash
+/home/wubinyi/miniforge3/envs/embed_nanobot/bin/python \
+  local_llm/local_provider_rknn_hybrid/benchmark_roundtrip.py \
+  --m 1 --k 3584 --n 3584 --repeats 20
+```
+
+### 8.2 Results
+
+| Metric | Value |
+|---|---:|
+| numpy_fp32_ms | 7.616 |
+| rknn_create_ms | 67.170 |
+| rknn_core_mask_ret | -1 (3-core mask rejected, fallback to single-core auto) |
+| copy_a_ms | 0.023 |
+| copy_b_ms | 79.075 |
+| run_ms | 2.415 |
+| readback_ms | 0.015 |
+| total_ms | 81.529 |
+| speedup_vs_numpy_fp32 | 0.09x |
+| decision_gate (`run_ms < 1.0`) | False |
+
+### 8.3 Interpretation
+
+- Raw NPU kernel compute (`run_ms`) is much lower than CPU matmul, but end-to-end latency is dominated by B layout conversion and B copy (`copy_b_ms`).
+- The current per-token path is not viable for decode projection calls.
+- Hybrid route remains valid, but implementation must pre-convert and pin static projection weights (`W_q/W_k/W_v/W_o/W_gate/W_up/W_down`) in native RKNN layout instead of converting/copying B each token.

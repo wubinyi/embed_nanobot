@@ -141,3 +141,32 @@ After Phase 1 implementation:
 - **Docs**: Freshness check run — architecture.md and configuration.md updated.
 - **Security**: Provider is localhost-only (127.0.0.1 binding) — no new attack surface.
 - **Opportunities**: Phase 2 (RKNN hybrid subgraph) remains in the roadmap as planned.
+
+---
+
+## 7. Phase 2.1 Kickoff (Hybrid Route)
+
+**Date**: 2026-05-30  
+**Scope**: Milestone 2.1 only — round-trip overhead benchmark for decode-style projection matmul.
+
+### 7.1 Files created / modified
+
+| File | Change |
+|------|--------|
+| `local_llm/local_provider_rknn_hybrid/benchmark_roundtrip.py` | New benchmark script (ctypes RKNN matmul wrapper, timing breakdown, decision metrics) |
+| `docs/01_features/f26_hybrid_npu_inference/01_Design_Log.md` | Added selected hybrid route and 2.1 measured result interpretation |
+| `docs/01_features/f26_hybrid_npu_inference/03_Test_Report.md` | Added Phase 2.1 command, results table, and interpretation |
+| `docs/00_system/Project_Roadmap.md` | Phase 2 status moved to In Progress; added 2.1 checkpoint note |
+
+### 7.2 Benchmark outcome summary
+
+- Shape tested: `A[1,3584] x B[3584,3584] -> C[1,3584]`
+- `numpy_fp32_ms`: `7.616`
+- `rknn_run_ms`: `2.415`
+- `rknn_total_ms`: `81.529`
+- Dominant cost: `copy_b_ms=79.075` (per-call B layout conversion + copy)
+- Core mask `7` rejected by current runtime (single-core fallback)
+
+### 7.3 Implementation decision
+
+The hybrid route remains selected. Next step is Option A C backend probe (`ggml_backend_rknn.c`) with a strict rule: pre-convert and pin projection weights in native RKNN layout to avoid per-token B conversion/copy overhead.

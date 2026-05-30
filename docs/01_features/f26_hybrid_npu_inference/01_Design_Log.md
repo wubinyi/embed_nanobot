@@ -240,6 +240,15 @@ If `ggml_backend` C integration cost is too high for initial prototype: Python t
 | **2.4 Full integration** | All 32 layers running, token loop operational, end-to-end t/s measured | t/s > Phase 1 baseline |
 | **2.5 Provider** | `local_provider_rknn_hybrid` operational as nanobot provider | `run_agent_smoke.sh --mode rknn_hybrid` passes |
 
+**Milestone 2.1 initial hardware result (2026-05-30):**
+
+- Script: `local_llm/local_provider_rknn_hybrid/benchmark_roundtrip.py`
+- Shape tested: `A[1,3584] x B[3584,3584] -> C[1,3584]` (decode-style projection)
+- Runtime: vendored `librknnrt.so` from `rknn-llm-src` (single-core fallback)
+- Measured: `numpy_fp32_ms=7.616`, `rknn_run_ms=2.415`, but `total_rknn_ms=81.529`
+- Breakdown bottleneck: `copy_b_ms=79.075` (dominates latency due to per-call B layout conversion + copy)
+- Decision: keep hybrid route and continue to Option A C backend probe, but optimize by pre-converting and pinning static projection weights in native layout. Do not use per-token B conversion path.
+
 ### New directory structure (Phase 2)
 
 ```
