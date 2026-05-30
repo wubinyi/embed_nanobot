@@ -258,6 +258,19 @@ If `ggml_backend` C integration cost is too high for initial prototype: Python t
 - Real export verified: 7 ONNX files + `manifest.json` written to:
   `local_llm/local_provider_rknn_hybrid/runtime/onnx/block_3/`
 
+**Milestone 2.3 execution checkpoint (2026-05-30):**
+
+- Script added: `local_llm/local_provider_rknn_hybrid/inference/hybrid_loop.py`
+- Scope: one-token forward pass across all 32 blocks using simplified hybrid graph
+  (NPU for projection matmuls, CPU for attention glue / residual logic), with
+  CPU reference path for diff reporting.
+- Run command:
+  `/home/wubinyi/miniforge3/envs/embed_nanobot/bin/python local_llm/local_provider_rknn_hybrid/inference/hybrid_loop.py --max-layers 32 --seed 123`
+- Result: full 32-layer pass completes (`layers_executed=32`) and records timing + checksum metrics.
+- Runtime observation: core mask `7` rejected on every layer, falling back to single-core auto mode (`core_mask_nonzero_count=32`).
+- Numeric observation: CPU reference became unstable (NaN overflow in simplified FFN path), so diff metrics are currently `NaN`.
+- Decision: mark Milestone 2.3 as an execution checkpoint complete, but keep a follow-up subtask open to stabilize the simplified graph (scale/clip policy) before tolerance-based equivalence gating.
+
 This completes the first usable GGUF -> ONNX step for Phase 2 and unblocks the upcoming `.rknn` compile path.
 
 ### New directory structure (Phase 2)

@@ -339,6 +339,43 @@ Notes        : KleidiAI ARM dotprod kernels match (not beat) standard GGML kerne
 
 ## 9. Phase 2.2 — GGUF -> ONNX Weight Pipeline Checkpoint
 
+## 10. Phase 2.3 — One-Token 32-Layer Hybrid Prototype Checkpoint
+
+**Date**: 2026-05-30  
+**Classification**: `real-hardware required`  
+**Script**: `local_llm/local_provider_rknn_hybrid/inference/hybrid_loop.py`
+
+### 10.1 Command
+
+```bash
+/home/wubinyi/miniforge3/envs/embed_nanobot/bin/python \
+  local_llm/local_provider_rknn_hybrid/inference/hybrid_loop.py \
+  --max-layers 32 --seed 123
+```
+
+### 10.2 Results
+
+| Metric | Value |
+|---|---:|
+| layers_executed | 32 |
+| elapsed_ms | 308615.547 |
+| core_mask_nonzero_count | 32 |
+| hidden_max_abs_diff_vs_cpu_ref | NaN |
+| hidden_mean_abs_diff_vs_cpu_ref | NaN |
+| hidden_checksum_hybrid | 29125012.000000 |
+| hidden_checksum_cpu | NaN |
+
+### 10.3 Runtime observations
+
+- RKNN logs show repeated `Not support core mask: 7, fallback to single core auto mode`.
+- `NN Compiler/Model Version is 0.0.0` remains present, consistent with earlier runtime-upgrade attempt.
+
+### 10.4 Interpretation
+
+- Milestone 2.3 execution objective (full one-token, 32-layer loop completion) is achieved.
+- Numeric-equivalence objective is not yet achieved because the current simplified FFN path overflows and produces NaNs in the CPU reference.
+- Required next step: stabilize simplified math path (activation bounds / clipping policy) and rerun with finite diff metrics.
+
 **Date**: 2026-05-30  
 **Classification**: `real-hardware required` (target runtime is RK3588 path; conversion logic itself is host-agnostic)  
 **Script**: `local_llm/local_provider_rknn_hybrid/convert_weights.py`

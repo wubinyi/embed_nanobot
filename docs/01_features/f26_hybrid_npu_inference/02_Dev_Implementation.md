@@ -211,3 +211,39 @@ The hybrid route remains selected. Next step is Option A C backend probe (`ggml_
 ### 8.4 Next step from this checkpoint
 
 Compile the exported ONNX projection models to `.rknn` (same block) and benchmark per-op `rknn_run` with pre-converted pinned weights (no per-token B conversion).
+
+---
+
+## 9. Phase 2.3 Prototype (One-Token 32-Layer Hybrid Loop)
+
+**Date**: 2026-05-30  
+**Scope**: Milestone 2.3 execution checkpoint
+
+### 9.1 What was implemented
+
+- Added `local_llm/local_provider_rknn_hybrid/inference/hybrid_loop.py`.
+- Implemented a simplified one-token forward loop across GGUF `blk.0..blk.31`:
+  - NPU matmul path via RKNN `rknn_matmul_*` APIs with static B pre-convert/upload per op instance.
+  - CPU glue path for simplified attention/FFN/residual composition.
+  - Parallel CPU reference path with the same simplified graph.
+  - End-of-run metrics: elapsed time, core-mask fallback count, checksum, and hybrid-vs-CPU diff.
+
+### 9.2 Debug fix during implementation
+
+- Initial run failed on split-attention blocks due to shape mismatch (`Q=8192`, `K/V=1024`).
+- Fixed by normalizing to hidden width for the simplified glue path:
+  - `q_h = q[:, :hidden]`
+  - `k_h/v_h = tile(k/v)` to hidden width
+  - then compute averaged context proxy before `attn_output`.
+
+### 9.3 Execution outcome
+
+- 32-layer run completes end-to-end and prints all checkpoint metrics.
+- RKNN runtime still rejects core mask `7`; all layers fallback to single-core auto mode.
+- Numeric stability issue remains in the simplified graph under FP16/FP32 mixed flow:
+  - overflow warnings in `silu` and multiplication path,
+  - CPU reference checksum becomes `NaN`, so diff metrics are `NaN`.
+
+### 9.4 Follow-up action
+
+Milestone 2.3 execution checkpoint is complete. Next subtask is numeric stabilization for the simplified prototype (bounded activation/clip policy) so tolerance-gated equivalence metrics can be used before advancing deeper integration.

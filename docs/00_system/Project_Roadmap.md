@@ -219,6 +219,7 @@ and the other is remotely updatable by the Hub.
 | | Route selected: **Hybrid** — run Python overhead benchmark first (2.1), then start C `ggml_backend_rknn` probe. | | | | |
 | | 2.1 checkpoint (2026-05-30): `rknn_run`=2.415ms but total=81.529ms due to per-call B conversion/copy; next action is C path with pre-converted pinned weights. | | | | |
 | | 2.2 checkpoint (2026-05-30): `convert_weights.py` implemented; block 3 exported 7 projection ONNX models + manifest under `local_llm/local_provider_rknn_hybrid/runtime/onnx/block_3/`. | | | | |
+| | 2.3 checkpoint (2026-05-30): `inference/hybrid_loop.py` executes one-token full 32-layer hybrid pass (`layers_executed=32`); numeric diff currently NaN due to simplified-path overflow, follow-up stabilization required. | | | | |
 | 5.5.6 | **f26 Phase 3 (research track): prefill attention on NPU** | P3 | M | 5.5.5 | **Blocked** |
 | | Q·K^T and attn·V via `rknn_matmul_create_dynamic_shape` (Approach 3A). Bucket sizes [256,512,1024,2048]. | | | | |
 | | Blocked on: production `librknnrt.so` with 3-core NPU support not installed. | | | | |
