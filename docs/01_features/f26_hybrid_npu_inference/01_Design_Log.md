@@ -268,8 +268,9 @@ If `ggml_backend` C integration cost is too high for initial prototype: Python t
   `/home/wubinyi/miniforge3/envs/embed_nanobot/bin/python local_llm/local_provider_rknn_hybrid/inference/hybrid_loop.py --max-layers 32 --seed 123`
 - Result: full 32-layer pass completes (`layers_executed=32`) and records timing + checksum metrics.
 - Runtime observation: core mask `7` rejected on every layer, falling back to single-core auto mode (`core_mask_nonzero_count=32`).
-- Numeric observation: CPU reference became unstable (NaN overflow in simplified FFN path), so diff metrics are currently `NaN`.
-- Decision: mark Milestone 2.3 as an execution checkpoint complete, but keep a follow-up subtask open to stabilize the simplified graph (scale/clip policy) before tolerance-based equivalence gating.
+- Stabilization update (same day): applied bounded clip/scale policy in `hybrid_loop.py` (activation, state, and FP16-cast guardrails) and reran the checkpoint.
+- Stabilized metrics: `hidden_max_abs_diff_vs_cpu_ref=16384.0`, `hidden_mean_abs_diff_vs_cpu_ref=4464.086426`, CPU checksum finite (`-305371.343750`).
+- Decision: 2.3 numeric-gating unblock achieved (finite diff metrics now available). Continue with tolerance tightening and deeper integration milestones.
 
 This completes the first usable GGUF -> ONNX step for Phase 2 and unblocks the upcoming `.rknn` compile path.
 

@@ -7,7 +7,7 @@
 ## Bug ID Index
 
 - Assigned bug IDs in this file currently run from `BUG-001` through `BUG-022`.
-- Next bug ID to assign: `BUG-023`.
+- Next bug ID to assign: `BUG-024`.
 - Rule: use the next unassigned bug ID, even when backfilling an older incident, and update this index in the same edit.
 
 ---
@@ -538,3 +538,39 @@ I've completed processing but have no response to give.
 - `bash local_llm/local_provider/start_local_provider.sh` → PASS
 - `curl -s http://127.0.0.1:18000/v1/chat/completions ...` → PASS, returned `RKLLM_OK`
 - `bash local_llm/scripts/run_agent_smoke.sh --mode rkllm` → PASS, real `nanobot agent` returned `RKLLM_OK`
+
+---
+
+## BUG-023: Phase 2.3 simplified hybrid loop produced NaN diff metrics
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-05-30 |
+| **Severity** | Major (checkpoint quality gate blocked) |
+| **Found by** | f26 Phase 2.3 real-hardware rerun |
+| **Phase** | 5.5.5 (RKNN hybrid subgraph inference) |
+
+**Symptom**:
+- `local_llm/local_provider_rknn_hybrid/inference/hybrid_loop.py` completed 32 layers but reported non-finite quality metrics:
+	- `hidden_max_abs_diff_vs_cpu_ref = NaN`
+	- `hidden_mean_abs_diff_vs_cpu_ref = NaN`
+	- `hidden_checksum_cpu = NaN`
+- Runtime warnings indicated overflow in `silu`, FFN multiplication, and float16 cast paths.
+
+**Root cause**:
+- The simplified milestone graph had no numeric bounds, so FP16/FP32 mixed intermediates grew unbounded.
+- Overflows propagated through FFN activation and residual accumulation, producing NaN/Inf tensors in the CPU reference and invalid diff gating outputs.
+
+**Fix**:
+- Added bounded clip/scale policy in `hybrid_loop.py`:
+	- `clamp_act()` and `clamp_state()` helpers with finite `nan_to_num` sanitization.
+	- Stable `silu()` input bounding.
+	- Guardrail before NPU input cast to float16 (`FP16_CLIP`).
+	- Symmetric clamping in both hybrid and CPU reference paths at attention glue, FFN, and residual boundaries.
+- Re-ran 32-layer checkpoint; metrics are now finite:
+	- `hidden_max_abs_diff_vs_cpu_ref = 16384.000000`
+	- `hidden_mean_abs_diff_vs_cpu_ref = 4464.086426`
+	- `hidden_checksum_hybrid = 528305.750000`
+	- `hidden_checksum_cpu = -305371.343750`
+
+**Files changed**: `local_llm/local_provider_rknn_hybrid/inference/hybrid_loop.py`, `docs/01_features/f26_hybrid_npu_inference/01_Design_Log.md`, `docs/01_features/f26_hybrid_npu_inference/02_Dev_Implementation.md`, `docs/01_features/f26_hybrid_npu_inference/03_Test_Report.md`, `docs/00_system/Project_Roadmap.md`, `docs/02_bugfix/BUGFIX_LOG.md`

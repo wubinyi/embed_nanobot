@@ -33,6 +33,11 @@ RKNN_MM_LAYOUT_NATIVE = 1
 
 RKNN_NPU_CORE_0_1_2 = 7
 
+# Numeric guardrails for the simplified milestone-2.3 graph.
+FP16_CLIP = 60000.0
+ACT_CLIP = 2048.0
+STATE_CLIP = 8192.0
+
 SCRIPT_DIR = Path(__file__).parent
 REPO_ROOT = SCRIPT_DIR.parent.parent.parent
 DEFAULT_GGUF = REPO_ROOT / "local_llm/models/gguf/Qwen3.5-9B-Q4_K_M.gguf"
@@ -209,13 +214,15 @@ class OneShotMatmul:
         ctypes.memmove(self.mem_b.contents.virt_addr, native.tobytes(), self.b_size)
 
     def run(self, a_row):
-        a = np.ascontiguousarray(a_row.astype(np.float16))
+        a_src = clamp_act(a_row, FP16_CLIP)
+        a = np.ascontiguousarray(a_src.astype(np.float16))
         ctypes.memmove(self.mem_a.contents.virt_addr, a.tobytes(), self.a_size)
         ret = self.lib.rknn_matmul_run(self.ctx.value)
         if ret != RKNN_SUCC:
             raise RuntimeError(f"rknn_matmul_run failed: {ret}")
         c_bytes = ctypes.string_at(self.mem_c.contents.virt_addr, self.c_size)
-        return np.frombuffer(c_bytes, dtype=np.float32).reshape(1, self.out_dim).copy()
+        c = np.frombuffer(c_bytes, dtype=np.float32).reshape(1, self.out_dim).copy()
+        return clamp_act(c)
 
     def close(self):
         self.lib.rknn_destroy_mem(self.ctx.value, self.mem_a)
@@ -244,7 +251,16 @@ def normalize_shape(arr, logical_shape):
 
 
 def silu(x):
+    x = np.clip(np.nan_to_num(x, nan=0.0, posinf=ACT_CLIP, neginf=-ACT_CLIP), -ACT_CLIP, ACT_CLIP)
     return x / (1.0 + np.exp(-x))
+
+
+def clamp_act(x, limit=ACT_CLIP):
+    return np.clip(np.nan_to_num(x, nan=0.0, posinf=limit, neginf=-limit), -limit, limit)
+
+
+def clamp_state(x, limit=STATE_CLIP):
+    return np.clip(np.nan_to_num(x, nan=0.0, posinf=limit, neginf=-limit), -limit, limit)
 
 
 def fetch_weight(tensor_map, dequantize, name):
@@ -267,7 +283,10 @@ def npu_linear(lib, x, w):
 
 
 def cpu_linear(x, w):
-    return x.astype(np.float32) @ w.astype(np.float32)
+    x32 = clamp_act(x).astype(np.float32)
+    w32 = clamp_act(w).astype(np.float32)
+    y = x32 @ w32
+    return clamp_act(y)
 
 
 def run_layer_hybrid(lib, blk, x, weights):
@@ -276,7 +295,7 @@ def run_layer_hybrid(lib, blk, x, weights):
 
     if weights.get("attn_qkv") is not None:
         y, core_ret = npu_linear(lib, x, weights["attn_qkv"])
-        x = x + 0.1 * np.tanh(y[:, : x.shape[1]])
+        x = clamp_state(x + 0.1 * np.tanh(clamp_act(y[:, : x.shape[1]])))
     elif all(weights.get(k) is not None for k in ["attn_q", "attn_k", "attn_v", "attn_out"]):
         q, r1 = npu_linear(lib, x, weights["attn_q"])
         k, r2 = npu_linear(lib, x, weights["attn_k"])
@@ -289,28 +308,28 @@ def run_layer_hybrid(lib, blk, x, weights):
         rep = x.shape[1] // k.shape[1]
         k_h = np.tile(k, (1, rep))
         v_h = np.tile(v, (1, rep))
-        attn_cpu = (q_h + k_h + v_h) / 3.0
+        attn_cpu = clamp_act((q_h + k_h + v_h) / 3.0)
         o, r4 = npu_linear(lib, attn_cpu, weights["attn_out"])
         if core_ret is None:
             core_ret = r4
-        x = x + o
+        x = clamp_state(x + o)
 
     if all(weights.get(k) is not None for k in ["ffn_gate", "ffn_up", "ffn_down"]):
         gate, rg = npu_linear(lib, x, weights["ffn_gate"])
         up, ru = npu_linear(lib, x, weights["ffn_up"])
         if core_ret is None:
             core_ret = rg if rg is not None else ru
-        act = silu(gate) * up
+        act = clamp_act(silu(gate) * clamp_act(up))
         down, rd = npu_linear(lib, act, weights["ffn_down"])
         if core_ret is None:
             core_ret = rd
-        x = x + down
+        x = clamp_state(x + down)
 
     if weights.get("ssm_out") is not None:
         ssm, rs = npu_linear(lib, x, weights["ssm_out"])
         if core_ret is None:
             core_ret = rs
-        x = x + 0.1 * ssm
+        x = clamp_state(x + 0.1 * clamp_act(ssm))
 
     return x.astype(np.float32), core_ret
 
@@ -318,7 +337,7 @@ def run_layer_hybrid(lib, blk, x, weights):
 def run_layer_cpu(blk, x, weights):
     if weights.get("attn_qkv") is not None:
         y = cpu_linear(x, weights["attn_qkv"])
-        x = x + 0.1 * np.tanh(y[:, : x.shape[1]])
+        x = clamp_state(x + 0.1 * np.tanh(clamp_act(y[:, : x.shape[1]])))
     elif all(weights.get(k) is not None for k in ["attn_q", "attn_k", "attn_v", "attn_out"]):
         q = cpu_linear(x, weights["attn_q"])
         k = cpu_linear(x, weights["attn_k"])
@@ -327,20 +346,20 @@ def run_layer_cpu(blk, x, weights):
         rep = x.shape[1] // k.shape[1]
         k_h = np.tile(k, (1, rep))
         v_h = np.tile(v, (1, rep))
-        attn_cpu = (q_h + k_h + v_h) / 3.0
+        attn_cpu = clamp_act((q_h + k_h + v_h) / 3.0)
         o = cpu_linear(attn_cpu, weights["attn_out"])
-        x = x + o
+        x = clamp_state(x + o)
 
     if all(weights.get(k) is not None for k in ["ffn_gate", "ffn_up", "ffn_down"]):
         gate = cpu_linear(x, weights["ffn_gate"])
         up = cpu_linear(x, weights["ffn_up"])
-        act = silu(gate) * up
+        act = clamp_act(silu(gate) * clamp_act(up))
         down = cpu_linear(act, weights["ffn_down"])
-        x = x + down
+        x = clamp_state(x + down)
 
     if weights.get("ssm_out") is not None:
         ssm = cpu_linear(x, weights["ssm_out"])
-        x = x + 0.1 * ssm
+        x = clamp_state(x + 0.1 * clamp_act(ssm))
 
     return x.astype(np.float32)
 

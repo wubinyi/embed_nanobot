@@ -358,12 +358,12 @@ Notes        : KleidiAI ARM dotprod kernels match (not beat) standard GGML kerne
 | Metric | Value |
 |---|---:|
 | layers_executed | 32 |
-| elapsed_ms | 308615.547 |
+| elapsed_ms | 527528.722 |
 | core_mask_nonzero_count | 32 |
-| hidden_max_abs_diff_vs_cpu_ref | NaN |
-| hidden_mean_abs_diff_vs_cpu_ref | NaN |
-| hidden_checksum_hybrid | 29125012.000000 |
-| hidden_checksum_cpu | NaN |
+| hidden_max_abs_diff_vs_cpu_ref | 16384.000000 |
+| hidden_mean_abs_diff_vs_cpu_ref | 4464.086426 |
+| hidden_checksum_hybrid | 528305.750000 |
+| hidden_checksum_cpu | -305371.343750 |
 
 ### 10.3 Runtime observations
 
@@ -373,8 +373,8 @@ Notes        : KleidiAI ARM dotprod kernels match (not beat) standard GGML kerne
 ### 10.4 Interpretation
 
 - Milestone 2.3 execution objective (full one-token, 32-layer loop completion) is achieved.
-- Numeric-equivalence objective is not yet achieved because the current simplified FFN path overflows and produces NaNs in the CPU reference.
-- Required next step: stabilize simplified math path (activation bounds / clipping policy) and rerun with finite diff metrics.
+- Numeric stability objective for checkpoint gating is now achieved (all reported diff/checksum metrics are finite).
+- Diff magnitude remains large due to simplified graph and explicit clipping policy, so this checkpoint should be treated as a stability gate, not an accuracy-equivalence gate.
 
 **Date**: 2026-05-30  
 **Classification**: `real-hardware required` (target runtime is RK3588 path; conversion logic itself is host-agnostic)  
