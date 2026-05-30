@@ -249,6 +249,17 @@ If `ggml_backend` C integration cost is too high for initial prototype: Python t
 - Breakdown bottleneck: `copy_b_ms=79.075` (dominates latency due to per-call B layout conversion + copy)
 - Decision: keep hybrid route and continue to Option A C backend probe, but optimize by pre-converting and pinning static projection weights in native layout. Do not use per-token B conversion path.
 
+**Milestone 2.2 implementation checkpoint (2026-05-30):**
+
+- Script added: `local_llm/local_provider_rknn_hybrid/convert_weights.py`
+- Pipeline implemented: GGUF tensor lookup -> dequantize -> logical-shape normalization -> per-op ONNX MatMul export.
+- Auto block selection: picks first block containing all 7 required projection tensors (`attn_q`, `attn_k`, `attn_v`, `attn_output`, `ffn_gate`, `ffn_up`, `ffn_down`).
+- Dry-run verified on `Qwen3.5-9B-Q4_K_M.gguf` and selected `blk.3`.
+- Real export verified: 7 ONNX files + `manifest.json` written to:
+  `local_llm/local_provider_rknn_hybrid/runtime/onnx/block_3/`
+
+This completes the first usable GGUF -> ONNX step for Phase 2 and unblocks the upcoming `.rknn` compile path.
+
 ### New directory structure (Phase 2)
 
 ```

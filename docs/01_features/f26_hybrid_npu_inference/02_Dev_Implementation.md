@@ -170,3 +170,44 @@ After Phase 1 implementation:
 ### 7.3 Implementation decision
 
 The hybrid route remains selected. Next step is Option A C backend probe (`ggml_backend_rknn.c`) with a strict rule: pre-convert and pin projection weights in native RKNN layout to avoid per-token B conversion/copy overhead.
+
+---
+
+## 8. Phase 2.2 Weight Pipeline (GGUF -> ONNX)
+
+**Date**: 2026-05-30  
+**Scope**: Implement Milestone 2.2 first pass for one transformer block projection set.
+
+### 8.1 What was implemented
+
+- New script: `local_llm/local_provider_rknn_hybrid/convert_weights.py`
+- Reads GGUF model tensors via llama.cpp `gguf-py` (`GGUFReader`).
+- Dequantizes quantized GGUF weights using `gguf.quants.dequantize`.
+- Normalizes tensor layout to logical GGUF shape (handles transposed dequant output).
+- Exports one ONNX MatMul graph per projection op.
+- Writes `manifest.json` with exported tensor names/shapes/dtype.
+
+### 8.2 Block and tensor selection behavior
+
+- Required projection set:
+  - `attn_q.weight`
+  - `attn_k.weight`
+  - `attn_v.weight`
+  - `attn_output.weight`
+  - `ffn_gate.weight`
+  - `ffn_up.weight`
+  - `ffn_down.weight`
+- Auto-selects first block that contains all required tensors unless `--block` is provided.
+
+### 8.3 Validation run summary
+
+- Dry-run selected `blk.3` and validated all 7 tensor shapes after dequantization.
+- Real export produced:
+  - `attn_q.onnx`, `attn_k.onnx`, `attn_v.onnx`, `attn_output.onnx`, `ffn_gate.onnx`, `ffn_up.onnx`, `ffn_down.onnx`
+  - `manifest.json`
+- Output path:
+  `local_llm/local_provider_rknn_hybrid/runtime/onnx/block_3/`
+
+### 8.4 Next step from this checkpoint
+
+Compile the exported ONNX projection models to `.rknn` (same block) and benchmark per-op `rknn_run` with pre-converted pinned weights (no per-token B conversion).
