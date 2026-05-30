@@ -42,12 +42,20 @@ import numpy as np
 SCRIPT_DIR = Path(__file__).parent
 REPO_ROOT  = SCRIPT_DIR.parent.parent
 
-LIBRKNNRT_CANDIDATES = [
-    # From the rknn-llm-src vendored copy
-    REPO_ROOT / "local_llm/local_provider_rkllm/rknn-llm-src/examples/multimodal_model_demo/deploy/3rdparty/librknnrt/Linux/librknn_api/aarch64/librknnrt.so",
-    Path("/usr/lib/librknnrt.so"),
-    Path("/usr/local/lib/librknnrt.so"),
-]
+def get_librknnrt_candidates():
+    env_path = os.environ.get("RKNNRT_PATH", "").strip()
+    candidates = []
+    if env_path:
+        candidates.append(Path(env_path))
+
+    candidates.extend([
+        Path.home() / ".local/lib/librknnrt.so",
+        Path("/usr/local/lib/librknnrt.so"),
+        Path("/usr/lib/librknnrt.so"),
+        # Vendored copy from rknn-llm-src (fallback)
+        REPO_ROOT / "local_llm/local_provider_rkllm/rknn-llm-src/examples/multimodal_model_demo/deploy/3rdparty/librknnrt/Linux/librknn_api/aarch64/librknnrt.so",
+    ])
+    return candidates
 
 BUCKETS = [64, 128, 256, 512, 1024, 2048]
 
@@ -128,7 +136,7 @@ class RknnTensorMem(ctypes.Structure):
 
 def load_rknn_lib():
     """Load librknnrt.so from known locations. Returns (lib, path) or (None, None)."""
-    for candidate in LIBRKNNRT_CANDIDATES:
+    for candidate in get_librknnrt_candidates():
         p = Path(candidate)
         if p.exists():
             try:

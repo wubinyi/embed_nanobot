@@ -14,10 +14,18 @@ Default shape targets decode projection style:
 Usage:
   python benchmark_roundtrip.py
   python benchmark_roundtrip.py --m 1 --k 3584 --n 3584 --repeats 30
+
+Runtime selection:
+    By default this script prefers ~/.local/lib/librknnrt.so, then /usr/local/lib,
+    then /usr/lib, and finally the vendored runtime in rknn-llm-src.
+    You can force a specific runtime with:
+
+        RKNNRT_PATH=/path/to/librknnrt.so python benchmark_roundtrip.py
 """
 
 import argparse
 import ctypes
+import os
 import time
 from pathlib import Path
 
@@ -36,12 +44,23 @@ RKNN_NPU_CORE_0_1_2 = 7
 
 SCRIPT_DIR = Path(__file__).parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
-LIBRKNNRT_CANDIDATES = [
-    REPO_ROOT
-    / "local_llm/local_provider_rkllm/rknn-llm-src/examples/multimodal_model_demo/deploy/3rdparty/librknnrt/Linux/librknn_api/aarch64/librknnrt.so",
-    Path("/usr/lib/librknnrt.so"),
-    Path("/usr/local/lib/librknnrt.so"),
-]
+
+
+def get_librknnrt_candidates():
+    env_path = os.environ.get("RKNNRT_PATH", "").strip()
+    candidates = []
+    if env_path:
+        candidates.append(Path(env_path))
+
+    # Prefer user/system runtime first, then vendored demo runtime.
+    candidates.extend([
+        Path.home() / ".local/lib/librknnrt.so",
+        Path("/usr/local/lib/librknnrt.so"),
+        Path("/usr/lib/librknnrt.so"),
+        REPO_ROOT
+        / "local_llm/local_provider_rkllm/rknn-llm-src/examples/multimodal_model_demo/deploy/3rdparty/librknnrt/Linux/librknn_api/aarch64/librknnrt.so",
+    ])
+    return candidates
 
 
 class RknnMatmulInfo(ctypes.Structure):
@@ -87,7 +106,7 @@ class RknnTensorMem(ctypes.Structure):
 
 
 def load_rknn_lib():
-    for candidate in LIBRKNNRT_CANDIDATES:
+    for candidate in get_librknnrt_candidates():
         p = Path(candidate)
         if p.exists():
             try:

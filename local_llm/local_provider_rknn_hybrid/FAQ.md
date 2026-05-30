@@ -41,3 +41,17 @@ Observed in this project run:
 - `rknn_core_mask_ret: -1`
 - `Not support core mask: 7, fallback to single core auto mode`
 - `NN Compiler/Model Version is 0.0.0`
+
+## Q: Can we upgrade runtime to enable 3-core matmul on this host?
+
+We attempted exactly that on 2026-05-30 by pulling `rknn-toolkit2` `v2.3.2`,
+installing the aarch64 `librknnrt.so` to `~/.local/lib/librknnrt.so`, and
+forcing the benchmark to load it via `RKNNRT_PATH`.
+
+Result: core mask `7` is still rejected (`rknn_core_mask_ret=-1`) and runtime
+still falls back to single-core auto mode.
+
+For the full command-by-command log, see:
+
+- `local_llm/docs/RKNPU_DRIVER_INSTALL.md`
+  section: **Runtime upgrade attempt for 3-core matmul (2026-05-30)**

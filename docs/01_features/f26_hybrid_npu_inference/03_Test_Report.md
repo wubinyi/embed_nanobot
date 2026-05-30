@@ -326,3 +326,11 @@ Notes        : KleidiAI ARM dotprod kernels match (not beat) standard GGML kerne
 - Raw NPU kernel compute (`run_ms`) is much lower than CPU matmul, but end-to-end latency is dominated by B layout conversion and B copy (`copy_b_ms`).
 - The current per-token path is not viable for decode projection calls.
 - Hybrid route remains valid, but implementation must pre-convert and pin static projection weights (`W_q/W_k/W_v/W_o/W_gate/W_up/W_down`) in native RKNN layout instead of converting/copying B each token.
+
+### 8.4 Runtime upgrade attempt (3-core support)
+
+- Upgraded runtime source used: `rknn-toolkit2` (tag `v2.3.2`) aarch64 `librknnrt.so`.
+- Installed to user-local runtime path: `~/.local/lib/librknnrt.so`.
+- Forced benchmark runtime via `RKNNRT_PATH=~/.local/lib/librknnrt.so`.
+- Result unchanged: core mask `7` still rejected, fallback to single-core auto mode (`rknn_core_mask_ret=-1`).
+- Detailed command-by-command procedure is logged in `local_llm/docs/RKNPU_DRIVER_INSTALL.md` under "Runtime upgrade attempt for 3-core matmul (2026-05-30)".
