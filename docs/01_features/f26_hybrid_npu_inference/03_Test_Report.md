@@ -339,6 +339,46 @@ Notes        : KleidiAI ARM dotprod kernels match (not beat) standard GGML kerne
 
 ## 9. Phase 2.2 — GGUF -> ONNX Weight Pipeline Checkpoint
 
+**Date**: 2026-05-30  
+**Classification**: `real-hardware required` (target runtime is RK3588 path; conversion logic itself is host-agnostic)  
+**Script**: `local_llm/local_provider_rknn_hybrid/convert_weights.py`
+
+### 9.1 Commands
+
+```bash
+# Dry-run: discover a valid block and validate dequantized shapes
+/home/wubinyi/miniforge3/envs/embed_nanobot/bin/python \
+  local_llm/local_provider_rknn_hybrid/convert_weights.py \
+  --dry-run
+
+# Real export for selected block
+/home/wubinyi/miniforge3/envs/embed_nanobot/bin/python \
+  local_llm/local_provider_rknn_hybrid/convert_weights.py \
+  --block 3 --dtype float16
+```
+
+### 9.2 Results
+
+| Check | Result |
+|---|---|
+| Auto block selection | `blk.3` |
+| Required projection tensors found | 7/7 |
+| Dequantization + shape normalization | PASS |
+| ONNX files exported | 7 |
+| Manifest written | PASS (`manifest.json`) |
+| Output directory | `local_llm/local_provider_rknn_hybrid/runtime/onnx/block_3/` |
+
+### 9.3 Exported artifacts
+
+- `attn_q.onnx`
+- `attn_k.onnx`
+- `attn_v.onnx`
+- `attn_output.onnx`
+- `ffn_gate.onnx`
+- `ffn_up.onnx`
+- `ffn_down.onnx`
+- `manifest.json`
+
 ## 10. Phase 2.3 — One-Token 32-Layer Hybrid Prototype Checkpoint
 
 **Date**: 2026-05-30  
@@ -415,10 +455,6 @@ python3 local_llm/local_provider_rknn_hybrid/rknn_backend/probe_backend.py \
 - The current artifact is discovery-only. It proves the plugin shape and host-side load path, but it does not yet offload RKNN compute.
 - This is the correct narrow checkpoint before wiring real RKNN graph execution into the backend shell.
 
-**Date**: 2026-05-30  
-**Classification**: `real-hardware required` (target runtime is RK3588 path; conversion logic itself is host-agnostic)  
-**Script**: `local_llm/local_provider_rknn_hybrid/convert_weights.py`
-
 ## 12. Phase 2.4 — Real RKNN Execution Backend
 
 **Date**: 2026-05-31
@@ -459,39 +495,3 @@ python3 local_llm/local_provider_rknn_hybrid/rknn_backend/probe_backend.py \
 - Runtime: `/home/wubinyi/.local/lib/librknnrt.so`
 - Observed runtime log: `Not support core mask: 7, fallback to single core auto mode`
 - Validation result: pass for backend loading and real RKNN matmul execution
-
-### 9.1 Commands
-
-```bash
-# Dry-run: discover a valid block and validate dequantized shapes
-/home/wubinyi/miniforge3/envs/embed_nanobot/bin/python \
-  local_llm/local_provider_rknn_hybrid/convert_weights.py \
-  --dry-run
-
-# Real export for selected block
-/home/wubinyi/miniforge3/envs/embed_nanobot/bin/python \
-  local_llm/local_provider_rknn_hybrid/convert_weights.py \
-  --block 3 --dtype float16
-```
-
-### 9.2 Results
-
-| Check | Result |
-|---|---|
-| Auto block selection | `blk.3` |
-| Required projection tensors found | 7/7 |
-| Dequantization + shape normalization | PASS |
-| ONNX files exported | 7 |
-| Manifest written | PASS (`manifest.json`) |
-| Output directory | `local_llm/local_provider_rknn_hybrid/runtime/onnx/block_3/` |
-
-### 9.3 Exported artifacts
-
-- `attn_q.onnx`
-- `attn_k.onnx`
-- `attn_v.onnx`
-- `attn_output.onnx`
-- `ffn_gate.onnx`
-- `ffn_up.onnx`
-- `ffn_down.onnx`
-- `manifest.json`

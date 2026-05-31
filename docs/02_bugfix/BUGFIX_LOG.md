@@ -7,7 +7,7 @@
 ## Bug ID Index
 
 - Assigned bug IDs in this file currently run from `BUG-001` through `BUG-022`.
-- Next bug ID to assign: `BUG-024`.
+- Next bug ID to assign: `BUG-025`.
 - Rule: use the next unassigned bug ID, even when backfilling an older incident, and update this index in the same edit.
 
 ---
@@ -574,3 +574,29 @@ I've completed processing but have no response to give.
 	- `hidden_checksum_cpu = -305371.343750`
 
 **Files changed**: `local_llm/local_provider_rknn_hybrid/inference/hybrid_loop.py`, `docs/01_features/f26_hybrid_npu_inference/01_Design_Log.md`, `docs/01_features/f26_hybrid_npu_inference/02_Dev_Implementation.md`, `docs/01_features/f26_hybrid_npu_inference/03_Test_Report.md`, `docs/00_system/Project_Roadmap.md`, `docs/02_bugfix/BUGFIX_LOG.md`
+
+---
+
+## BUG-024: Phase 2.2 section content displaced in f26 test report
+
+| Field | Value |
+|-------|-------|
+| **Date** | 2026-05-31 |
+| **Severity** | Medium (documentation structure regression) |
+| **Found by** | User review of f26 Phase 2 docs |
+| **Phase** | 5.5.5 (RKNN hybrid subgraph inference) |
+
+**Symptom**:
+- In `docs/01_features/f26_hybrid_npu_inference/03_Test_Report.md`, section 9 (`Phase 2.2 — GGUF -> ONNX Weight Pipeline Checkpoint`) lost its local metadata and appeared to have missing content.
+- The `Date/Classification/Script` block and section 9 subsections (`9.1` to `9.3`) were displaced to the tail of the file after later sections.
+
+**Root cause**:
+- Earlier edits inserted Phase 2.4 sections while section 9 content was not kept contiguous, causing the section 9 block to remain appended near the end of the document.
+
+**Fix**:
+- Restored section 9 to a contiguous block directly under the section 9 heading.
+- Reinserted the section 9 metadata block (`Date`, `Classification`, `Script`) in-place.
+- Kept section 9 subsections (`9.1 Commands`, `9.2 Results`, `9.3 Exported artifacts`) in section order.
+- Removed the misplaced duplicate section 9 block from the end of the file.
+
+**Files changed**: `docs/01_features/f26_hybrid_npu_inference/03_Test_Report.md`, `docs/02_bugfix/BUGFIX_LOG.md`
