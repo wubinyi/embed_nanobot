@@ -125,6 +125,9 @@ Current evidence file:
 - `local_llm/local_provider_rknn_hybrid/runtime/kernels/block_3/compile_manifest.json`
    records blocked artifacts with message `toolkit_import_failed: No module named 'rknn'`.
 
+Detailed install and migration notes are maintained in:
+- `docs/01_features/f26_hybrid_npu_inference/04_RKNN_Toolkit2_Install.md`.
+
 ---
 
 For bug fixes found during testing, see [docs/02_bugfix/BUGFIX_LOG.md](02_bugfix/BUGFIX_LOG.md).

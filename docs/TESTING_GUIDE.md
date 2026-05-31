@@ -70,56 +70,8 @@ This covers:
 
 ---
 
-## A.5 RKNN Toolkit2 Install Guide (`.rknn` compile prerequisites)
-
-Use this section when you need to run:
-
-```bash
-python local_llm/local_provider_rknn_hybrid/compile_rknn.py ...
-```
-
-### What must be installed
-
-- Runtime-only package: `rknn-toolkit-lite2` provides `rknnlite.api` (inference/runtime).
-- Compiler package: `rknn-toolkit2` provides `rknn.api` (ONNX -> RKNN compile/export).
-
-If `rknn.api` is missing, `.rknn` build is blocked even if runtime-lite works.
-
-### Quick verification
-
-```bash
-conda run -n embed_nanobot python -c "import rknnlite.api as la; print('rknnlite ok')"
-conda run -n embed_nanobot python -c "import rknn.api as ra; print('rknn toolkit2 ok')"
-```
-
-Expected:
-- First command succeeds when runtime-lite is installed.
-- Second command must succeed for `compile_rknn.py` to produce `.rknn` files.
-
-### Install attempt in `embed_nanobot`
-
-```bash
-conda run -n embed_nanobot python -m pip install rknn-toolkit2==2.3.2
-```
-
-If pip cannot provide a compatible wheel for your architecture/Python ABI,
-you must switch to a supported build host.
-
-### Recommended compile host strategy
-
-1. Use a Linux x86_64 build machine with a Python version supported by the Rockchip Toolkit2 wheel.
-2. Install `rknn-toolkit2` there and run `compile_rknn.py` against:
-  - `local_llm/local_provider_rknn_hybrid/runtime/onnx/block_3/manifest.json`
-3. Copy generated `.rknn` files and `compile_manifest.json` back to:
-  - `local_llm/local_provider_rknn_hybrid/runtime/kernels/block_3/`
-4. On RK3588 target host, keep `rknn-toolkit-lite2` for runtime execution.
-
-### Current RK3588 checkpoint (2026-05-31)
-
-- Host: RK3588 (aarch64), `embed_nanobot` Python 3.12.12.
-- `rknnlite.api`: available.
-- `rknn.api`: unavailable (`No module named 'rknn'`).
-- Result: runtime path is available; compile path remains blocked on this env.
+For f26 RKNN Toolkit2 installation details and the current RK3588 compile-status log, see:
+`docs/01_features/f26_hybrid_npu_inference/04_RKNN_Toolkit2_Install.md`
 
 ---
 
