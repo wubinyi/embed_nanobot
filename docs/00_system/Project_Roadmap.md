@@ -221,6 +221,8 @@ and the other is remotely updatable by the Hub.
 | | 2.2 checkpoint (2026-05-30): `convert_weights.py` implemented; block 3 exported 7 projection ONNX models + manifest under `local_llm/local_provider_rknn_hybrid/runtime/onnx/block_3/`. | | | | |
 | | 2.3 checkpoint (2026-05-30): `inference/hybrid_loop.py` executes one-token full 32-layer hybrid pass (`layers_executed=32`); tuned default envelope now reports finite low-diff metrics (`max_abs=0.760761`, `mean_abs=0.108222`) with single-core fallback still active. | | | | |
 | | 2.4 checkpoint (2026-05-31): `rknn_backend/ggml_backend_rknn.c` now executes a real RKNN `GGML_OP_MUL_MAT` graph behind the same loadable backend shape; build + ctypes probe confirm `RKNN`, `api_version=2`, `device_count=1`, runtime-aware scoring, and a successful matmul run on the RK3588 runtime. | | | | |
+| | 2.4b checkpoint (2026-05-31): probe discriminator upgraded to dual-case numeric validation (`max_abs_diff`, nonzero counts, per-case stats); current runtime reports `rk_graph_fallback` with zero host-visible outputs, making correctness gaps explicit instead of checksum-opaque. | | | | |
+| | 2.5 prep checkpoint (2026-05-31): ONNX->RKNN compile script (`compile_rknn.py`) added for block_3 projections; milestone currently blocked by missing RKNN Toolkit2 Python module (`No module named 'rknn'`) on host env. | | | | |
 | 5.5.6 | **f26 Phase 3 (research track): prefill attention on NPU** | P3 | M | 5.5.5 | **Blocked** |
 | | Q·K^T and attn·V via `rknn_matmul_create_dynamic_shape` (Approach 3A). Bucket sizes [256,512,1024,2048]. | | | | |
 | | Blocked on: production `librknnrt.so` with 3-core NPU support not installed. | | | | |

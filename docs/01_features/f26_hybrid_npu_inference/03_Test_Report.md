@@ -495,3 +495,63 @@ python3 local_llm/local_provider_rknn_hybrid/rknn_backend/probe_backend.py \
 - Runtime: `/home/wubinyi/.local/lib/librknnrt.so`
 - Observed runtime log: `Not support core mask: 7, fallback to single core auto mode`
 - Validation result: pass for backend loading and real RKNN matmul execution
+
+## 13. Phase 2.4 — Probe Discriminator Strengthening + `.rknn` Compile Attempt
+
+**Date**: 2026-05-31
+**Classification**: `real-hardware required`
+**Artifacts**:
+- `local_llm/local_provider_rknn_hybrid/rknn_backend/ggml_backend_rknn.c`
+- `local_llm/local_provider_rknn_hybrid/rknn_backend/probe_backend.py`
+- `local_llm/local_provider_rknn_hybrid/compile_rknn.py`
+
+### 13.1 Commands
+
+```bash
+bash local_llm/local_provider_rknn_hybrid/rknn_backend/build_probe.sh
+/home/wubinyi/workspace/embed_nanobot/.conda/bin/python \
+  local_llm/local_provider_rknn_hybrid/rknn_backend/probe_backend.py \
+  local_llm/local_provider_rknn_hybrid/runtime/backend/libggml-rknn-probe.so
+
+/home/wubinyi/workspace/embed_nanobot/.conda/bin/python \
+  local_llm/local_provider_rknn_hybrid/compile_rknn.py \
+  --manifest local_llm/local_provider_rknn_hybrid/runtime/onnx/block_3/manifest.json \
+  --out-dir local_llm/local_provider_rknn_hybrid/runtime/kernels/block_3 \
+  --target rk3588
+```
+
+### 13.2 Probe discriminator results
+
+| Metric | Value |
+|---|---:|
+| probe status | `rk_graph_fallback` |
+| case1_checksum | 0.000000 |
+| case1_abs_sum | 0.000000 |
+| case1_max_abs_diff | 528.000000 |
+| case1_nonzero | 0 |
+| case2_checksum | 0.000000 |
+| case2_abs_sum | 0.000000 |
+| case2_max_abs_diff | 1.968750 |
+| case2_nonzero | 0 |
+| max_abs_diff | 528.000000 |
+
+### 13.3 Interpretation (probe)
+
+- The strengthened probe now provides a useful numeric discriminator.
+- The runtime path still executes matmul calls, but host-visible output remains all zero on this runtime path.
+- This is now measurable and explicit via `max_abs_diff` and nonzero-count metrics instead of a single checksum string.
+
+### 13.4 `.rknn` compile attempt results
+
+| Check | Result |
+|---|---|
+| compile script present | ✅ `compile_rknn.py` |
+| manifest input detected | ✅ `runtime/onnx/block_3/manifest.json` |
+| RKNN toolkit import | ❌ `No module named 'rknn'` |
+| `.rknn` artifacts generated | ❌ blocked by missing toolkit |
+
+### 13.5 Interpretation (`.rknn` milestone)
+
+- The compile pipeline is implemented and ready.
+- This host currently lacks an RKNN Toolkit2-capable Python environment, so `.rknn` export cannot complete in this session.
+- Next checkpoint action is environment enablement (Toolkit2), then rerun `compile_rknn.py` and capture generated artifacts.

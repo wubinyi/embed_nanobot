@@ -8,6 +8,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -372,8 +373,125 @@ static bool rknn_run_decode_matmul(struct rknn_backend_context * backend_ctx, st
     return true;
 }
 
+static void rknn_probe_cpu_matmul(const float * a, const float * b, float * out, size_t k, size_t n) {
+    for (size_t col = 0; col < n; ++col) {
+        float acc = 0.0f;
+        for (size_t i = 0; i < k; ++i) {
+            acc += a[i] * b[i * n + col];
+        }
+        out[col] = acc;
+    }
+}
+
+static void rknn_probe_fill_case_one(float * a, float * b, size_t k, size_t n) {
+    for (size_t i = 0; i < k; ++i) {
+        a[i] = (float) (i + 1);
+    }
+    for (size_t i = 0; i < k * n; ++i) {
+        b[i] = 1.0f;
+    }
+}
+
+static void rknn_probe_fill_case_two(float * a, float * b, size_t k, size_t n) {
+    for (size_t i = 0; i < k; ++i) {
+        a[i] = (float) (((int) (i % 7) - 3) * 0.25f);
+    }
+    for (size_t row = 0; row < k; ++row) {
+        for (size_t col = 0; col < n; ++col) {
+            const int pattern = (int) ((row * 3 + col * 5) % 11) - 5;
+            b[row * n + col] = (float) pattern * 0.125f;
+        }
+    }
+}
+
+static bool rknn_probe_run_case(
+        struct rknn_backend_context * ctx,
+        const float * in_a,
+        const float * in_b,
+        size_t k,
+        size_t n,
+        float * checksum,
+        float * abs_sum,
+        float * min_val,
+        float * max_val,
+        float * max_abs_diff,
+        size_t * nonzero_count) {
+    float a[32];
+    float b[1024];
+    float out[32];
+    float ref[32];
+
+    if (k != 32 || n != 32) {
+        return false;
+    }
+
+    memcpy(a, in_a, sizeof(a));
+    memcpy(b, in_b, sizeof(b));
+    memset(out, 0, sizeof(out));
+    memset(ref, 0, sizeof(ref));
+
+    struct ggml_tensor a_tensor = {0};
+    struct ggml_tensor b_tensor = {0};
+    struct ggml_tensor out_tensor = {0};
+    a_tensor.type = GGML_TYPE_F32;
+    a_tensor.ne[0] = (int64_t) k;
+    a_tensor.ne[1] = 1;
+    a_tensor.data = a;
+    b_tensor.type = GGML_TYPE_F32;
+    b_tensor.ne[0] = (int64_t) k;
+    b_tensor.ne[1] = (int64_t) n;
+    b_tensor.data = b;
+    out_tensor.type = GGML_TYPE_F32;
+    out_tensor.ne[0] = (int64_t) n;
+    out_tensor.ne[1] = 1;
+    out_tensor.data = out;
+    out_tensor.src[0] = &a_tensor;
+    out_tensor.src[1] = &b_tensor;
+    out_tensor.op = GGML_OP_MUL_MAT;
+
+    if (!rknn_run_decode_matmul(ctx, &out_tensor)) {
+        return false;
+    }
+
+    rknn_probe_cpu_matmul(a, b, ref, k, n);
+
+    float local_checksum = 0.0f;
+    float local_abs_sum = 0.0f;
+    float local_min = out[0];
+    float local_max = out[0];
+    float local_max_abs_diff = 0.0f;
+    size_t local_nonzero_count = 0;
+
+    for (size_t i = 0; i < n; ++i) {
+        const float value = out[i];
+        const float diff = fabsf(value - ref[i]);
+        if (fabsf(value) > 1e-6f) {
+            local_nonzero_count += 1;
+        }
+        local_checksum += value;
+        local_abs_sum += fabsf(value);
+        if (value < local_min) {
+            local_min = value;
+        }
+        if (value > local_max) {
+            local_max = value;
+        }
+        if (diff > local_max_abs_diff) {
+            local_max_abs_diff = diff;
+        }
+    }
+
+    *checksum = local_checksum;
+    *abs_sum = local_abs_sum;
+    *min_val = local_min;
+    *max_val = local_max;
+    *max_abs_diff = local_max_abs_diff;
+    *nonzero_count = local_nonzero_count;
+    return true;
+}
+
 static const char * rknn_backend_probe_run(void) {
-    static char result[256];
+    static char result[768];
     struct rknn_backend_context ctx = {0};
     if (!rknn_load_runtime(&ctx.runtime)) {
         snprintf(result, sizeof(result), "probe_run: runtime unavailable");
@@ -390,43 +508,80 @@ static const char * rknn_backend_probe_run(void) {
     ctx.policy.ffn_scale = 0.25f;
     ctx.policy.ssm_scale = 0.05f;
 
-    float a[32];
-    float b[1024];
-    float c[32];
-    for (size_t i = 0; i < 32; ++i) {
-        a[i] = (float) (i + 1);
-        c[i] = 0.0f;
-    }
-    for (size_t i = 0; i < 1024; ++i) {
-        b[i] = 1.0f;
-    }
+    float case1_a[32];
+    float case1_b[1024];
+    float case2_a[32];
+    float case2_b[1024];
+    rknn_probe_fill_case_one(case1_a, case1_b, 32, 32);
+    rknn_probe_fill_case_two(case2_a, case2_b, 32, 32);
 
-    struct ggml_tensor a_tensor = {0};
-    struct ggml_tensor b_tensor = {0};
-    struct ggml_tensor c_tensor = {0};
-    a_tensor.type = GGML_TYPE_F32;
-    a_tensor.ne[0] = 32;
-    a_tensor.ne[1] = 1;
-    a_tensor.data = a;
-    b_tensor.type = GGML_TYPE_F32;
-    b_tensor.ne[0] = 32;
-    b_tensor.ne[1] = 32;
-    b_tensor.data = b;
-    c_tensor.type = GGML_TYPE_F32;
-    c_tensor.ne[0] = 32;
-    c_tensor.ne[1] = 1;
-    c_tensor.data = c;
-    c_tensor.src[0] = &a_tensor;
-    c_tensor.src[1] = &b_tensor;
-    c_tensor.op = GGML_OP_MUL_MAT;
+    float case1_checksum = 0.0f;
+    float case1_abs_sum = 0.0f;
+    float case1_min = 0.0f;
+    float case1_max = 0.0f;
+    float case1_max_abs_diff = 0.0f;
+    size_t case1_nonzero_count = 0;
 
-    const bool ok = rknn_run_decode_matmul(&ctx, &c_tensor);
-    float checksum = 0.0f;
-    for (size_t i = 0; i < 32; ++i) {
-        checksum += c[i];
-    }
+    float case2_checksum = 0.0f;
+    float case2_abs_sum = 0.0f;
+    float case2_min = 0.0f;
+    float case2_max = 0.0f;
+    float case2_max_abs_diff = 0.0f;
+    size_t case2_nonzero_count = 0;
 
-    snprintf(result, sizeof(result), "probe_run: %s checksum=%.6f", ok ? "rk_graph_ok" : "rk_graph_fallback", checksum);
+    const bool case1_ok = rknn_probe_run_case(
+        &ctx,
+        case1_a,
+        case1_b,
+        32,
+        32,
+        &case1_checksum,
+        &case1_abs_sum,
+        &case1_min,
+        &case1_max,
+        &case1_max_abs_diff,
+        &case1_nonzero_count);
+    const bool case2_ok = rknn_probe_run_case(
+        &ctx,
+        case2_a,
+        case2_b,
+        32,
+        32,
+        &case2_checksum,
+        &case2_abs_sum,
+        &case2_min,
+        &case2_max,
+        &case2_max_abs_diff,
+        &case2_nonzero_count);
+
+    const float max_abs_diff = case1_max_abs_diff > case2_max_abs_diff ? case1_max_abs_diff : case2_max_abs_diff;
+    const bool metrics_finite = isfinite(case1_checksum) && isfinite(case1_abs_sum) && isfinite(case1_min) && isfinite(case1_max) &&
+        isfinite(case2_checksum) && isfinite(case2_abs_sum) && isfinite(case2_min) && isfinite(case2_max) &&
+        isfinite(case1_max_abs_diff) && isfinite(case2_max_abs_diff);
+    const bool has_signal = case1_nonzero_count > 0 || case2_nonzero_count > 0;
+    const bool discriminator_ok = case1_ok && case2_ok && metrics_finite && has_signal;
+
+    snprintf(
+        result,
+        sizeof(result),
+        "probe_run: %s case1_checksum=%.6f case1_abs_sum=%.6f case1_min=%.6f case1_max=%.6f "
+        "case1_max_abs_diff=%.6f case1_nonzero=%zu "
+        "case2_checksum=%.6f case2_abs_sum=%.6f case2_min=%.6f case2_max=%.6f "
+        "case2_max_abs_diff=%.6f case2_nonzero=%zu max_abs_diff=%.6f",
+        discriminator_ok ? "rk_graph_ok" : "rk_graph_fallback",
+        case1_checksum,
+        case1_abs_sum,
+        case1_min,
+        case1_max,
+        case1_max_abs_diff,
+        case1_nonzero_count,
+        case2_checksum,
+        case2_abs_sum,
+        case2_min,
+        case2_max,
+        case2_max_abs_diff,
+        case2_nonzero_count,
+        max_abs_diff);
     rknn_runtime_unload(&ctx.runtime);
     return result;
 }

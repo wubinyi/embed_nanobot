@@ -257,6 +257,7 @@ If `ggml_backend` C integration cost is too high for initial prototype: Python t
 - Dry-run verified on `Qwen3.5-9B-Q4_K_M.gguf` and selected `blk.3`.
 - Real export verified: 7 ONNX files + `manifest.json` written to:
   `local_llm/local_provider_rknn_hybrid/runtime/onnx/block_3/`
+- This completes the first usable GGUF -> ONNX step for Phase 2 and unblocks the upcoming `.rknn` compile path.
 
 **Milestone 2.3 execution checkpoint (2026-05-30):**
 
@@ -288,7 +289,19 @@ If `ggml_backend` C integration cost is too high for initial prototype: Python t
 - Phase 2.3 policy defaults remain the baseline envelope inside the backend context: `fp16=60000`, `act=1024`, `state=4096`, `silu=16`, `attn_qkv=0.1`, `attn_out=0.25`, `ffn=0.25`, `ssm=0.05`.
 - Validation showed the backend loads and the matmul call completes on the RK3588 runtime; numeric correctness of the probe payload still needs a stronger follow-up discriminator.
 
-This completes the first usable GGUF -> ONNX step for Phase 2 and unblocks the upcoming `.rknn` compile path.
+**Milestone 2.4 probe discriminator checkpoint (2026-05-31):**
+
+- Updated `rknn_backend_probe_run` to execute two deterministic payload cases and report structured numeric metrics (`checksum`, `abs_sum`, `min/max`, `max_abs_diff`, `nonzero_count`).
+- Added host-side CPU reference matmul in the probe path so the discriminator no longer relies on a single checksum string.
+- Updated `probe_backend.py` to parse `key=value` probe metrics into structured output for easier checkpoint gating.
+- Validation now clearly discriminates backend behavior: runtime execution still occurs, but host-visible output remains all-zero on this runtime path (`max_abs_diff=528.0`, `case*_nonzero=0`), so the probe reports `rk_graph_fallback`.
+
+**Milestone 2.5 prep checkpoint (2026-05-31):**
+
+- Added `local_llm/local_provider_rknn_hybrid/compile_rknn.py` to compile Phase 2.2 ONNX projection artifacts to `.rknn` and emit a compile manifest.
+- Added generated-kernel ignore rule for `runtime/kernels/` in `.gitignore`.
+- Current blocker: host Python environments do not provide `rknn` (`rknn-toolkit2`) import support yet, so `.rknn` compilation cannot complete in this session.
+- Next action remains unchanged: install/activate RKNN Toolkit2 for this host, then run `compile_rknn.py` against `runtime/onnx/block_3/manifest.json`.
 
 ### New directory structure (Phase 2)
 

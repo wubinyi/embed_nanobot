@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import ctypes
 import json
+import re
 from pathlib import Path
 
 
@@ -145,6 +146,22 @@ def load_backend(library_path: Path) -> dict[str, object]:
     }
 
 
+def parse_probe_metrics(probe_run: object) -> dict[str, object]:
+    if not isinstance(probe_run, str):
+        return {}
+
+    metrics: dict[str, object] = {}
+    for key, raw in re.findall(r"([A-Za-z0-9_]+)=([-+0-9.eE]+)", probe_run):
+        if re.fullmatch(r"[-+]?\d+", raw):
+            metrics[key] = int(raw)
+        else:
+            try:
+                metrics[key] = float(raw)
+            except ValueError:
+                metrics[key] = raw
+    return metrics
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("library", type=Path, help="Path to libggml-rknn-probe.so")
@@ -152,6 +169,7 @@ def main() -> None:
     args = parser.parse_args()
 
     result = load_backend(args.library)
+    result["probe_metrics"] = parse_probe_metrics(result.get("probe_run"))
     if args.json:
         print(json.dumps(result, indent=2, sort_keys=True))
         return
@@ -163,6 +181,8 @@ def main() -> None:
     print(f"device_count: {result['device_count']}")
     print(f"summary: {result['summary']}")
     print(f"probe_run: {result['probe_run']}")
+    if result["probe_metrics"]:
+        print(f"probe_metrics: {result['probe_metrics']}")
     for device in result["devices"]:
         print(
             "device: "

@@ -329,3 +329,45 @@ The backend is now executing a real RKNN graph instead of a no-compute shell. Th
 - customization.md: OK — no new extension pattern was added.
 - PRD.md: OK — Phase 2.4 remains aligned with the existing RKNN hybrid roadmap item.
 - agent.md: OK — no upstream convention change was required.
+
+## 12. Phase 2.4 Probe Discriminator + .rknn Compile Step
+
+**Date**: 2026-05-31
+**Scope**: Make probe metrics numerically discriminative and advance to ONNX->RKNN compilation.
+
+### 12.1 What was implemented
+
+- Updated `local_llm/local_provider_rknn_hybrid/rknn_backend/ggml_backend_rknn.c` probe logic:
+  - Added two deterministic probe payloads.
+  - Added host-side CPU reference matmul.
+  - Added structured metric reporting for each case: `checksum`, `abs_sum`, `min`, `max`, `max_abs_diff`, `nonzero_count`.
+  - Added aggregate discriminator fields (`max_abs_diff`) and probe status gate (`rk_graph_ok` / `rk_graph_fallback`).
+- Updated `local_llm/local_provider_rknn_hybrid/rknn_backend/probe_backend.py` to parse and print probe `key=value` metrics as a structured dictionary.
+- Added `local_llm/local_provider_rknn_hybrid/compile_rknn.py`:
+  - Reads Phase 2.2 export manifest.
+  - Compiles each ONNX projection model to `.rknn`.
+  - Writes `compile_manifest.json` with per-artifact status.
+- Updated `local_llm/local_provider_rknn_hybrid/.gitignore` to ignore generated kernels under `runtime/kernels/`.
+
+### 12.2 Validation outcome
+
+- Rebuilt backend shared object with `build_probe.sh` and reran `probe_backend.py`.
+- Probe now reports rich discriminator metrics and correctly flags fallback behavior on this runtime:
+  - `probe_run: rk_graph_fallback`
+  - `case1_max_abs_diff=528.000000`
+  - `case2_max_abs_diff=1.968750`
+  - `case1_nonzero=0`, `case2_nonzero=0`
+- This confirms the discriminator is now informative: it distinguishes runtime call success from host-visible numeric correctness.
+
+### 12.3 `.rknn` compile milestone status
+
+- Attempted `.rknn` compilation via:
+  - `python compile_rknn.py --manifest runtime/onnx/block_3/manifest.json --out-dir runtime/kernels/block_3 --target rk3588`
+- Current blocker:
+  - `ERROR: rknn-toolkit2 is not importable in current Python environment`
+  - `No module named 'rknn'`
+- The compile step is implemented and runnable, but execution is blocked until RKNN Toolkit2 is installed/activated on this host.
+
+### 12.4 Follow-up action
+
+Install/activate an RKNN Toolkit2-capable Python environment on the RK3588 host, rerun `compile_rknn.py`, and record produced `.rknn` artifacts + compile manifest in the test report as the next checkpoint.
