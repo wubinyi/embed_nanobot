@@ -91,4 +91,40 @@ ls /dev/ttyUSB*                      # verify it appeared
 
 ---
 
+## Q5: How do I install RKNN Toolkit2 for `.rknn` compilation, and why is it still blocked on RK3588?
+
+`compile_rknn.py` needs the full compiler API module `rknn.api`, which is provided by
+`rknn-toolkit2` (not by `rknn-toolkit-lite2`).
+
+Validated checks:
+
+```bash
+conda run -n embed_nanobot python -c "import rknnlite.api as la; print('rknnlite ok')"
+conda run -n embed_nanobot python -c "import rknn.api as ra; print('rknn toolkit2 ok')"
+```
+
+Observed on 2026-05-31 (RK3588 aarch64, Python 3.12.12):
+- `rknnlite.api` import succeeds.
+- `rknn.api` import fails with `No module named 'rknn'`.
+
+Install attempt used:
+
+```bash
+conda run -n embed_nanobot python -m pip install rknn-toolkit2==2.3.2
+```
+
+If no compatible wheel exists for host architecture + Python ABI, local compile stays blocked.
+
+Recommended workflow:
+
+1. Compile `.rknn` on a supported Linux x86_64 build host with a compatible Toolkit2 wheel.
+2. Copy generated `.rknn` files to `local_llm/local_provider_rknn_hybrid/runtime/kernels/block_3/`.
+3. Keep RK3588 side on `rknn-toolkit-lite2` for runtime loading/execution.
+
+Current evidence file:
+- `local_llm/local_provider_rknn_hybrid/runtime/kernels/block_3/compile_manifest.json`
+   records blocked artifacts with message `toolkit_import_failed: No module named 'rknn'`.
+
+---
+
 For bug fixes found during testing, see [docs/02_bugfix/BUGFIX_LOG.md](02_bugfix/BUGFIX_LOG.md).
