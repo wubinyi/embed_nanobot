@@ -273,6 +273,13 @@ If `ggml_backend` C integration cost is too high for initial prototype: Python t
 - Final stabilized metrics: `hidden_max_abs_diff_vs_cpu_ref=0.760761`, `hidden_mean_abs_diff_vs_cpu_ref=0.108222`, CPU checksum finite (`507.076752`), hybrid checksum finite (`503.927185`).
 - Decision: 2.3 checkpoint now passes both stability and tolerance-tightening goals. Next step is deeper integration via the Phase 2.4 C backend probe using this tuned envelope as the reference policy.
 
+**Milestone 2.4 probe scaffold (2026-05-31):**
+
+- Added a loadable backend shell at `local_llm/local_provider_rknn_hybrid/rknn_backend/ggml_backend_rknn.c` plus `build_probe.sh` and `probe_backend.py`.
+- The probe exports the llama.cpp dynamic backend contract expected by `ggml_backend_load_all()` (`ggml_backend_init` + `ggml_backend_score`) and returns a visible device record for discovery checks.
+- Host validation on the RK3588 machine confirms the probe loads, reports `RKNN-PROBE`, and exposes `api_version=2` with a runtime-aware score.
+- This is still a scaffold, not the real NPU offload path; the next step is to wire actual RKNN compute behind the loadable shell.
+
 This completes the first usable GGUF -> ONNX step for Phase 2 and unblocks the upcoming `.rknn` compile path.
 
 ### New directory structure (Phase 2)

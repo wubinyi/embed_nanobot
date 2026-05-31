@@ -378,6 +378,43 @@ Notes        : KleidiAI ARM dotprod kernels match (not beat) standard GGML kerne
 - With the tightened default envelope, the simplified hybrid loop now also meets a useful tolerance gate (`max_abs_diff < 1.0`) for the checkpointed 32-layer path.
 - Next deeper integration step is Phase 2.4, using this tuned envelope as the baseline for the C backend probe.
 
+## 11. Phase 2.4 — Loadable RKNN Backend Probe Scaffold
+
+**Date**: 2026-05-31
+**Classification**: `real-hardware required`
+**Artifact**: `local_llm/local_provider_rknn_hybrid/rknn_backend/ggml_backend_rknn.c`
+
+### 11.1 Build command
+
+```bash
+bash local_llm/local_provider_rknn_hybrid/rknn_backend/build_probe.sh
+```
+
+### 11.2 Probe command
+
+```bash
+python3 local_llm/local_provider_rknn_hybrid/rknn_backend/probe_backend.py \
+  local_llm/local_provider_rknn_hybrid/runtime/backend/libggml-rknn-probe.so
+```
+
+### 11.3 Results
+
+| Check | Result |
+|---|---|
+| Shared library builds | ✅ exit 0 |
+| `ggml_backend_init` loads | ✅ registry pointer returned |
+| Backend API version | ✅ `2` |
+| Registry name | ✅ `RKNN-PROBE` |
+| Device count | ✅ `1` |
+| Runtime-aware score | ✅ `100` on this host |
+| Probe summary string | ✅ runtime detected |
+
+### 11.4 Interpretation
+
+- The C backend probe now satisfies the loader contract that llama.cpp expects from a dynamic backend library.
+- The current artifact is discovery-only. It proves the plugin shape and host-side load path, but it does not yet offload RKNN compute.
+- This is the correct narrow checkpoint before wiring real RKNN graph execution into the backend shell.
+
 **Date**: 2026-05-30  
 **Classification**: `real-hardware required` (target runtime is RK3588 path; conversion logic itself is host-agnostic)  
 **Script**: `local_llm/local_provider_rknn_hybrid/convert_weights.py`

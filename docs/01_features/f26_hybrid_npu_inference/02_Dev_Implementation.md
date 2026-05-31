@@ -255,3 +255,36 @@ Compile the exported ONNX projection models to `.rknn` (same block) and benchmar
 ### 9.4 Follow-up action
 
 Milestone 2.3 quality gating is now unblocked and tightened (finite metrics with sub-1.0 max diff). Next step is the deeper Phase 2.4 integration milestone, carrying forward this envelope as the baseline policy.
+
+## 10. Phase 2.4 Probe Scaffold (Loadable RKNN Backend Shell)
+
+**Date**: 2026-05-31
+**Scope**: Initial C backend integration milestone for the Phase 2.4 loader contract.
+
+### 10.1 What was implemented
+
+- Added `local_llm/local_provider_rknn_hybrid/rknn_backend/ggml_backend_rknn.c`.
+- Added `local_llm/local_provider_rknn_hybrid/rknn_backend/build_probe.sh`.
+- Added `local_llm/local_provider_rknn_hybrid/rknn_backend/probe_backend.py`.
+- Added `local_llm/local_provider_rknn_hybrid/.gitignore` entry for `runtime/backend/` build output.
+
+### 10.2 Key design decisions
+
+- Kept the first C milestone intentionally narrow: a loadable backend shell that satisfies llama.cpp's dynamic backend loader contract instead of jumping straight into partial compute.
+- Exported `ggml_backend_init` and `ggml_backend_score` through the ggml backend macros so the shared object matches the loader's expectations.
+- Returned one visible probe device and a runtime-aware score so the loader and registry shape can be validated end to end.
+- Left the device as a no-compute shell for now; this avoids conflating loader validation with unfinished RKNN graph execution.
+
+### 10.3 Validation outcome
+
+- `build_probe.sh` compiled `libggml-rknn-probe.so` successfully into `runtime/backend/`.
+- `probe_backend.py` loaded the shared object with `ctypes` and confirmed:
+  - `api_version=2`
+  - registry name `RKNN-PROBE`
+  - `device_count=1`
+  - probe summary reported runtime presence on this host
+- This is the first concrete C backend loading checkpoint for Phase 2.4.
+
+### 10.4 Follow-up action
+
+The probe scaffold now validates the llama.cpp dynamic backend contract end to end. Next step is to replace the no-compute shell with real RKNN graph execution while keeping the same loadable backend shape and the tuned Phase 2.3 envelope as the baseline policy.
