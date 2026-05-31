@@ -65,14 +65,6 @@ def main() -> int:
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 
-    try:
-        from rknn import api as rknn_api  # type: ignore
-    except Exception as exc:
-        print("ERROR: rknn-toolkit2 is not importable in current Python environment.")
-        print(f"Import error: {exc}")
-        print("Install/activate toolkit env, then rerun compile_rknn.py.")
-        return 2
-
     manifest = _load_manifest(args.manifest)
     onnx_dir = args.onnx_dir if args.onnx_dir else args.manifest.parent
     args.out_dir.mkdir(parents=True, exist_ok=True)
@@ -83,6 +75,35 @@ def main() -> int:
         "target": args.target,
         "artifacts": [],
     }
+
+    try:
+        from rknn import api as rknn_api  # type: ignore
+    except Exception as exc:
+        print("ERROR: rknn-toolkit2 is not importable in current Python environment.")
+        print(f"Import error: {exc}")
+        print("Install/activate toolkit env, then rerun compile_rknn.py.")
+
+        for entry in manifest["exports"]:
+            tensor_name = entry.get("tensor")
+            if not tensor_name:
+                continue
+            onnx_name = _tensor_to_onnx_name(str(tensor_name))
+            onnx_path = onnx_dir / onnx_name
+            out_path = args.out_dir / onnx_name.replace(".onnx", ".rknn")
+            compile_manifest["artifacts"].append(
+                {
+                    "tensor": tensor_name,
+                    "onnx": str(onnx_path),
+                    "rknn": str(out_path),
+                    "status": "blocked",
+                    "message": f"toolkit_import_failed: {exc}",
+                }
+            )
+
+        compile_manifest_path = args.out_dir / "compile_manifest.json"
+        compile_manifest_path.write_text(json.dumps(compile_manifest, indent=2) + "\n", encoding="utf-8")
+        print(f"compile manifest: {compile_manifest_path}")
+        return 2
 
     failures = 0
     for entry in manifest["exports"]:

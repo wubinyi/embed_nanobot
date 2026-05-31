@@ -518,6 +518,13 @@ bash local_llm/local_provider_rknn_hybrid/rknn_backend/build_probe.sh
   --manifest local_llm/local_provider_rknn_hybrid/runtime/onnx/block_3/manifest.json \
   --out-dir local_llm/local_provider_rknn_hybrid/runtime/kernels/block_3 \
   --target rk3588
+
+# Rerun in project env (embed_nanobot)
+conda run -n embed_nanobot python \
+  local_llm/local_provider_rknn_hybrid/compile_rknn.py \
+  --manifest local_llm/local_provider_rknn_hybrid/runtime/onnx/block_3/manifest.json \
+  --out-dir local_llm/local_provider_rknn_hybrid/runtime/kernels/block_3 \
+  --target rk3588
 ```
 
 ### 13.2 Probe discriminator results
@@ -548,10 +555,13 @@ bash local_llm/local_provider_rknn_hybrid/rknn_backend/build_probe.sh
 | compile script present | ✅ `compile_rknn.py` |
 | manifest input detected | ✅ `runtime/onnx/block_3/manifest.json` |
 | RKNN toolkit import | ❌ `No module named 'rknn'` |
-| `.rknn` artifacts generated | ❌ blocked by missing toolkit |
+| compile manifest output | ✅ `runtime/kernels/block_3/compile_manifest.json` generated |
+| per-artifact status in compile manifest | 7 entries, all `blocked` |
+| `.rknn` artifacts generated | ❌ none generated (all blocked) |
 
 ### 13.5 Interpretation (`.rknn` milestone)
 
 - The compile pipeline is implemented and ready.
-- This host currently lacks an RKNN Toolkit2-capable Python environment, so `.rknn` export cannot complete in this session.
-- Next checkpoint action is environment enablement (Toolkit2), then rerun `compile_rknn.py` and capture generated artifacts.
+- The compile rerun in `conda env: embed_nanobot` confirms this host has `rknn-toolkit-lite2` but still lacks full `rknn` Toolkit2 compile API (`rknn.api`).
+- `compile_manifest.json` is now produced as a checkpoint artifact and explicitly records each target `.rknn` as `blocked` with message `toolkit_import_failed: No module named 'rknn'`.
+- Next checkpoint action remains environment enablement for full Toolkit2 (or a supported x86_64 compile host) and then rerun `compile_rknn.py` to generate actual `.rknn` artifacts.
