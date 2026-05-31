@@ -419,6 +419,47 @@ python3 local_llm/local_provider_rknn_hybrid/rknn_backend/probe_backend.py \
 **Classification**: `real-hardware required` (target runtime is RK3588 path; conversion logic itself is host-agnostic)  
 **Script**: `local_llm/local_provider_rknn_hybrid/convert_weights.py`
 
+## 12. Phase 2.4 — Real RKNN Execution Backend
+
+**Date**: 2026-05-31
+**Classification**: `real-hardware required`
+**Artifact**: `local_llm/local_provider_rknn_hybrid/rknn_backend/ggml_backend_rknn.c`
+
+### 12.1 Commands
+
+```bash
+bash local_llm/local_provider_rknn_hybrid/rknn_backend/build_probe.sh
+python3 local_llm/local_provider_rknn_hybrid/rknn_backend/probe_backend.py \
+  local_llm/local_provider_rknn_hybrid/runtime/backend/libggml-rknn-probe.so
+```
+
+### 12.2 Results
+
+| Check | Result |
+|---|---|
+| Shared library builds | ✅ exit 0 |
+| `ggml_backend_init` loads | ✅ registry pointer returned |
+| Backend API version | ✅ `2` |
+| Registry name | ✅ `RKNN` |
+| Device count | ✅ `1` |
+| Runtime-aware score | ✅ `100` on this host |
+| Probe summary string | ✅ runtime detected at `/home/wubinyi/.local/lib/librknnrt.so` |
+| Real RKNN matmul call | ✅ `probe_run: rk_graph_ok` |
+| Runtime log | ✅ matmul create/run path reached; core-mask request fell back to single-core auto mode |
+
+### 12.3 Interpretation
+
+- The backend is no longer a discovery-only shell. It now loads RKNN at runtime and executes a real matmul graph through the `rknn_matmul_*` API family.
+- The loadable backend shape remains unchanged from the probe scaffold, so the llama.cpp backend loader contract is still satisfied.
+- The probe payload still needs a stronger numeric discriminator for host-side correctness checking; the current pass criterion is the successful runtime execution path and the visible RKNN logs.
+
+### 12.4 Real Hardware Validation
+
+- Host: Radxa Rock 5T (RK3588)
+- Runtime: `/home/wubinyi/.local/lib/librknnrt.so`
+- Observed runtime log: `Not support core mask: 7, fallback to single core auto mode`
+- Validation result: pass for backend loading and real RKNN matmul execution
+
 ### 9.1 Commands
 
 ```bash

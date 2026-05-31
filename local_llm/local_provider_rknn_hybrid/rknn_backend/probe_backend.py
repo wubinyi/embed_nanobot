@@ -102,6 +102,12 @@ def load_backend(library_path: Path) -> dict[str, object]:
         summary_fn = ctypes.CFUNCTYPE(ctypes.c_char_p)(proc_summary_ptr)
         summary = summary_fn().decode()
 
+    probe_run = None
+    probe_run_ptr = reg.iface.get_proc_address(reg_ptr, b"rknn_backend_probe_run")
+    if probe_run_ptr:
+        probe_run_fn = ctypes.CFUNCTYPE(ctypes.c_char_p)(probe_run_ptr)
+        probe_run = probe_run_fn().decode()
+
     devices: list[dict[str, object]] = []
     for index in range(device_count):
         dev_ptr = reg.iface.get_device(reg_ptr, index)
@@ -134,6 +140,7 @@ def load_backend(library_path: Path) -> dict[str, object]:
         "name": name,
         "device_count": int(device_count),
         "summary": summary,
+        "probe_run": probe_run,
         "devices": devices,
     }
 
@@ -155,6 +162,7 @@ def main() -> None:
     print(f"name: {result['name']}")
     print(f"device_count: {result['device_count']}")
     print(f"summary: {result['summary']}")
+    print(f"probe_run: {result['probe_run']}")
     for device in result["devices"]:
         print(
             "device: "

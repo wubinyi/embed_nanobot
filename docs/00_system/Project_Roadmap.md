@@ -212,7 +212,7 @@ and the other is remotely updatable by the Hub.
 | | Port 19100 (adapter), 19180 (backend). Model alias `qwen3.5-9b-kleidiai`. | | | | |
 | | Expected: ~5–7 t/s (1.5–2× vs 3.58 t/s baseline). Validation: `real-hardware required`. | | | | |
 | | Hardware benchmark validated on Radxa Rock 5T: tg128 3.43 t/s (KleidiAI) vs 3.46 t/s (CPU baseline), ~1x; both 1.47x faster than Vulkan 2.34 t/s. | | | | |
-| 5.5.5 | **RKNN hybrid subgraph inference (f26 Phase 2)** | P2 | XL | 5.5.4 | **In Progress** (2026-05-30) |
+| 5.5.5 | **RKNN hybrid subgraph inference (f26 Phase 2)** | P2 | XL | 5.5.4 | **In Progress** (2026-05-31) |
 | | Offload MLP/FFN layers to RK3588 NPU via RKNN API (lower-level than RKLLM). | | | | |
 | | CPU handles attention + KV cache; NPU handles compute-heavy subgraphs. | | | | |
 | | Design: `docs/01_features/f26_hybrid_npu_inference/01_Design_Log.md` §5 (Phase 2). | | | | |
@@ -220,7 +220,7 @@ and the other is remotely updatable by the Hub.
 | | 2.1 checkpoint (2026-05-30): `rknn_run`=2.415ms but total=81.529ms due to per-call B conversion/copy; next action is C path with pre-converted pinned weights. | | | | |
 | | 2.2 checkpoint (2026-05-30): `convert_weights.py` implemented; block 3 exported 7 projection ONNX models + manifest under `local_llm/local_provider_rknn_hybrid/runtime/onnx/block_3/`. | | | | |
 | | 2.3 checkpoint (2026-05-30): `inference/hybrid_loop.py` executes one-token full 32-layer hybrid pass (`layers_executed=32`); tuned default envelope now reports finite low-diff metrics (`max_abs=0.760761`, `mean_abs=0.108222`) with single-core fallback still active. | | | | |
-| | 2.4 checkpoint (2026-05-31): `rknn_backend/ggml_backend_rknn.c` added as a loadable probe shell; build + ctypes probe confirm `RKNN-PROBE`, `api_version=2`, `device_count=1`, and runtime-aware scoring. | | | | |
+| | 2.4 checkpoint (2026-05-31): `rknn_backend/ggml_backend_rknn.c` now executes a real RKNN `GGML_OP_MUL_MAT` graph behind the same loadable backend shape; build + ctypes probe confirm `RKNN`, `api_version=2`, `device_count=1`, runtime-aware scoring, and a successful matmul run on the RK3588 runtime. | | | | |
 | 5.5.6 | **f26 Phase 3 (research track): prefill attention on NPU** | P3 | M | 5.5.5 | **Blocked** |
 | | Q·K^T and attn·V via `rknn_matmul_create_dynamic_shape` (Approach 3A). Bucket sizes [256,512,1024,2048]. | | | | |
 | | Blocked on: production `librknnrt.so` with 3-core NPU support not installed. | | | | |

@@ -280,6 +280,14 @@ If `ggml_backend` C integration cost is too high for initial prototype: Python t
 - Host validation on the RK3588 machine confirms the probe loads, reports `RKNN-PROBE`, and exposes `api_version=2` with a runtime-aware score.
 - This is still a scaffold, not the real NPU offload path; the next step is to wire actual RKNN compute behind the loadable shell.
 
+**Milestone 2.4 real execution checkpoint (2026-05-31):**
+
+- The loadable backend shell was replaced with a self-contained RKNN executor in `ggml_backend_rknn.c`.
+- The backend now `dlopen()`s `librknnrt.so` at runtime, binds the RKNN matmul symbols it needs, and runs a real `GGML_OP_MUL_MAT` graph instead of a no-compute probe.
+- The same loadable shape is preserved: probe summary, `ggml_backend_score`, one visible device, and the llama.cpp backend registry contract remain intact.
+- Phase 2.3 policy defaults remain the baseline envelope inside the backend context: `fp16=60000`, `act=1024`, `state=4096`, `silu=16`, `attn_qkv=0.1`, `attn_out=0.25`, `ffn=0.25`, `ssm=0.05`.
+- Validation showed the backend loads and the matmul call completes on the RK3588 runtime; numeric correctness of the probe payload still needs a stronger follow-up discriminator.
+
 This completes the first usable GGUF -> ONNX step for Phase 2 and unblocks the upcoming `.rknn` compile path.
 
 ### New directory structure (Phase 2)

@@ -288,3 +288,44 @@ Milestone 2.3 quality gating is now unblocked and tightened (finite metrics with
 ### 10.4 Follow-up action
 
 The probe scaffold now validates the llama.cpp dynamic backend contract end to end. Next step is to replace the no-compute shell with real RKNN graph execution while keeping the same loadable backend shape and the tuned Phase 2.3 envelope as the baseline policy.
+
+## 11. Phase 2.4 Real RKNN Execution Backend
+
+**Date**: 2026-05-31
+**Scope**: Replace the discovery-only shell with a real RKNN matmul executor while preserving the loadable backend contract.
+
+### 11.1 What was implemented
+
+- Reworked `local_llm/local_provider_rknn_hybrid/rknn_backend/ggml_backend_rknn.c` into a self-contained backend that loads `librknnrt.so` with `dlopen()` / `dlsym()`.
+- Bound the RKNN matmul runtime symbols directly at load time, including `rknn_matmul_create`, `rknn_create_mem`, `rknn_matmul_set_io_mem`, `rknn_B_normal_layout_to_native_layout`, `rknn_matmul_run`, `rknn_destroy_mem`, `rknn_matmul_destroy`, and `rknn_mem_sync`.
+- Kept the backend shape intact: one visible device, runtime-aware score, and the probe summary/probe-run entry points used by the standalone loader script.
+- Limited compute support to `GGML_OP_MUL_MAT` so the first real backend slice stays narrow and matches the decode-style hybrid target.
+
+### 11.2 Key design decisions
+
+- Preserved the Phase 2.3 tuned envelope as the baseline policy inside the backend context: `fp16=60000`, `act=1024`, `state=4096`, `silu=16`, `attn_qkv=0.1`, `attn_out=0.25`, `ffn=0.25`, `ssm=0.05`.
+- Added explicit RKNN memory sync calls around the matmul invocation so host-side buffers are coherent before and after device execution.
+- Kept the runtime dependency isolated to the backend module instead of linking against any external ggml shared library, which preserves the direct `ctypes` load path.
+
+### 11.3 Validation outcome
+
+- `build_probe.sh` still compiles `libggml-rknn-probe.so` successfully into `runtime/backend/`.
+- `probe_backend.py` now loads the rebuilt shared object and reports:
+  - `api_version=2`
+  - `name=RKNN`
+  - `device_count=1`
+  - `summary=RKNN backend: runtime detected at /home/wubinyi/.local/lib/librknnrt.so`
+- The probe run path now executes a real RKNN matmul call and returns `probe_run: rk_graph_ok`.
+- The runtime still emits the expected core-mask fallback warning on this host (`Not support core mask: 7, fallback to single core auto mode`), which matches the earlier Python checkpoints.
+
+### 11.4 Follow-up action
+
+The backend is now executing a real RKNN graph instead of a no-compute shell. The remaining follow-up is to strengthen the probe payload so the host-side output checksum becomes a useful numeric discriminator, then continue toward the `.rknn` graph compilation milestone.
+
+### 11.5 Documentation Freshness Check
+
+- architecture.md: OK — no new top-level module or integration surface was added outside the existing local LLM hybrid area.
+- configuration.md: OK — no new user-facing config field or CLI option was introduced.
+- customization.md: OK — no new extension pattern was added.
+- PRD.md: OK — Phase 2.4 remains aligned with the existing RKNN hybrid roadmap item.
+- agent.md: OK — no upstream convention change was required.
